@@ -1,38 +1,64 @@
-# Tracearr HA — HACS integration + Lovelace cards
+# Tracearr HA — Intégration HACS pour Home Assistant
 
-[![Validate](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml/badge.svg)](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml)
+[![Validation](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml/badge.svg)](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml)
 
-**Français** · Home Assistant custom integration for Tracearr Public API v2. Compatible with streams from **Plex, Jellyfin and Emby**. **Alpha 0.1.1** — test on your installation before relying on the sensors for automations.
+**Retrouvez les lectures en cours de Plex, Jellyfin et Emby directement dans votre tableau de bord Home Assistant.** Tracearr HA est une intégration HACS qui fournit des capteurs et deux cartes Lovelace personnalisables, avec suivi en temps réel via l'API publique Tracearr v2.
 
-## What it does / Fonctionnalités
+**Version actuelle : 0.1.2 Alpha.** Le projet est en cours de test sur de vraies installations. Évitez encore d'utiliser ses informations pour des automatismes critiques.
 
-- Uses `GET /api/v2/public/streams` and `GET /api/v2/public/servers` to initialize the session cache.
-- Maintains **one** authenticated SSE connection to `GET /api/v2/public/events` (Tracearr **2.7.0+**) for every Home Assistant instance, with reconnect and rate-limit handling.
-- On every `ready` SSE event, resynchronizes via REST (the API does not replay missed events). Polling fallback runs about every 15 seconds when SSE is disconnected and a safety refresh runs about every minute while connected.
-- Shows movie/TV/music title, artwork, user, playback position, server, player, quality, bitrate, codecs, paused status.
-- Sensors for active streams, paused/playing counts, direct, video-only, audio-only, combined A/V and unknown transcodes, total transcodes, approximate bandwidth.
-- Online sensor for Tracearr; online and active stream entities for each media server.
-- **Two independent Lovelace cards** included: all streams, and single stream.
-- **Three layouts** on the grouped card: vertical list, adaptive grid, carousel; automatic or fixed columns, carousel arrows and optional auto scroll.
-- Responsive CSS; configurable Home Assistant **Sections** grid columns/rows; height in pixels for other dashboards.
-- Graphical Lovelace card editor: show/hide details, filtering, paused sessions, compact mode, aliases and avatars.
-- Global user aliases via **Settings → Devices & services → Tracearr → Configure**, with an account picker or bulk JSON editor. Card-level alias overrides are also available.
+## Fonctionnalités
 
-**Important limits:** Tracearr `/streams` v2 does not publish a LAN/WAN flag or stable user identity ID. The card does not invent either. The card's individual mode can select the most recent stream, or match a user/server through its filters; a fixed session ID is also supported. When a session ends, the individual card shows an empty state. No playback control or remote termination is implemented.
+- Connexion à l'API publique **Tracearr v2**, avec clé API configurée depuis l'interface Home Assistant.
+- **Temps réel SSE** via une connexion unique pour tous les serveurs, avec synchronisation REST initiale, reconnexion automatique et interrogation périodique de secours.
+- **Capteurs Home Assistant** : nombre de flux actifs, lecture directe, transcodage vidéo seul, audio seul, vidéo + audio, transcodages inconnus, débit estimé et disponibilité des serveurs.
+- **Deux cartes Lovelace** : tous les flux dans une seule carte, ou une lecture individuelle.
+- **Trois modes** : liste verticale, grille adaptative et carrousel (1 à 4 flux visibles).
+- **Carrousel personnalisable** : défilement automatique, intervalle entre les flux, vitesse de transition, cinq effets et option pour masquer la barre horizontale.
+- **Liseré selon le serveur** : Plex orange, Jellyfin violet, Emby vert.
+- **Affichage adaptable** : dimensions Home Assistant *Sections*, hauteur personnalisée et mode compact.
+- **Éditeur visuel** : choix des informations visibles, tri, filtre par serveur/utilisateur/transcodage, alias et avatars personnalisés.
+- **Détails de lecture** : affiche, utilisateur, film ou épisode, progression, temps restant, résolution, codecs, débit, lecteur et état pause.
 
-## Installation (once a GitHub repository exists)
+## Nouveautés de la version 0.1.2
 
-1. In HACS, add a **custom repository** with the repository URL and category **Integration**.
-2. Install **Tracearr HA**, restart Home Assistant.
-3. Go to **Settings → Devices & services → Add integration → Tracearr HA**.
-4. Enter the **Tracearr URL** (reachable from your Home Assistant machine, e.g. `https://tracearr.example.org`) and your `trr_pub_...` key, generated in **Tracearr → Settings → Data & API → API**.
-5. Refresh your Home Assistant browser page (hard reload if necessary). Under **Edit dashboard → Add card**, search for **Tracearr** and choose a card. The integration registers its included JavaScript automatically when Home Assistant starts.
+Le carrousel conserve désormais son **index courant** pendant les mises à jour SSE. Quand plusieurs lectures sont disponibles, il passe bien à la suivante, puis revient à la première **après la dernière**. La progression des médias peut se mettre à jour sans reconstruire tout le carrousel.
 
-> HACS custom repository installation is possible only after the repo has been published. To install from the ZIP manually, copy the directory `custom_components/tracearr_ha` into `/config/custom_components/tracearr_ha/` on your Home Assistant system, and restart HA. The rest of the setup is identical.
+| Réglage | Valeurs |
+|---|---|
+| `mode` | `list`, `grid`, `carousel` |
+| `carousel_visible` | de 1 à 4 lectures affichées |
+| `carousel_autoplay` | `true` / `false` |
+| `carousel_interval` | 3 à 120 secondes entre deux changements |
+| `carousel_transition` | `slide` (glissement), `fade` (fondu), `zoom`, `flip` (retournement 3D), `none` |
+| `carousel_transition_speed` | 100 à 3000 millisecondes pour l'animation |
+| `carousel_hide_scrollbar` | masquer ou afficher la barre horizontale |
+| `carousel_pause_on_hover` | suspendre au survol de la souris, désactivé par défaut |
 
-### YAML examples (optional)
+Le carrousel suspend le défilement automatique quand la page est masquée ou que la réduction des mouvements est activée au niveau du système. La pause au survol reste facultative. **L'intervalle** contrôle le temps entre deux flux ; **la vitesse** contrôle la durée de l'effet.
 
-**All currently playing sessions, adaptive grid:**
+## Installer l'intégration avec HACS
+
+1. Dans **HACS → ⋮ → Dépôts personnalisés**, ajoutez `https://github.com/Moosketair/home-assistant-tracearr` en tant qu'**Intégration**.
+2. Installez **Tracearr HA**, puis redémarrez Home Assistant.
+3. Ouvrez **Paramètres → Appareils et services → Ajouter une intégration → Tracearr HA**.
+4. Renseignez l'adresse de votre instance Tracearr et votre clé `trr_pub_...` générée dans **Tracearr → Paramètres → Données et API → API**.
+5. Dans votre dashboard, choisissez **Modifier → Ajouter une carte → Tracearr** ou utilisez un exemple YAML ci-dessous.
+
+Si la carte n'apparaît pas, allez dans **Paramètres → Tableaux de bord → ⋮ → Ressources** et vérifiez qu'une seule ressource de type **Module JavaScript** pointe vers :
+
+```text
+/tracearr_ha/tracearr-card.js?v=0.1.2
+```
+
+Modifiez l'ancienne ressource au lieu d'en ajouter une deuxième, puis rechargez le navigateur (`Ctrl + F5`). La version est également gérée automatiquement par l'intégration lorsque les ressources Lovelace sont en mode stockage.
+
+### Installation manuelle
+
+Copiez `custom_components/tracearr_ha/` dans `/config/custom_components/tracearr_ha/` et redémarrez Home Assistant.
+
+## Exemples Lovelace
+
+**Grille adaptative :**
 
 ```yaml
 type: custom:tracearr-streams-card
@@ -41,10 +67,9 @@ columns: auto
 show_transcodes: true
 show_progress: true
 show_quality: true
-show_paused: true
 ```
 
-**Carousel with 2 sessions per slide:**
+**Carrousel automatique (2 flux, zoom, 800 ms, barre masquée) :**
 
 ```yaml
 type: custom:tracearr-streams-card
@@ -52,11 +77,13 @@ mode: carousel
 carousel_visible: 2
 carousel_autoplay: true
 carousel_interval: 8
-show_transcodes: false
-compact: false
+carousel_transition: zoom
+carousel_transition_speed: 800
+carousel_hide_scrollbar: true
+show_transcodes: true
 ```
 
-**Vertical list, compact:**
+**Liste compacte :**
 
 ```yaml
 type: custom:tracearr-streams-card
@@ -67,7 +94,7 @@ show_bitrate: true
 show_codecs: true
 ```
 
-**A single user's most recent session:**
+**Carte d'une seule lecture :**
 
 ```yaml
 type: custom:tracearr-stream-card
@@ -76,63 +103,49 @@ selection: recent
 show_poster: true
 ```
 
-Card configuration is also available through the built-in Lovelace visual editor, without YAML.
+Tous ces paramètres sont également disponibles dans l'**éditeur graphique** des cartes.
 
-### User display names
+## Noms et avatars personnalisés
 
-Use the integration's **Configure** option to select a Tracearr server account and enter an alias, e.g. display `alice` as `Alice maison`. Accounts remain unchanged in Plex or Jellyfin.
-
-To change a name only on one dashboard card, use **Aliases**, one mapping per line, in its editor:
+Dans **Paramètres → Appareils et services → Tracearr HA → Configurer**, vous pouvez associer un alias à un compte. Pour une carte particulière, entrez une correspondance par ligne dans le champ *Alias* :
 
 ```text
 alice=Alice maison
 plex:alice=Alice Plex
-<server_uuid>:alice=Alice salon
+<identifiant_serveur>:alice=Alice salon
 ```
 
-For custom avatars, enter the same style of mapping but with HTTPS image URLs. External images must be available in the viewing browser. The app does not expose a user's Tracearr API key to Lovelace.
+Les avatars acceptent le même format avec des URL HTTPS disponibles dans le navigateur. Cela ne modifie jamais les comptes Plex, Jellyfin ou Emby.
 
-### Connection details / security
+## Fonctionnement et sécurité
 
-- This integration **never sends the Tracearr API key to the browser**. Cards subscribe to Home Assistant's authenticated WebSocket data feed.
-- Tracearr-proxied movie posters are read by the HA backend and served through a **Home Assistant signed image URL** for a short time. The image route only accepts an image path from the active session cache, and only fetches Tracearr's own `/api/v1/images/proxy` endpoint (no general-purpose proxy).
-- API keys belong in the config flow and are stored by Home Assistant in its config entry store. Use HTTPS, especially for remote Tracearr instances. No keys should ever be written into a dashboard YAML file.
-- Some upstream user avatar URLs may be external URLs (e.g. from Plex). Browser access to these depends on the image provider. A fallback initial is used if the URL isn't available.
-- A **503** causes a timed reconnect; **429** obeys `Retry-After`; **401/403** is considered a credential error. Tracearr ends SSE connections after roughly 30 minutes; reconnect is normal.
-- The event stream can contain a latest position not present in a later full update. While playing, a full update does not decrease the stored progress.
-- Images are only available while the associated session remains in the cache. Artwork for stopped streams is not retained.
-- The "hide empty" option hides the card content. Home Assistant's layout may still reserve a section cell for that card.
+- La clé API Tracearr **reste sur le serveur Home Assistant**. Elle ne doit pas être placée dans le YAML Lovelace.
+- Les cartes utilisent le WebSocket **authentifié** de Home Assistant et ne se connectent pas directement à Tracearr.
+- Les affiches provenant du proxy d'images Tracearr sont exposées par une route d'images Home Assistant avec URL temporairement signée.
+- L'intégration utilise **une seule connexion SSE**, avec rechargement de l'état lors de chaque événement `ready`. En cas d'indisponibilité, elle interroge périodiquement l'API REST.
+- Les informations de transcodage non renseignées sont considérées comme **inconnues**, et non devinées.
 
-### Compatibility
+### Limites connues
 
-- Home Assistant **2025.6+** (development target; first verified static against 2026 documentation, not yet field-tested).
-- Tracearr API v2; for SSE the server must be **Tracearr 2.7.0+**. Older versions without SSE can still use REST polling, provided they implement the v2 endpoints.
-- Modern Chromium/Firefox/Safari for the responsive card and CSS `color-mix`/container queries.
+Le schéma `/streams` de Tracearr v2 n'expose ni la distinction réseau local/WAN ni un identifiant utilisateur unique stable par session. La carte n'invente pas ces valeurs. L'arrêt à distance des flux n'est pas proposé. Si l'option « Masquer si aucune lecture » est activée, une cellule *Sections* Home Assistant peut malgré tout conserver son emplacement.
 
-### Troubleshooting
+## Compatibilité et dépannage
 
-1. **No entities:** inspect HA **Settings → System → Logs** for `tracearr_ha`; verify the URL from the HA host (not only from a browser) and check `GET /api/v2/public/servers` credentials.
-2. **SSE reconnects every 25–30 seconds:** adjust your reverse proxy to disable response buffering and raise idle/read timeout above 30 seconds; Tracearr sends a ping every ~25 seconds.
-3. **Cards don't appear in the card picker:** restart HA, hard refresh the dashboard tab, and verify that `/tracearr_ha/tracearr-card.js` is reachable. It is automatically loaded through the frontend integration.
-4. **Image placeholders:** the v2 `poster_url` may refer to a v1 image proxy; this alpha only supports authorized requests to that Tracearr-local proxy and cannot test your host's image authentication in advance. Check the HA log / browser network inspector.
-5. **Transcode "unknown":** the server set `is_transcode` without reliable audio/video decisions; the integration deliberately does not guess.
+- Home Assistant **2025.6+** (cible de développement, non validée exhaustivement sur toutes les versions).
+- Tracearr **API publique v2**, SSE à partir de **Tracearr 2.7.0** ; sinon interrogation REST.
+- Chromium, Firefox ou Safari récents.
 
-## Development
+Si la carte n'apparaît pas, contrôlez la ressource JavaScript ci-dessus. Si les capteurs sont absents, consultez **Paramètres → Système → Journaux**. En cas de reconnexions SSE fréquentes, désactivez le buffering du reverse proxy sur `text/event-stream` et augmentez son timeout de lecture au-delà de 30 secondes. Si le carrousel ne bouge pas, assurez-vous qu'il existe plus de flux que de cartes visibles et que l'onglet est actif.
+
+## Développement
 
 ```bash
 python -m compileall -q custom_components
 python -m pytest -q tests
 node --check custom_components/tracearr_ha/frontend/tracearr-card.js
+node --test tests/test_carousel.cjs
 ```
 
-The test suite checks transcode classification and SSE event state changes without needing a running HA. Integration end-to-end tests against an actual Home Assistant and Tracearr instance are still required before calling this a stable release.
+Les tests couvrent les données Tracearr, la compatibilité Lovelace, la navigation, la durée des transitions, les effets et les couleurs des serveurs. Un test complet sur plusieurs installations Home Assistant réelles reste nécessaire avant une version stable.
 
-## Roadmap
-
-- Dedicated GUI selector for offline user filtering, including users with no active session.
-- Robust media image proxy testing against multiple Tracearr image backends.
-- Better per-user statistics and diagnostics.
-- Native localization of the Lovelace editor (currently French), accessibility and screen-reader testing.
-- Visual snapshot tests on dashboard Sections and Mobile.
-
-MIT License. Not affiliated with the Tracearr, Home Assistant, Plex, Jellyfin or Emby projects.
+**Licence MIT.** Projet indépendant, sans affiliation avec Tracearr, Home Assistant, Plex, Jellyfin ou Emby.
