@@ -1,0 +1,60 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Tracearr",
+        "description": "Create a key in Tracearr > Settings > Data & API > API.",
+        "data": {
+          "url": "Tracearr URL",
+          "token": "Public API key (trr_pub_...)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to Tracearr",
+      "invalid_auth": "Invalid API key"
+    },
+    "abort": {
+      "already_configured": "This Tracearr instance is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "User aliases",
+        "menu_options": {
+          "user_alias": "Edit an account",
+          "raw_maps": "Advanced JSON editor"
+        }
+      },
+      "user_alias": {
+        "title": "Choose an account",
+        "data": {
+          "account": "Plex / Jellyfin / Emby account"
+        }
+      },
+      "edit_alias": {
+        "title": "Personalize {account}",
+        "description": "Leave a field empty to restore its default.",
+        "data": {
+          "alias": "Display name",
+          "avatar": "Custom avatar HTTPS URL"
+        }
+      },
+      "raw_maps": {
+        "title": "Advanced customization",
+        "description": "JSON maps: {\"plex:alice\":\"Alice\"}. For avatar values, use HTTPS URLs.",
+        "data": {
+          "aliases": "Aliases (JSON)",
+          "avatars": "Custom avatars (JSON)"
+        }
+      }
+    },
+    "error": {
+      "invalid_json": "Enter a valid JSON object"
+    },
+    "abort": {
+      "no_users": "No user accounts were found. Use the advanced JSON editor."
+    }
+  }
+}
