@@ -1,4 +1,4 @@
-"""Regression checks for LovelaceData attribute changes without HA installed."""
+"""Regression checks for the HA LovelaceData mode rename, without HA installed."""
 import ast
 import asyncio
 from pathlib import Path
@@ -8,6 +8,7 @@ FRONTEND = Path(__file__).resolve().parents[1] / 'custom_components/tracearr_ha/
 
 
 def load_register_function():
+    # Extract actual function without importing HA, so these tests run in CI.
     tree = ast.parse(FRONTEND.read_text())
     node = next(n for n in tree.body if isinstance(n, ast.AsyncFunctionDef) and n.name == 'async_register_frontend')
     module = ast.fix_missing_locations(ast.Module(body=[node], type_ignores=[]))
@@ -60,7 +61,7 @@ def test_storage_mode_2026_has_no_mode_attr():
     resources = Resources()
     hass = SimpleNamespace(data={'lovelace': SimpleNamespace(resource_mode='storage', resources=resources)}, http=Http())
     asyncio.run(load_register_function()(hass))
-    assert resources.created == [{'res_type': 'module', 'url': '/tracearr_ha/tracearr-card.js?v=0.1.1'}]
+    assert resources.created == [{'res_type': 'module', 'url': '/tracearr_ha/tracearr-card.js?v=0.1.2'}]
     assert len(hass.http.paths) == 1
     assert len(hass.http.views) == 1
 
@@ -70,7 +71,7 @@ def test_legacy_mode_and_existing_resource_updated():
     hass = SimpleNamespace(data={'lovelace': SimpleNamespace(mode='storage', resources=resources)}, http=Http())
     asyncio.run(load_register_function()(hass))
     assert resources.created == []
-    assert resources.updated == [('old', {'res_type': 'module', 'url': '/tracearr_ha/tracearr-card.js?v=0.1.1'})]
+    assert resources.updated == [('old', {'res_type': 'module', 'url': '/tracearr_ha/tracearr-card.js?v=0.1.2'})]
 
 
 def test_yaml_mode_does_not_edit_resources():

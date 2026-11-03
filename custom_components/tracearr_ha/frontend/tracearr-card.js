@@ -1,11 +1,12 @@
-/* Tracearr HA Lovelace cards 0.1.1 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.2 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;
 
   const DEFAULTS = {
     mode: "grid", columns: "auto", carousel_visible: 1, carousel_autoplay: false,
-    carousel_interval: 7, compact: false, show_title: true, show_counter: true,
+    carousel_interval: 7, carousel_transition: "slide", carousel_transition_speed: 600,
+    carousel_hide_scrollbar: false, carousel_pause_on_hover: false, compact: false, show_title: true, show_counter: true,
     show_transcodes: false, show_poster: true, show_avatar: true,
     show_progress: true, show_quality: true, show_device: true, show_server: true,
     show_bitrate: false, show_health: true, show_codecs: false, show_year: true, show_remaining: true,
@@ -29,6 +30,12 @@
     if (s.is_transcode) return "unknown";
     if (["copy", "directplay"].includes(s.video_decision) || ["copy", "directplay"].includes(s.audio_decision)) return "direct";
     return "unknown";
+  };
+  const SERVER_ACCENTS = Object.freeze({ plex: "#E5A00D", jellyfin: "#AA5CC3", emby: "#52B54B" });
+  const TRANSITION_EFFECTS = ["slide", "fade", "zoom", "flip", "none"];
+  const clamp = (value, min, max, fallback) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
   };
   const labels = {
     direct: "Direct", video: "Transcode vidéo", audio: "Transcode audio", both: "Vidéo + audio", unknown: "Inconnu",
@@ -61,11 +68,13 @@
     .stats span { padding:5px 8px; font-size:11px; background:var(--secondary-background-color,rgba(255,255,255,.06)); border-radius:9px; }
     .streams { display:flex; flex-direction:column; gap:10px; }
     .streams.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--min-column,290px)),1fr)); }
-    .streams.carousel { overflow-x:auto; flex-direction:row; scroll-snap-type:x mandatory; scrollbar-width:thin; scroll-behavior:smooth; padding-bottom:4px; }
+    .streams.carousel { overflow-x:auto; flex-direction:row; scroll-snap-type:x mandatory; scrollbar-width:thin; scroll-behavior:auto; padding-bottom:4px; overscroll-behavior-x:contain; }
+    .streams.carousel.hide-scrollbar { scrollbar-width:none; -ms-overflow-style:none; }
+    .streams.carousel.hide-scrollbar::-webkit-scrollbar { display:none; }
     .carousel .stream { flex:0 0 calc((100% - (var(--carousel-visible,1) - 1)*10px)/var(--carousel-visible,1)); scroll-snap-align:start; min-width:0; }
     .stream { position:relative; display:flex; gap:12px; min-width:0; min-height:116px; padding:12px; box-sizing:border-box;
       border-radius:12px; background:var(--secondary-background-color,rgba(255,255,255,.05)); border:1px solid var(--divider-color,rgba(255,255,255,.08)); }
-    .stream::before { content:""; position:absolute; left:0; top:13px; bottom:13px; width:3px; border-radius:3px; background:var(--tr-accent); }
+    .stream::before { content:""; position:absolute; left:0; top:13px; bottom:13px; width:3px; border-radius:3px; background:var(--stream-accent,var(--tr-accent)); }
     .poster { width:73px; height:109px; flex:0 0 73px; border-radius:7px; object-fit:cover; background:rgba(100,100,100,.15); }
     .poster.empty { display:grid; place-items:center; font-size:25px; }
     .info { min-width:0; flex:1; display:flex; flex-direction:column; gap:5px; }
@@ -106,6 +115,10 @@
       this._positions = new Map();
       this._tick = null;
       this._carouselTimer = null;
+      this._carouselFrame = null;
+      this._carouselAnimating = false;
+      this._carouselIndex = 0;
+      this._renderFingerprint = null;
       this._entry = null;
     }
     static getStubConfig() { return {...DEFAULTS}; }
@@ -113,6 +126,9 @@
     setConfig(config) {
       if (!config || !["list", "grid", "carousel", undefined].includes(config.mode)) throw Error("Invalid Tracearr layout");
       this._config = {...DEFAULTS, ...config};
+      this._renderFingerprint = null;
+      this._carouselIndex = 0;
+      this._stopCarouselAnimation();
       this._setTimers();
       this.render();
     }
@@ -129,6 +145,7 @@
       this._closed = true;
       clearInterval(this._tick);
       clearInterval(this._carouselTimer);
+      this._stopCarouselAnimation();
       this._tick = null;
       this._carouselTimer = null;
       if (this._unsubscribe) this._unsubscribe();
@@ -162,9 +179,9 @@
       if (this._closed) return;
       this._tick = setInterval(() => this._updateProgress(), 1000);
       if (this._config.mode === "carousel" && this._config.carousel_autoplay) {
-        const duration = Math.max(3, Number(this._config.carousel_interval) || 7);
+        const duration = clamp(this._config.carousel_interval, 3, 120, 7);
         this._carouselTimer = setInterval(() => {
-          if (!this.isConnected || this.matches(":hover") || document.hidden || window.matchMedia("(prefers-reduced-motion:reduce)").matches) return;
+          if (!this.isConnected || (this._config.carousel_pause_on_hover && this.matches(":hover")) || document.hidden || window.matchMedia("(prefers-reduced-motion:reduce)").matches) return;
           this._scroll(1);
         }, duration * 1000);
       }
@@ -214,7 +231,7 @@
       if (cached && cached.expires > Date.now()) return cached.url;
       if (!cached?.pending && this._hass?.connection) {
         const pending = this._hass.connection.sendMessagePromise({type:"auth/sign_path", path, expires:600})
-          .then(result => { this._images.set(path,{url:result.path,expires:Date.now()+540000}); if (!this._closed) this.render(); })
+          .then(result => { this._images.set(path,{url:result.path,expires:Date.now()+540000}); if (!this._closed) { this._renderFingerprint = null; this.render(); } })
           .catch(() => { this._images.set(path,{url:"",expires:Date.now()+60000}); });
         this._images.set(path,{pending,expires:Date.now()+60000});
       }
@@ -240,7 +257,8 @@
       if (mode !== "direct") meta.push(`<span class="chip ${mode === "unknown" ? "warn" : ""}">${E(labels[mode])}</span>`);
       if (c.show_bitrate && s.bitrate != null) meta.push(`<span class="chip">${E((s.bitrate/1000).toFixed(1))} Mb/s</span>`);
       if (c.show_codecs) meta.push(`<span>${E([s.stream_video_codec_display,s.stream_audio_codec_display].filter(Boolean).join(" / "))}</span>`);
-      return `<article class="stream ${paused?"paused":""}" data-session="${E(s.id)}">
+      const accent = SERVER_ACCENTS[String(s.server_type || "").toLowerCase()] || "var(--tr-accent)";
+      return `<article class="stream ${paused?"paused":""}" data-session="${E(s.id)}" style="--stream-accent:${accent}">
         ${c.show_poster ? (image ? `<img class="poster" src="${E(image)}" alt="Affiche" loading="lazy">` : `<div class="poster empty">▣</div>`) : ""}
         <div class="info">
           ${c.show_avatar ? `<div class="user">${avatar ? `<img class="avatar" src="${E(avatar)}" alt="">` : `<span class="avatar fallback-avatar">${E(name.slice(0,1).toUpperCase())}</span>`}<span>${E(name)}</span>${paused ? `<span class="chip warn">Pause</span>` : ""}</div>` : `<div class="user">${E(name)}${paused ? ` · Pause` : ""}</div>`}
@@ -264,37 +282,143 @@
         if (remainingNode) remainingNode.textContent = `-${fmtTime(Math.max(0,item.duration-current))}`;
       });
     }
+    _stopCarouselAnimation() {
+      if (this._carouselFrame !== null) cancelAnimationFrame(this._carouselFrame);
+      this._carouselFrame = null;
+      this._carouselAnimating = false;
+      const el = this.shadowRoot?.querySelector(".streams.carousel");
+      if (el) el.style.scrollSnapType = "";
+    }
+    _carouselVisibleCount(el, cards) {
+      // Container queries may force a single stream on small dashboard cards.
+      // Use the actual rendered size instead of blindly trusting the editor value.
+      const configured = clamp(this._config.carousel_visible, 1, 4, 1);
+      const first = cards?.[0];
+      const width = first?.getBoundingClientRect?.().width;
+      if (!el?.clientWidth || !Number.isFinite(width) || width <= 0) return configured;
+      const gap = 10;
+      return clamp(Math.floor((el.clientWidth + gap + 1) / (width + gap)), 1, 4, 1);
+    }
+    _carouselMaxIndex(count, el, cards) {
+      const visible = this._carouselVisibleCount(el, cards);
+      return Math.max(0, count - visible);
+    }
+    _goToCarouselIndex(el, cards, index) {
+      const first = cards[0];
+      const target = cards[index];
+      if (!first || !target) return;
+      const left = target.offsetLeft - first.offsetLeft;
+      this._stopCarouselAnimation();
+      const duration = clamp(this._config.carousel_transition_speed, 100, 3000, 600);
+      const chosen = this._config.carousel_transition;
+      const effect = TRANSITION_EFFECTS.includes(chosen) ? chosen : "slide";
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (effect !== "slide" || reducedMotion) {
+        // Different effects switch pages directly, then animate the incoming cards.
+        // This also works with multiple visible streams (unlike stacked slides).
+        el.scrollLeft = left;
+        if (!reducedMotion && effect !== "none") {
+          const frames = {
+            fade: [{opacity: 0}, {opacity: 1}],
+            zoom: [{opacity: 0.3, transform: "scale(.86)"}, {opacity: 1, transform: "scale(1)"}],
+            flip: [{opacity: 0.4, transform: "perspective(900px) rotateY(-75deg)"}, {opacity: 1, transform: "perspective(900px) rotateY(0deg)"}],
+          }[effect];
+          if (frames) {
+            cards.slice(index, index + this._carouselVisibleCount(el, cards)).forEach(card => {
+              if (typeof card.animate === "function") card.animate(frames, {duration, easing: "ease-in-out"});
+            });
+          }
+        }
+        return;
+      }
+      if (Math.abs(el.scrollLeft - left) < 1) return;
+      const from = el.scrollLeft;
+      const start = performance.now();
+      el.style.scrollSnapType = "none";
+      this._carouselAnimating = true;
+      const step = (now) => {
+        if (!this.isConnected) { this._stopCarouselAnimation(); return; }
+        const progress = Math.min(1, Math.max(0, (now - start) / duration));
+        const eased = progress < 0.5 ? 4 * progress ** 3 : 1 - ((-2 * progress + 2) ** 3) / 2;
+        el.scrollLeft = from + (left - from) * eased;
+        if (progress < 1) this._carouselFrame = requestAnimationFrame(step);
+        else {
+          el.scrollLeft = left;
+          this._carouselFrame = null;
+          this._carouselAnimating = false;
+          el.style.scrollSnapType = "";
+        }
+      };
+      this._carouselFrame = requestAnimationFrame(step);
+    }
     _scroll(direction) {
       const el = this.shadowRoot.querySelector(".streams.carousel");
       if (!el) return;
-      const item = el.querySelector(".stream");
-      if (!item) return;
-      const step = item.getBoundingClientRect().width + 10;
-      if (direction > 0 && el.scrollLeft + el.clientWidth >= el.scrollWidth - 5) el.scrollTo({left:0,behavior:"smooth"});
-      else el.scrollBy({left:direction * step,behavior:"smooth"});
+      const cards = [...el.querySelectorAll(".stream")];
+      const max = this._carouselMaxIndex(cards.length, el, cards);
+      if (max < 1) return;
+      const next = this._carouselIndex + (direction > 0 ? 1 : -1);
+      this._carouselIndex = next > max ? 0 : next < 0 ? max : next;
+      this._goToCarouselIndex(el, cards, this._carouselIndex);
     }
+
     render() {
       const entry = this._entryData();
       const c = this._config;
       if (!this.shadowRoot) return;
       const streams = this._streams(entry);
-      const oldScroll = this.shadowRoot.querySelector(".streams.carousel")?.scrollLeft || 0;
+      // Progress arrives frequently over SSE. Updating DOM for every tick destroys
+      // the native carousel's scroll position and interrupts transitions.
+      const fingerprint = JSON.stringify({
+        config: c,
+        streams: streams.map(({progress_ms, ...rest}) => rest),
+        stats: entry?.stats,
+        servers: entry?.servers,
+        aliases: entry?.aliases,
+        avatars: entry?.avatars,
+        connected: entry?.connected,
+      });
+      if (fingerprint === this._renderFingerprint && this.shadowRoot.querySelector("ha-card")) {
+        const now = Date.now();
+        for (const s of streams) this._positions.set(s.id, {
+          progress: s.progress_ms || 0, duration: s.duration_ms || 0, at: now, state: s.state,
+        });
+        this._updateProgress();
+        return;
+      }
+      this._renderFingerprint = fingerprint;
+      const carousel = this.shadowRoot.querySelector(".streams.carousel");
+      const oldScroll = carousel?.scrollLeft || 0;
+      this._stopCarouselAnimation();
       if (c.hide_empty && !streams.length) { this.shadowRoot.innerHTML = `<style>${style}</style>`; this.style.display="none"; return; }
       this.style.display="";
       const stat = entry?.stats || {};
       const head = c.show_title || c.show_counter ? `<div class="head">${c.show_title ? `<h3>${E(c.title || "Lectures en cours")}</h3>` : "<span></span>"}${c.show_counter ? `<span class="count">${streams.length} flux</span>` : ""}</div>` : "";
       const statChips = !this._individual && c.show_transcodes ? `<div class="stats"><span>Flux : ${Number(stat.total||0)}</span><span>Vidéo : ${Number(stat.video||0)}</span><span>Audio : ${Number(stat.audio||0)}</span><span>Les deux : ${Number(stat.both||0)}</span><span>Total transcodes : ${Number(stat.transcodes||0)}</span><span>Autres : ${Number(stat.unknown||0)}</span></div>` : "";
       const cols = c.columns === "auto" ? "repeat(auto-fit,minmax(min(100%,var(--min-column,290px)),1fr))" : `repeat(${Math.max(1, Math.min(4,Number(c.columns)||1))}, minmax(0,1fr))`;
-      const visible = Math.max(1,Math.min(4,Number(c.carousel_visible)||1));
+      const visible = clamp(c.carousel_visible, 1, 4, 1);
       const items = streams.map(s => this._streamCard(entry,s)).join("");
-      const body = `<div class="streams ${E(c.mode)}" style="grid-template-columns:${E(cols)};--carousel-visible:${visible}">${items || `<div class="empty-message">${entry && !entry.connected ? "Tracearr indisponible" : "Aucune lecture en cours"}</div>`}</div>`;
+      const classes = `streams ${E(c.mode)}${c.mode === "carousel" && c.carousel_hide_scrollbar ? " hide-scrollbar" : ""}`;
+      const body = `<div class="${classes}" style="grid-template-columns:${E(cols)};--carousel-visible:${visible}">${items || `<div class="empty-message">${entry && !entry.connected ? "Tracearr indisponible" : "Aucune lecture en cours"}</div>`}</div>`;
       const nav = c.mode === "carousel" && streams.length > visible ? `<div class="carousel-nav"><button class="nav" data-step="-1" aria-label="Précédent">❮</button><span>${streams.length} lectures</span><button class="nav" data-step="1" aria-label="Suivant">❯</button></div>` : "";
       this.shadowRoot.innerHTML = `<style>${style}</style><ha-card style="${Number(c.height)>0?`height:${Math.max(100, Math.min(2000,Number(c.height)))}px;`:""}"><div class="root ${c.compact?"compact":""}" style="--min-column:${c.compact?"210px":"290px"}">${head}${statChips}${body}${nav}</div></ha-card>`;
-      const carousel = this.shadowRoot.querySelector(".streams.carousel");
-      if (carousel) carousel.scrollLeft = oldScroll;
+      const newCarousel = this.shadowRoot.querySelector(".streams.carousel");
+      if (newCarousel) {
+        const cards = [...newCarousel.querySelectorAll(".stream")];
+        this._carouselIndex = Math.min(this._carouselIndex, this._carouselMaxIndex(cards.length, newCarousel, cards));
+        if (cards.length) {
+          newCarousel.scrollLeft = cards[this._carouselIndex].offsetLeft - cards[0].offsetLeft;
+        } else newCarousel.scrollLeft = oldScroll;
+        newCarousel.addEventListener("scroll", () => {
+          if (this._carouselAnimating || !cards.length) return;
+          const step = cards.length > 1 ? cards[1].offsetLeft - cards[0].offsetLeft : 0;
+          if (step > 0) this._carouselIndex = Math.min(this._carouselMaxIndex(cards.length, newCarousel, cards), Math.max(0, Math.round(newCarousel.scrollLeft / step)));
+        }, {passive:true});
+      } else this._carouselIndex = 0;
       this.shadowRoot.querySelectorAll("button[data-step]").forEach(btn => btn.addEventListener("click", () => this._scroll(Number(btn.dataset.step))));
       this._updateProgress();
     }
+
   }
   class TracearrStreamsCard extends BaseTracearrCard { get _individual() { return false; } }
   class TracearrStreamCard extends BaseTracearrCard { get _individual() { return true; } }
@@ -345,7 +469,13 @@
       ${this._select("columns","Colonnes de la grille",[["auto","Automatique"],["1","1"],["2","2"],["3","3"],["4","4"]])}
       <div class="columns"><label>Flux visibles dans le carrousel<input type="number" min="1" max="4" data-field="carousel_visible" value="${E(c.carousel_visible)}"></label>
       <label>Intervalle carrousel (s)<input type="number" min="3" max="120" data-field="carousel_interval" value="${E(c.carousel_interval)}"></label></div>
-      <label class="check"><input type="checkbox" data-field="carousel_autoplay" ${c.carousel_autoplay?"checked":""}>Défilement automatique</label>` : `<h4>Lecture individuelle</h4>${this._select("selection","Choix du flux",[["recent","Flux le plus récent"],["stream","ID de session précis"]])}
+      <div class="columns">
+        ${this._select("carousel_transition","Effet de transition",[["slide","Glissement"],["fade","Fondu"],["zoom","Zoom"],["flip","Retournement 3D"],["none","Sans animation"]])}
+        <label>Durée de transition (ms)<input type="number" min="100" max="3000" step="100" data-field="carousel_transition_speed" value="${E(c.carousel_transition_speed)}"></label>
+      </div>
+      <label class="check"><input type="checkbox" data-field="carousel_autoplay" ${c.carousel_autoplay?"checked":""}>Défilement automatique</label>
+      <label class="check"><input type="checkbox" data-field="carousel_hide_scrollbar" ${c.carousel_hide_scrollbar?"checked":""}>Masquer la barre de défilement horizontale</label>
+      <label class="check"><input type="checkbox" data-field="carousel_pause_on_hover" ${c.carousel_pause_on_hover?"checked":""}>Mettre en pause le défilement au survol de la souris</label>` : `<h4>Lecture individuelle</h4>${this._select("selection","Choix du flux",[["recent","Flux le plus récent"],["stream","ID de session précis"]])}
       <label>ID de session (facultatif)<input type="text" data-field="stream_id" value="${E(c.stream_id||"")}"></label>`}
       <h4>Dimensions</h4><div class="columns">
       <label>Largeur Sections (3–12 colonnes)<input type="number" min="3" max="12" data-field="grid_columns" value="${E(c.grid_columns)}"></label>
