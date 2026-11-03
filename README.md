@@ -4,7 +4,7 @@
 
 **Suivez en temps réel les lectures Plex, Jellyfin et Emby directement dans votre tableau de bord Home Assistant.** Une intégration HACS, des capteurs et deux cartes Lovelace entièrement personnalisables : liste verticale, grille adaptative ou carrousel.
 
-**Version 0.1.6 Alpha.** Ce projet est en cours de test sur de vraies installations Home Assistant. N'utilisez pas encore ses capteurs pour des automatismes critiques.
+**Version 0.1.7 Alpha.** Ce projet est en cours de test sur de vraies installations Home Assistant. N'utilisez pas encore ses capteurs pour des automatismes critiques.
 
 ## Fonctionnalités
 
@@ -53,7 +53,7 @@ L'animation automatique se suspend lorsque la page est masquée ou que le naviga
 4. Entrez l'adresse de Tracearr (accessible depuis Home Assistant) et votre clé API `trr_pub_...`, créée dans **Tracearr → Paramètres → Données et API → API**.
 5. Ouvrez votre tableau de bord → **Modifier → Ajouter une carte** et cherchez « Tracearr ». Les cartes sont également disponibles depuis l'éditeur manuel (exemples ci-dessous).
 
-**Si les cartes ne figurent pas dans le sélecteur :** ouvrez **Paramètres → Tableaux de bord → ⋮ → Ressources** et vérifiez qu'une seule ressource de type **Module JavaScript** pointe vers `/tracearr_ha/tracearr-card.js?v=0.1.6`. Si une ancienne ressource (`?v=0.1.0` ou `?v=0.1.1`) existe, modifiez-la plutôt que d'en créer une seconde. Rechargez ensuite le navigateur avec `Ctrl + F5`.
+**Si les cartes ne figurent pas dans le sélecteur :** ouvrez **Paramètres → Tableaux de bord → ⋮ → Ressources** et vérifiez qu'une seule ressource de type **Module JavaScript** pointe vers `/tracearr_ha/tracearr-card.js?v=0.1.7`. Si une ancienne ressource (`?v=0.1.0` ou `?v=0.1.1`) existe, modifiez-la plutôt que d'en créer une seconde. Rechargez ensuite le navigateur avec `Ctrl + F5`.
 
 **Installation manuelle :** copiez le dossier `custom_components/tracearr_ha` dans `/config/custom_components/tracearr_ha/`, puis redémarrez Home Assistant.
 
@@ -161,10 +161,11 @@ movie_show_year: false
 movie_field_order: title,year
 series_show_title: true
 series_show_episode_title: true
-series_show_season_episode: true
+series_show_season: true
+series_show_episode_number: true
 series_show_year: true
 series_episode_style: long
-series_field_order: series,episode,season,year
+series_field_order: series,season,episode_number,episode,year
 ```
 
 **Important** : l'année provient du champ `year` fourni par Tracearr ; selon le serveur, ce champ peut correspondre à l'année de l'épisode plutôt qu'à la première année de diffusion de toute la série.
@@ -226,7 +227,7 @@ L'API `/streams` v2 ne fournit pas la distinction réseau local/WAN ni un identi
 
 1. **Aucun capteur :** consultez **Paramètres → Système → Journaux** et vérifiez l'URL et la clé API Tracearr.
 2. **Le SSE se reconnecte souvent :** désactivez le buffering du proxy inverse pour `text/event-stream` et augmentez le délai d'inactivité au-delà de 30 secondes (un ping arrive environ toutes les 25 secondes).
-3. **La carte est introuvable :** vérifiez la ressource `/tracearr_ha/tracearr-card.js?v=0.1.6` dans Lovelace, redémarrez HA et rechargez votre navigateur.
+3. **La carte est introuvable :** vérifiez la ressource `/tracearr_ha/tracearr-card.js?v=0.1.7` dans Lovelace, redémarrez HA et rechargez votre navigateur.
 4. **Les images sont absentes :** vérifiez que les URL `poster_url` sont bien servies par le proxy d'images de Tracearr et qu'aucune erreur n'apparaît dans les journaux réseau du navigateur.
 5. **Transcodage « Inconnu » :** Tracearr ou le serveur média n'a pas fourni assez de détails pour classer la lecture.
 6. **Le carrousel ne défile pas automatiquement :** vérifiez qu'il y a plus de flux que de cartes visibles, que la page est au premier plan, que la pause au survol est désactivée ou que la souris est sortie de la carte, et que la réduction des animations n'est pas activée dans le système.
@@ -255,3 +256,41 @@ La suite de tests couvre notamment la classification des transcodages, les évé
 ### Chronomètres et temps de lecture
 
 Les temps « déjà lu » et « restant » sont calculés localement à partir d’une horloge monotone. Les petits décalages des mises à jour SSE de Tracearr sont corrigés progressivement sans faire reculer le chronomètre. Un vrai saut dans la lecture (avance ou retour volontaire) reste pris en compte. En pause, le temps est figé. Les temps restent indicatifs et peuvent être décalés si le serveur signale tardivement une mise en tampon.
+
+## Nouveautés 0.1.7
+
+### Saison et numéro d’épisode séparés
+
+Les options `series_show_season` et `series_show_episode_number` permettent de masquer individuellement la saison ou le numéro d’épisode. Le format `series_episode_style` (`short` ou `long`) et l’ordre `series_field_order` restent configurables. L’ancienne option `series_show_season_episode` reste compatible.
+
+### Badges pour toute entité Home Assistant
+
+Dans l’éditeur **En-tête et statistiques**, choisissez **Ajouter un badge**, sélectionnez une entité Home Assistant (capteur, compteur ou autre) et saisissez un titre facultatif. Les valeurs et unités se mettent à jour sans reconstruire le carrousel.
+
+```yaml
+header_entity_badges:
+  - entity: counter.overseer_demande
+    label: Demandes Seerr
+  - entity: sensor.temperature_salon
+    label: Salon
+```
+
+### Débit local, distant ou total
+
+Dans **Débit et localisation des flux**, `bitrate_scope` accepte `both`, `local` ou `remote`. Le filtre s’applique aux badges de débit par flux et au débit total de l’en-tête.
+
+**Attention :** l’API publique Tracearr v2 ne transmet pas l’adresse IP ni le statut LAN/WAN dans `/streams`. Il faut renseigner des correspondances manuelles ; un flux non classé n’est pas inclus dans un débit local/distant.
+
+```yaml
+bitrate_scope: remote
+network_locations: |
+  plex:alice=remote
+  device:Apple TV=local
+  player:Plex for Android=remote
+```
+
+Utilisez un identifiant serveur et utilisateur (`uuid:utilisateur`), `plex:utilisateur`, `device:Nom`, `player:Nom` ou simplement `utilisateur`. Une règle liée à un appareil peut devenir inexacte s’il change de réseau.
+
+### Aucun flux en cours
+
+`empty_mode` peut prendre `message` (texte personnalisé via `empty_message`), `header_only` (en-tête uniquement) ou `hide` (carte masquée). L’ancien `hide_empty: true` reste compatible.
