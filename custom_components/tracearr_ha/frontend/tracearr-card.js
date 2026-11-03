@@ -1,4 +1,4 @@
-/* Tracearr HA Lovelace cards 0.1.3 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.4 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;
@@ -12,8 +12,13 @@
     show_progress: true, show_quality: true, show_device: true, show_server: true,
     show_bitrate: false, show_health: true, show_codecs: false, show_year: true, show_remaining: true,
     show_paused: true, hide_empty: false, sort: "recent", filter_transcode: "all",
+    show_header: true, header_show_streams: true, header_show_bandwidth: false,
+    header_show_direct: false, header_show_paused: false,
+    header_show_video: false, header_show_audio: false, header_show_both: false,
+    header_show_transcodes_total: false, header_show_server_counts: false,
+    stream_surface: "soft",
     selection: "recent", grid_columns: 12, grid_rows: 0, height: 0,
-    font_size: 14, progress_color_mode: "theme", progress_custom_color: "#00BCD4",
+    font_size: 14, accent_color_mode: "theme", accent_custom_color: "#00BCD4",
     aliases: "", avatars: "",
   };
   const E = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({
@@ -45,6 +50,24 @@
     `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v14M15 5v14M3 9h6M3 15h6M15 9h6M15 15h6"/></svg>` :
     `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4" stroke-linecap="round"/></svg>`;
   const validColor = (value) => /^#[0-9a-fA-F]{6}$/.test(String(value || "")) ? value : "#00BCD4";
+  // Centralized palette: progress, metric pills and per-stream badges share the
+  // same choice. Contrast uses WCAG relative luminance (black or white).
+  const readRgb = (value) => {
+    const raw = String(value || "").trim();
+    const hex = raw.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hex) {
+      const v = hex[1].length === 3 ? [...hex[1]].map(x => x + x).join("") : hex[1];
+      return [0, 2, 4].map(i => parseInt(v.slice(i, i + 2), 16));
+    }
+    const rgb = raw.match(/^rgba?\(\s*(\d+(?:\.\d+)?)\s*[,\s]+(\d+(?:\.\d+)?)\s*[,\s]+(\d+(?:\.\d+)?)/i);
+    return rgb ? rgb.slice(1, 4).map(v => clamp(v, 0, 255, 0)) : null;
+  };
+  const contrastColor = (background) => {
+    const rgb = readRgb(background) || [0, 188, 212];
+    const linear = rgb.map(n => { const v = n / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+    const luminance = linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+    return luminance > 0.179 ? "#000000" : "#FFFFFF";
+  };
   const asMapping = (input) => {
     if (input && typeof input === "object") return input;
     const result = {};
@@ -63,20 +86,21 @@
   };
   const style = `
     :host { display:block; width:100%; height:100%; min-width:0; box-sizing:border-box;
-      color:#fff; container-type:inline-size; --tr-font-size:14px; }
-    ha-card { --tr-accent:var(--accent-color,#00bcd4); background:transparent!important;
-      background-color:transparent!important; box-shadow:none!important; border:0!important;
-      border-radius:var(--ha-card-border-radius,16px); overflow:hidden; color:#fff;
-      height:100%; min-height:0; box-sizing:border-box; }
-    .root { padding:12px; min-width:0; height:100%; box-sizing:border-box; overflow-y:auto; overflow-x:hidden;
-      color:#fff; scrollbar-width:thin; }
-    .head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 12px; }
-    .head h3 { margin:0; font-size:calc(var(--tr-font-size)*1.24); font-weight:700; color:#fff; }
-    .count { padding:4px 9px; background:rgba(255,255,255,.08); border-radius:30px;
-      color:#fff; font-weight:600; font-size:calc(var(--tr-font-size)*.85); }
-    .stats { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
-    .stats span { padding:5px 8px; font-size:calc(var(--tr-font-size)*.78);
-      background:rgba(255,255,255,.07); color:#fff; border-radius:9px; }
+      color:var(--primary-text-color,#fff); container-type:inline-size; --tr-font-size:14px; }
+    /* Home Assistant owns the real card surface, radius, border and shadow. */
+    ha-card { border-radius:var(--ha-card-border-radius,16px); overflow:hidden;
+      color:var(--primary-text-color,#fff); height:100%; min-height:0; box-sizing:border-box; }
+    .root { padding:14px; min-width:0; height:100%; box-sizing:border-box;
+      overflow-y:auto; overflow-x:hidden; scrollbar-width:thin; }
+    .head { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px;
+      margin:0 0 12px; color:var(--primary-text-color,#fff); }
+    .head h3 { flex:0 1 auto; margin:0; font-size:calc(var(--tr-font-size)*1.24); font-weight:700;
+      color:var(--primary-text-color,#fff); overflow-wrap:anywhere; }
+    .head-metrics { display:flex; flex:1 1 auto; flex-wrap:wrap; align-items:center; gap:5px;
+      min-width:0; justify-content:flex-end; }
+    .metric { display:inline-flex; align-items:center; padding:4px 9px; border-radius:20px;
+      font-size:calc(var(--tr-font-size)*.80); font-weight:600; background:var(--pill-bg);
+      color:var(--pill-text); white-space:nowrap; }
     .streams { display:flex; flex-direction:column; gap:10px; }
     .streams.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--min-column,290px)),1fr)); }
     .streams.carousel { overflow-x:auto; flex-direction:row; scroll-snap-type:x mandatory;
@@ -86,13 +110,15 @@
     .streams.carousel.is-dragging { cursor:grabbing; scroll-snap-type:none!important; user-select:none; }
     .streams.carousel.is-dragging * { user-select:none; pointer-events:none; }
     .carousel .stream { flex:0 0 calc((100% - (var(--carousel-visible,1) - 1)*10px)/var(--carousel-visible,1)); scroll-snap-align:start; min-width:0; }
-    .stream { position:relative; display:flex; gap:12px; min-width:0; min-height:116px; padding:12px;
-      box-sizing:border-box; border-radius:12px; background:transparent;
-      border:1px solid var(--divider-color,rgba(255,255,255,.12)); color:#fff; }
+    .stream { position:relative; display:flex; align-items:center; gap:12px; min-width:0; min-height:116px;
+      padding:12px; box-sizing:border-box; border-radius:12px; background:color-mix(in srgb,
+      var(--primary-text-color,#fff) 4%,transparent); border:1px solid var(--divider-color,rgba(255,255,255,.12));
+      color:var(--primary-text-color,#fff); }
     .stream::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
-      border-radius:3px; background:var(--stream-accent,var(--tr-accent)); }
-    .poster-wrap { position:relative; width:73px; height:109px; flex:0 0 73px; border-radius:7px;
-      overflow:hidden; background:rgba(100,100,100,.15); }
+      border-radius:3px; background:var(--stream-accent,var(--accent-color,#00BCD4)); }
+    .root.flat-streams .stream { background:transparent; }
+    .poster-wrap { position:relative; width:73px; height:109px; flex:0 0 73px; align-self:center;
+      border-radius:7px; overflow:hidden; background:rgba(100,100,100,.15); }
     .poster { width:100%; height:100%; display:block; object-fit:cover; }
     .poster.empty { display:grid; place-items:center; font-size:calc(var(--tr-font-size)*1.8); }
     .poster-paused { position:absolute; inset:0; display:flex; justify-content:center; align-items:center;
@@ -100,14 +126,15 @@
     .pause-symbol { display:flex; gap:5px; align-items:center; justify-content:center; }
     .pause-symbol::before,.pause-symbol::after { content:""; display:block; background:#fff; border:1px solid rgba(0,0,0,.3);
       border-radius:2px; width:6px; height:24px; box-shadow:0 0 5px rgba(0,0,0,.45); }
-    .info { min-width:0; flex:1; display:flex; flex-direction:column; gap:5px; color:#fff; }
+    .info { min-width:0; flex:1; display:flex; flex-direction:column; gap:5px; align-self:stretch;
+      color:var(--primary-text-color,#fff); }
     .user { display:flex; align-items:center; gap:6px; padding-right:54px;
-      font-size:calc(var(--tr-font-size)*.92); color:#fff; }
+      font-size:calc(var(--tr-font-size)*.92); color:inherit; }
     .avatar { width:23px; height:23px; border-radius:50%; object-fit:cover; background:rgba(100,100,100,.25); }
-    .fallback-avatar { display:grid; place-items:center; font-size:calc(var(--tr-font-size)*.78); font-weight:bold; color:#fff; }
-    .title { font-weight:700; font-size:calc(var(--tr-font-size)*1.12); color:#fff;
+    .fallback-avatar { display:grid; place-items:center; font-size:calc(var(--tr-font-size)*.78); font-weight:bold; }
+    .title { font-weight:700; font-size:calc(var(--tr-font-size)*1.12);
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .subtitle { color:#fff; font-size:calc(var(--tr-font-size)*.9); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .subtitle { font-size:calc(var(--tr-font-size)*.9); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .media-flags { display:flex; position:absolute; right:12px; top:12px; align-items:center; gap:8px; z-index:1; }
     .stream-indicator { width:19px; height:19px; display:inline-flex; align-items:center;
       justify-content:center; color:#a3a3a3; }
@@ -116,21 +143,25 @@
     .stream-indicator.direct { color:#12bb70; }
     .stream-indicator.transcode { color:#ff9900; }
     .progress { margin-top:auto; width:100%; height:6px; border-radius:7px; overflow:hidden;
-      background:color-mix(in srgb,var(--progress-accent) 24%,transparent); }
-    .fill { display:block; height:100%; background:var(--progress-accent);
+      background:color-mix(in srgb,var(--shared-accent) 24%,transparent); }
+    .fill { display:block; height:100%; background:var(--shared-accent);
       border-radius:7px; transition:width 1s linear; }
     .times { display:flex; justify-content:space-between; align-items:center; gap:8px;
-      font-size:calc(var(--tr-font-size)*.82); color:#fff; font-variant-numeric:tabular-nums; }
+      font-size:calc(var(--tr-font-size)*.82); font-variant-numeric:tabular-nums; }
     .time-paused { color:#ff9900; font-weight:700; }
+    /* Footer information wraps freely; the poster remains vertically centered beside it. */
     .meta { display:flex; align-items:center; flex-wrap:wrap; gap:5px;
-      font-size:calc(var(--tr-font-size)*.8); color:#fff; }
-    .chip { background:rgba(255,255,255,.08); color:#fff; border-radius:6px; padding:2px 6px; }
-    .warn { background:rgba(239,178,82,.16); color:#fff; }
-    .empty-message { text-align:center; padding:18px 8px; color:#fff;
+      margin-top:5px; padding-top:7px; border-top:1px solid var(--divider-color,rgba(255,255,255,.12));
+      font-size:calc(var(--tr-font-size)*.80); }
+    .chip { display:inline-flex; align-items:center; padding:3px 7px; border-radius:7px;
+      background:var(--pill-bg); color:var(--pill-text); font-weight:600; }
+    .chip.warn { background:color-mix(in srgb,#ff9900 14%,transparent); color:#ff9900; }
+    .empty-message { text-align:center; padding:18px 8px;
       font-size:var(--tr-font-size); }
     .carousel-nav { display:flex; justify-content:center; align-items:center; gap:12px;
-      margin-top:8px; font-size:calc(var(--tr-font-size)*.85); color:#fff; }
-    button.nav { border:1px solid rgba(255,255,255,.18); background:transparent; color:#fff;
+      margin-top:8px; font-size:calc(var(--tr-font-size)*.85); }
+    button.nav { border:1px solid var(--divider-color,rgba(255,255,255,.18));
+      background:transparent; color:var(--primary-text-color,#fff);
       border-radius:8px; padding:6px 11px; cursor:pointer; font-size:calc(var(--tr-font-size)*.95); }
     button.nav:focus-visible,.streams.carousel:focus-visible { outline:2px solid var(--focus-color,#00bcd4); outline-offset:2px; }
     .compact .stream { min-height:78px; padding:8px; gap:8px; }
@@ -142,6 +173,18 @@
       .carousel .stream { flex-basis:100%!important; } }
     @media (prefers-reduced-motion:reduce) { .fill { transition:none; } }
   `;
+
+  function normalizeConfig(config) {
+    const result = {...DEFAULTS, ...config};
+    // Pre-0.1.4 dashboards continue to behave the same until users change them.
+    if (!("header_show_streams" in config)) result.header_show_streams = config.show_counter ?? true;
+    if (config.show_transcodes && !["header_show_video","header_show_audio","header_show_both","header_show_transcodes_total"].some(k => k in config)) {
+      result.header_show_video = result.header_show_audio = result.header_show_both = result.header_show_transcodes_total = true;
+    }
+    if (!("accent_color_mode" in config) && config.progress_color_mode) result.accent_color_mode = config.progress_color_mode;
+    if (!("accent_custom_color" in config) && config.progress_custom_color) result.accent_custom_color = config.progress_custom_color;
+    return result;
+  }
 
   class BaseTracearrCard extends HTMLElement {
     constructor() {
@@ -167,7 +210,7 @@
     static getConfigElement() { return document.createElement("tracearr-card-editor"); }
     setConfig(config) {
       if (!config || !["list", "grid", "carousel", undefined].includes(config.mode)) throw Error("Invalid Tracearr layout");
-      this._config = {...DEFAULTS, ...config};
+      this._config = normalizeConfig(config);
       this._renderFingerprint = null;
       this._carouselIndex = 0;
       this._stopCarouselAnimation();
@@ -284,6 +327,75 @@
       }
       return "";
     }
+    _themeAccent() {
+      // Use the theme's true RGB value for legible foreground contrast.
+      // The CSS var itself remains the color source so theme changes propagate.
+      try {
+        if (typeof getComputedStyle !== "function") return "#00BCD4";
+        const style = getComputedStyle(this);
+        const raw = style.getPropertyValue("--accent-color").trim() ||
+          getComputedStyle(document.documentElement).getPropertyValue("--accent-color").trim();
+        if (readRgb(raw)) return raw;
+        if (typeof document.createElement === "function") {
+          const helper = document.createElement("span");
+          helper.style.color = raw || "#00BCD4";
+          (this.shadowRoot || this).appendChild(helper);
+          const resolved = getComputedStyle(helper).color;
+          helper.remove();
+          if (readRgb(resolved)) return resolved;
+        }
+      } catch (_) { /* detached editor preview or browser without computed styles */ }
+      return "#00BCD4";
+    }
+    _palette(serverType, forceTheme=false) {
+      const mode = forceTheme && this._config.accent_color_mode === "server" ? "theme" : this._config.accent_color_mode;
+      const raw = mode === "server" ? SERVER_ACCENTS[String(serverType||"").toLowerCase()] :
+        mode === "custom" ? validColor(this._config.accent_custom_color) : null;
+      const cssColor = raw || "var(--accent-color,#00BCD4)";
+      const foreground = contrastColor(raw || this._themeAccent());
+      return {bg:cssColor, text:foreground};
+    }
+    _streamSummary(streams) {
+      const sums = {total:streams.length, direct:0, video:0, audio:0, both:0,
+        transcodes:0, unknown:0, paused:0, bandwidth:0, byServer:new Map()};
+      for (const s of streams) {
+        const kind = transcodeMode(s);
+        sums[kind]++;
+        if (kind === "video" || kind === "audio" || kind === "both" || s.is_transcode) sums.transcodes++;
+        if (s.state === "paused") sums.paused++;
+        sums.bandwidth += Math.max(0, Number(s.bitrate) || 0);
+        const id = s.server_id || `${s.server_type}:${s.server_name}`;
+        const row = sums.byServer.get(id) || {name:s.server_name || s.server_type || "Serveur",type:s.server_type,count:0};
+        row.count++;
+        sums.byServer.set(id,row);
+      }
+      return sums;
+    }
+    _header(streams) {
+      const c = this._config;
+      if (!c.show_header) return "";
+      const summary = this._streamSummary(streams);
+      const metrics = [];
+      const add = (active,label,colorType=null) => {
+        if (!active) return;
+        const palette = this._palette(colorType, !colorType);
+        metrics.push(`<span class="metric" style="--pill-bg:${palette.bg};--pill-text:${palette.text}">${E(label)}</span>`);
+      };
+      add(c.header_show_streams, `${summary.total} flux`);
+      add(c.header_show_bandwidth, `Débit : ${(summary.bandwidth/1000).toFixed(1)} Mb/s`);
+      add(c.header_show_direct, `Direct : ${summary.direct}`);
+      add(c.header_show_paused, `Pause : ${summary.paused}`);
+      add(c.header_show_video, `Vidéo : ${summary.video}`);
+      add(c.header_show_audio, `Audio : ${summary.audio}`);
+      add(c.header_show_both, `Vidéo + audio : ${summary.both}`);
+      add(c.header_show_transcodes_total, `Transcodes : ${summary.transcodes}`);
+      if (c.header_show_server_counts) {
+        for (const server of summary.byServer.values()) add(true, `${server.name} : ${server.count}`,server.type);
+      }
+      const title = c.show_title ? `<h3>${E(c.title || "Lectures en cours")}</h3>` : "";
+      if (!title && !metrics.length) return "";
+      return `<header class="head">${title}${metrics.length ? `<div class="head-metrics">${metrics.join("")}</div>` : ""}</header>`;
+    }
     _streamCard(entry,s) {
       const c = this._config;
       const poster = c.show_poster ? this._image(entry,s,"poster") : "";
@@ -302,11 +414,10 @@
       if (c.show_quality && s.resolution) meta.push(`<span class="chip">${E(s.resolution)}</span>`);
       // The separate video/audio icons take the place of the old text badge.
       if (c.show_bitrate && s.bitrate != null) meta.push(`<span class="chip">${E((s.bitrate/1000).toFixed(1))} Mb/s</span>`);
-      if (c.show_codecs) meta.push(`<span>${E([s.stream_video_codec_display,s.stream_audio_codec_display].filter(Boolean).join(" / "))}</span>`);
+      if (c.show_codecs && (s.stream_video_codec_display || s.stream_audio_codec_display)) meta.push(`<span>${E([s.stream_video_codec_display,s.stream_audio_codec_display].filter(Boolean).join(" / "))}</span>`);
       const accent = SERVER_ACCENTS[String(s.server_type || "").toLowerCase()] || "var(--tr-accent)";
-      const colorMode = c.progress_color_mode;
-      const progressColor = colorMode === "server" ? "var(--stream-accent)" :
-        colorMode === "custom" ? validColor(c.progress_custom_color) : "var(--accent-color,#00BCD4)";
+      const palette = this._palette(s.server_type);
+      const sharedStyle = `--shared-accent:${palette.bg};--pill-bg:${palette.bg};--pill-text:${palette.text}`;
       const indicators = c.show_transcode_icons ? `<div class="media-flags" aria-label="État du flux audio et vidéo">${["video","audio"].map(kind => {
         const decision = kind === "video" ? s.video_decision : s.audio_decision;
         const state = codecState(decision);
@@ -314,7 +425,7 @@
         return `<span class="stream-indicator ${state}" role="img" aria-label="${E(tip)}" title="${E(tip)}">${badgeIcon(kind)}</span>`;
       }).join("")}</div>` : "";
       const posterMarkup = c.show_poster ? `<div class="poster-wrap">${poster ? `<img class="poster" src="${E(poster)}" alt="Affiche" loading="lazy">` : `<div class="poster empty">▣</div>`}${paused ? `<span class="poster-paused" aria-label="Lecture en pause"><span class="pause-symbol" aria-hidden="true"></span></span>` : ""}</div>` : "";
-      return `<article class="stream" data-session="${E(s.id)}" style="--stream-accent:${accent};--progress-accent:${progressColor}">
+      return `<article class="stream" data-session="${E(s.id)}" style="--stream-accent:${accent};${sharedStyle}">
         ${posterMarkup}
         ${indicators}
         <div class="info">
@@ -492,9 +603,7 @@
       this._stopCarouselAnimation();
       if (c.hide_empty && !streams.length) { this.shadowRoot.innerHTML = `<style>${style}</style>`; this.style.display="none"; return; }
       this.style.display="";
-      const stat = entry?.stats || {};
-      const head = c.show_title || c.show_counter ? `<div class="head">${c.show_title ? `<h3>${E(c.title || "Lectures en cours")}</h3>` : "<span></span>"}${c.show_counter ? `<span class="count">${streams.length} flux</span>` : ""}</div>` : "";
-      const statChips = !this._individual && c.show_transcodes ? `<div class="stats"><span>Flux : ${Number(stat.total||0)}</span><span>Vidéo : ${Number(stat.video||0)}</span><span>Audio : ${Number(stat.audio||0)}</span><span>Les deux : ${Number(stat.both||0)}</span><span>Total transcodes : ${Number(stat.transcodes||0)}</span><span>Autres : ${Number(stat.unknown||0)}</span></div>` : "";
+      const head = this._header(streams);
       const cols = c.columns === "auto" ? "repeat(auto-fit,minmax(min(100%,var(--min-column,290px)),1fr))" : `repeat(${Math.max(1, Math.min(4,Number(c.columns)||1))}, minmax(0,1fr))`;
       const visible = clamp(c.carousel_visible, 1, 4, 1);
       const items = streams.map(s => this._streamCard(entry,s)).join("");
@@ -507,7 +616,7 @@
       // Otherwise the optional pixel height applies (e.g. masonry dashboards).
       const rowsAssigned = Number(c.grid_options?.rows) > 0;
       const fixedHeight = Number(c.height) > 0 && !rowsAssigned ? `height:${clamp(c.height,100,2000,240)}px;` : "";
-      this.shadowRoot.innerHTML = `<style>${style}</style><ha-card style="${fixedHeight}--tr-font-size:${clamp(c.font_size,10,28,14)}px"><div class="root ${c.compact?"compact":""}" style="--min-column:${c.compact?"210px":"290px"}">${head}${statChips}${body}${nav}</div></ha-card>`;
+      this.shadowRoot.innerHTML = `<style>${style}</style><ha-card style="${fixedHeight}--tr-font-size:${clamp(c.font_size,10,28,14)}px"><div class="root ${c.compact?"compact":""} ${c.stream_surface === "transparent" ? "flat-streams" : ""}" style="--min-column:${c.compact?"210px":"290px"}">${head}${body}${nav}</div></ha-card>`;
       const newCarousel = this.shadowRoot.querySelector(".streams.carousel");
       if (newCarousel) {
         const cards = [...newCarousel.querySelectorAll(".stream")];
@@ -531,38 +640,55 @@
   class TracearrStreamCard extends BaseTracearrCard { get _individual() { return true; } }
 
   const editorStyle = `
-    :host { display:block; font:inherit; } .editor { padding:10px 0; display:grid; gap:13px; }
-    label { display:grid; gap:4px; font-size:13px; color:var(--primary-text-color); }
+    :host { display:block; font:inherit; } .editor { display:grid; gap:9px; padding:8px 0; }
+    details { border:1px solid var(--divider-color,#8885); border-radius:10px; overflow:hidden; }
+    summary { cursor:pointer; padding:12px; font-size:14px; font-weight:700; background:var(--secondary-background-color,transparent); }
+    details[open] summary { border-bottom:1px solid var(--divider-color,#8885); }
+    .section-body { padding:12px; display:grid; gap:11px; }
+    label { display:grid; gap:5px; font-size:13px; color:var(--primary-text-color); }
     select,input[type=text],input[type=number],textarea,input[type=color] { padding:9px; font:inherit; width:100%; min-width:0; box-sizing:border-box;
       color:var(--primary-text-color); background:var(--card-background-color); border:1px solid var(--divider-color,#777); border-radius:7px; }
-    .check { display:flex; align-items:center; gap:8px; } .check input { accent-color:var(--accent-color); }
-    h4 { margin:7px 0 2px; font-size:13px; } .columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+    .check { display:flex; align-items:center; gap:8px; } .check input { accent-color:var(--accent-color); flex-shrink:0; }
+    .columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
     textarea { min-height:64px; resize:vertical; } small { font-size:11px; color:var(--secondary-text-color); }
   `;
-  const fields = [
-    ["show_title","Afficher le titre"], ["show_counter","Afficher le nombre de flux"],
-    ["show_transcodes","Compteurs globaux de transcodage"], ["show_transcode_icons","Icônes vidéo / audio (vert = direct, orange = transcode)"],
-    ["show_poster","Afficher les affiches"],
-    ["show_avatar","Afficher les avatars"], ["show_progress","Afficher la progression"],
-    ["show_remaining","Afficher le temps restant"], ["show_quality","Afficher la résolution"],
-    ["show_device","Afficher le lecteur"], ["show_server","Afficher le serveur"],
-    ["show_bitrate","Afficher le débit"], ["show_health","État du serveur"], ["show_codecs","Afficher les codecs"],
-    ["show_year","Afficher l'année"], ["show_paused","Inclure les lectures en pause"],
-    ["hide_empty","Masquer si aucune lecture"], ["compact","Affichage compact"],
-  ];
   class TracearrCardEditor extends HTMLElement {
-    constructor() { super(); this.attachShadow({mode:"open"}); this._config={...DEFAULTS}; this._payload={entries:[]}; }
-    setConfig(config) { this._config={...DEFAULTS,...config}; this.render(); }
+    constructor() {
+      super(); this.attachShadow({mode:"open"}); this._config={...DEFAULTS};
+      this._payload={entries:[]}; this._openSections=new Set(["header","layout"]);
+    }
+    setConfig(config) {
+      // Keep opened categories across dashboard editor rerenders.
+      this._captureOpenSections();
+      this._config=normalizeConfig(config);
+      this.render();
+    }
     set hass(hass) {
       this._hass=hass;
       if (hass?.connection && this._connection !== hass.connection) {
         this._connection=hass.connection;
-        hass.connection.sendMessagePromise({type:"tracearr_ha/get"}).then(r=>{this._payload=r;this.render();}).catch(()=>{});
+        hass.connection.sendMessagePromise({type:"tracearr_ha/get"}).then(r=>{
+          this._payload=r;this._captureOpenSections();this.render();
+        }).catch(()=>{});
       }
+    }
+    _captureOpenSections() {
+      const details=this.shadowRoot.querySelectorAll("details[data-section]");
+      if (details.length) this._openSections=new Set([...details].filter(d=>d.open).map(d=>d.dataset.section));
+    }
+    _group(key,title,contents) {
+      return `<details data-section="${E(key)}" ${this._openSections.has(key)?"open":""}><summary>${E(title)}</summary><div class="section-body">${contents}</div></details>`;
     }
     _option(value,text) { return `<option value="${E(value)}">${E(text)}</option>`; }
     _select(name,label,options) {
       return `<label>${E(label)}<select data-field="${E(name)}">${options.map(([v,l])=>this._option(v,l)).join("")}</select></label>`;
+    }
+    _toggle(name,label) {
+      return `<label class="check"><input type="checkbox" data-field="${E(name)}" ${this._config[name]?"checked":""}>${E(label)}</label>`;
+    }
+    _checks(fields) { return `<div class="columns">${fields.map(([key,label])=>this._toggle(key,label)).join("")}</div>`; }
+    _number(name,label,min,max) {
+      return `<label>${E(label)}<input type="number" min="${min}" max="${max}" data-field="${E(name)}" value="${E(this._config[name])}"></label>`;
     }
     render() {
       const c=this._config;
@@ -571,42 +697,68 @@
       const servers=[...new Map((selected?.servers||[]).map(s=>[s.server_id,[s.server_id,s.server_name]])).values()];
       const users=[...new Set((selected?.streams||[]).map(s=>s.username).filter(Boolean))].sort();
       const isIndividual=c.type==="custom:tracearr-stream-card";
-      this.shadowRoot.innerHTML=`<style>${editorStyle}</style><div class="editor">
-      <h4>Source</h4>${this._select("entry_id","Instance Tracearr",[["","Automatique (première instance)"],...entries.map(e=>[e.id,e.name])])}
-      ${!isIndividual ? `<h4>Disposition</h4>${this._select("mode","Type d'affichage",[["list","Liste verticale"],["grid","Grille adaptative"],["carousel","Carrousel"]])}
-      ${this._select("columns","Colonnes de la grille",[["auto","Automatique"],["1","1"],["2","2"],["3","3"],["4","4"]])}
-      <div class="columns"><label>Flux visibles dans le carrousel<input type="number" min="1" max="4" data-field="carousel_visible" value="${E(c.carousel_visible)}"></label>
-      <label>Intervalle carrousel (s)<input type="number" min="3" max="120" data-field="carousel_interval" value="${E(c.carousel_interval)}"></label></div>
-      <div class="columns">
-        ${this._select("carousel_transition","Effet de transition",[["slide","Glissement"],["fade","Fondu"],["zoom","Zoom"],["flip","Retournement 3D"],["none","Sans animation"]])}
-        <label>Durée de transition (ms)<input type="number" min="100" max="3000" step="100" data-field="carousel_transition_speed" value="${E(c.carousel_transition_speed)}"></label>
-      </div>
-      <label class="check"><input type="checkbox" data-field="carousel_autoplay" ${c.carousel_autoplay?"checked":""}>Défilement automatique</label>
-      <small>La barre de défilement native est toujours masquée.</small>
-      <label class="check"><input type="checkbox" data-field="carousel_show_arrows" ${c.carousel_show_arrows?"checked":""}>Afficher les boutons précédent / suivant</label>
-      <label class="check"><input type="checkbox" data-field="carousel_mouse_drag" ${c.carousel_mouse_drag?"checked":""}>Navigation à la souris (cliquer-glisser)</label>
-      <label class="check"><input type="checkbox" data-field="carousel_pause_on_hover" ${c.carousel_pause_on_hover?"checked":""}>Mettre en pause le défilement au survol de la souris</label>` : `<h4>Lecture individuelle</h4>${this._select("selection","Choix du flux",[["recent","Flux le plus récent"],["stream","ID de session précis"]])}
-      <label>ID de session (facultatif)<input type="text" data-field="stream_id" value="${E(c.stream_id||"")}"></label>`}
-      <h4>Dimensions</h4><div class="columns">
-      <label>Largeur Sections (3–12 colonnes)<input type="number" min="3" max="12" data-field="grid_columns" value="${E(c.grid_columns)}"></label>
-      <label>Hauteur initiale Sections (lignes ; 0 = 4)<input type="number" min="0" max="30" data-field="grid_rows" value="${E(c.grid_rows)}"></label>
-      </div><small>La hauteur peut ensuite être redimensionnée directement avec la poignée native du tableau de bord Sections. Minimum : 2 lignes.</small>
-      <label>Hauteur CSS en pixels (0 = auto, pour les dashboards hors Sections)<input type="number" min="0" max="2000" data-field="height" value="${E(c.height)}"></label>
-      <h4>Filtrage</h4>${this._select("filter_server","Serveur",[["","Tous les serveurs"],...servers])}
-      ${this._select("filter_user","Utilisateur",[["","Tous les utilisateurs"],...users.map(u=>[u,u])])}
-      ${this._select("filter_transcode","Transcodage",[["all","Tous"],["direct","Direct"],["video","Vidéo seule"],["audio","Audio seul"],["both","Vidéo et audio"],["unknown","Inconnu"]])}
-      ${this._select("sort","Trier par",[["recent","Date de début"],["user","Utilisateur"],["server","Serveur"]])}
-      <h4>Apparence</h4>
-      <label>Taille de la police (10–28 px)<input type="number" min="10" max="28" step="1" data-field="font_size" value="${E(c.font_size)}"></label>
-      ${this._select("progress_color_mode","Couleur de la barre de lecture",[["theme","Thème Home Assistant"],["server","Selon le serveur (Plex / Jellyfin / Emby)"],["custom","Couleur personnalisée"]])}
-      <label>Couleur personnalisée<input type="color" data-field="progress_custom_color" value="${E(validColor(c.progress_custom_color))}"></label>
-      <small>Fond transparent et informations en blanc. L'état « En pause » et les icônes de transcodage gardent leurs couleurs.</small>
-      <h4>Informations visibles</h4><label>Titre personnalisé<input type="text" data-field="title" value="${E(c.title||"")}"></label>
-      <div class="columns">${fields.map(([name,label])=>`<label class="check"><input type="checkbox" data-field="${name}" ${c[name]?"checked":""}>${E(label)}</label>`).join("")}</div>
-      <h4>Personnalisation des utilisateurs</h4><label>Alias (un par ligne : plex:alice=Alice)<textarea data-field="aliases">${E(c.aliases||"")}</textarea></label>
-      <label>Avatars (un par ligne : plex:alice=https://... )<textarea data-field="avatars">${E(c.avatars||"")}</textarea></label>
-      <small>Les alias définis ici sont prioritaires sur les alias globaux. Les ressources d'image externes doivent être accessibles depuis le navigateur.</small>
-      </div>`;
+      const source=this._select("entry_id","Instance Tracearr",[["","Automatique (première instance)"],...entries.map(e=>[e.id,e.name])])+
+        this._select("filter_server","Filtrer par serveur",[["","Tous les serveurs"],...servers])+
+        this._select("filter_user","Filtrer par utilisateur",[["","Tous les utilisateurs"],...users.map(u=>[u,u])])+
+        this._select("filter_transcode","Mode de lecture",[["all","Tous"],["direct","Direct"],["video","Vidéo seule"],["audio","Audio seul"],["both","Vidéo et audio"],["unknown","Inconnu"]])+
+        this._select("sort","Ordre des flux",[["recent","Plus récent d'abord"],["user","Utilisateur"],["server","Serveur"]]);
+      const header=this._toggle("show_header","Afficher le bandeau d'en-tête")+
+        `<label>Titre de l'en-tête<input type="text" data-field="title" placeholder="Lectures en cours" value="${E(c.title||"")}"></label>`+
+        this._toggle("show_title","Afficher le titre")+
+        `<small>Les compteurs correspondent aux lectures affichées après filtrage.</small>`+
+        this._checks([
+          ["header_show_streams","Nombre de flux"],["header_show_bandwidth","Débit total"],
+          ["header_show_direct","Lectures directes"],["header_show_paused","Lectures en pause"],
+          ["header_show_video","Transcode vidéo seul"],["header_show_audio","Transcode audio seul"],
+          ["header_show_both","Transcode vidéo + audio"],["header_show_transcodes_total","Total transcodages"],
+          ["header_show_server_counts","Nombre de flux par serveur"],
+        ]);
+      const layout=(isIndividual ? this._select("selection","Choix de la lecture",[["recent","Lecture la plus récente"],["stream","Session précise"]])+
+        `<label>ID de session<input type="text" data-field="stream_id" value="${E(c.stream_id||"")}"></label>` :
+        this._select("mode","Disposition",[["list","Liste verticale"],["grid","Grille adaptative"],["carousel","Carrousel"]])+
+        this._select("columns","Colonnes en mode grille",[["auto","Automatique"],["1","1"],["2","2"],["3","3"],["4","4"]]))+
+        this._checks([["compact","Mode compact"],["hide_empty","Masquer si vide"],["show_paused","Inclure les lectures en pause"]])+
+        `<div class="columns">${this._number("grid_columns","Largeur Sections (3–12)",3,12)}${this._number("grid_rows","Hauteur initiale Sections (0=4)",0,30)}</div>`+
+        this._number("height","Hauteur CSS hors Sections (0=auto)",0,2000)+
+        `<small>Dans un dashboard Sections, la poignée native permet de redimensionner la carte en hauteur et en largeur.</small>`;
+      const carousel=this._checks([
+          ["carousel_autoplay","Défilement automatique"],["carousel_show_arrows","Flèches de navigation"],
+          ["carousel_mouse_drag","Glissement à la souris"],["carousel_pause_on_hover","Pause au survol"],
+        ])+
+        `<div class="columns">${this._number("carousel_visible","Nombre de flux visibles",1,4)}${this._number("carousel_interval","Intervalle (secondes)",3,120)}</div>`+
+        this._select("carousel_transition","Transition",[["slide","Glissement"],["fade","Fondu"],["zoom","Zoom"],["flip","Retournement 3D"],["none","Sans animation"]])+
+        this._number("carousel_transition_speed","Durée de transition (ms)",100,3000)+
+        `<small>Barre horizontale masquée. Navigation tactile toujours disponible.</small>`;
+      const content=this._checks([
+        ["show_poster","Affiche"],["show_avatar","Avatar utilisateur"],
+        ["show_progress","Barre de lecture"],["show_remaining","Temps restant / En pause"],
+        ["show_year","Année ou épisode"],["show_transcode_icons","Icônes vidéo et audio"],
+      ]);
+      const footer=this._checks([
+        ["show_server","Nom du serveur"],["show_device","Appareil / lecteur"],
+        ["show_quality","Résolution"],["show_bitrate","Débit du flux"],
+        ["show_codecs","Codecs"],["show_health","État du serveur"],
+      ])+`<small>Les badges de résolution et de débit adoptent la palette globale avec une écriture blanche ou noire automatique.</small>`;
+      const colors=this._select("accent_color_mode","Palette commune (progression, badges, statistiques)",[
+          ["theme","Couleur du thème Home Assistant"],["server","Selon Plex / Jellyfin / Emby"],["custom","Couleur personnalisée"],
+        ])+
+        `<label>Couleur personnalisée<input type="color" data-field="accent_custom_color" value="${E(validColor(c.accent_custom_color))}"></label>`+
+        this._select("stream_surface","Fond intérieur des lectures",[["soft","Légèrement contrasté"],["transparent","Transparent"]])+
+        this._number("font_size","Taille du texte (px)",10,28)+
+        `<small>Le cadre extérieur utilise le fond, les arrondis et les bordures natifs de Home Assistant. Les badges calculent automatiquement leur contraste.</small>`;
+      const usersSection=`<label>Alias (exemple : plex:alice=Alice)<textarea data-field="aliases">${E(c.aliases||"")}</textarea></label>`+
+        `<label>Avatars (URL HTTPS, une ligne par utilisateur)<textarea data-field="avatars">${E(c.avatars||"")}</textarea></label>`+
+        `<small>Ces réglages sont propres à cette carte et prioritaires sur les alias globaux.</small>`;
+      this.shadowRoot.innerHTML=`<style>${editorStyle}</style><div class="editor">${[
+        this._group("header","En-tête et statistiques",header),
+        this._group("layout","Disposition et dimensions",layout),
+        ...(!isIndividual ? [this._group("carousel","Navigation et carrousel",carousel)] : []),
+        this._group("content","Contenu de la lecture",content),
+        this._group("footer","Bandeau d'informations du flux",footer),
+        this._group("colors","Apparence, couleurs et typographie",colors),
+        this._group("source","Filtres et tri",source),
+        this._group("users","Noms et avatars personnalisés",usersSection),
+      ].join("")}</div>`;
       this.shadowRoot.querySelectorAll("[data-field]").forEach(el => {
         const name=el.dataset.field;
         if (el.tagName==="SELECT") el.value=String(c[name]??"");
@@ -615,7 +767,7 @@
           this._config={...this._config,[name]:value};
           this.dispatchEvent(new CustomEvent("config-changed",{detail:{config:this._config},bubbles:true,composed:true}));
         };
-        el.addEventListener(el.tagName==="TEXTAREA"||el.type==="text" ? "change" : "change",fn);
+        el.addEventListener("change",fn);
       });
     }
   }

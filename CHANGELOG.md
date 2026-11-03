@@ -1,5 +1,16 @@
 # Historique des versions
 
+## 0.1.4 — Alpha (2026-11-03)
+
+- Restauration du cadre extérieur natif `ha-card` : fond, bordure, rayon et ombre pilotés par le thème Home Assistant. Les panneaux intérieurs conservent un fond légèrement contrasté, ou transparent au choix.
+- Bandeau d’en-tête entièrement désactivable, titre personnalisable et statistiques activables séparément : total des flux, débit total, lectures directes, en pause, transcodage vidéo seul/audio seul/les deux, total des transcodages et nombre de flux par serveur.
+- Les statistiques d’en-tête correspondent aux flux réellement affichés après application des filtres, y compris pour les vues d’un seul utilisateur.
+- Couleur commune pour la progression, les badges de résolution/débit et les statistiques : thème HA, couleur Plex/Jellyfin/Emby ou couleur hexadécimale personnalisée. Choix automatique de l’écriture blanche ou noire pour maximiser le contraste.
+- Affiches centrées verticalement même lorsque le pied d’informations occupe plusieurs lignes ; correction d’une puce de séparation inutile si les codecs sont absents.
+- Éditeur visuel regroupé dans des catégories repliables : En-tête et statistiques, Disposition et dimensions, Navigation et carrousel, Contenu de la lecture, Bandeau d’informations du flux, Apparence et couleurs, Filtres et tri, Noms et avatars.
+- Migration des anciens réglages `show_counter`, `show_transcodes`, `progress_color_mode`, `progress_custom_color` pour préserver les dashboards existants.
+- Nouveaux tests sur le contraste, les métriques, les anciennes configurations, le style de la carte et le regroupement de l’éditeur.
+
 ## 0.1.3 — Alpha (2026-11-03)
 
 - Barre de défilement horizontale masquée de façon permanente dans le carrousel.

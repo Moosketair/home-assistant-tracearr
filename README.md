@@ -4,7 +4,7 @@
 
 **Suivez en temps réel les lectures Plex, Jellyfin et Emby directement dans votre tableau de bord Home Assistant.** Une intégration HACS, des capteurs et deux cartes Lovelace entièrement personnalisables : liste verticale, grille adaptative ou carrousel.
 
-**Version 0.1.3 Alpha.** Ce projet est en cours de test sur de vraies installations Home Assistant. N'utilisez pas encore ses capteurs pour des automatismes critiques.
+**Version 0.1.4 Alpha.** Ce projet est en cours de test sur de vraies installations Home Assistant. N'utilisez pas encore ses capteurs pour des automatismes critiques.
 
 ## Fonctionnalités
 
@@ -16,12 +16,15 @@
 - **Carrousel personnalisable :** défilement automatique, intervalle, durée de transition, cinq effets, barre de défilement horizontale toujours cachée, flèches activables/désactivables et navigation au cliquer-glisser avec la souris, au doigt ou au clavier. La pause au survol de la souris est facultative.
 - **Couleurs par serveur :** liseré latéral jaune/orange pour Plex, violet pour Jellyfin et vert pour Emby.
 - **Affichage adaptable :** redimensionnement natif en largeur ET en hauteur dans les dashboards Home Assistant *Sections* ; hauteur CSS facultative pour les autres dashboards et mode compact.
-- **Éditeur visuel :** filtres (utilisateur, serveur, transcodage), tri, informations affichées/masquées, noms et avatars personnalisés.
+- **Éditeur visuel organisé par catégories :** en-tête, dimensions, navigation, contenu des lectures, informations de bas de carte, palette, filtres et alias.
+- **En-tête personnalisable :** masquer le bandeau, changer son titre et sélectionner individuellement les compteurs (flux, débit cumulé, transcodages vidéo/audio/mixtes/total, direct, pause et flux par serveur).
+- **Couleurs partagées :** même palette pour barres de progression, bulles de qualité/débit et compteurs, avec choix automatique de la couleur du texte (noir ou blanc).
+- **Aspect Home Assistant natif :** carte extérieure `ha-card` avec le fond, les bordures et l'ombre du thème ; sous-cartes légèrement contrastées ou transparentes. Affiches centrées verticalement lorsque les détails se répartissent sur plusieurs lignes.
 - **Informations par lecture :** affiche, utilisateur, titre, épisode, progression, durée restante, lecteur, résolution, codecs et débit. Icônes vidéo/audio indépendantes (vert = direct/copie, orange = transcodage, gris = inconnu), masquables. En pause : symbole sur l’affiche et « En pause » orange en remplacement du temps restant.
 
-### Nouveautés de la version 0.1.3
+### Réglages du carrousel et de la présentation
 
-Le carrousel se pilote désormais au **cliquer-glisser**, comme sur une interface tactile, en plus des flèches masquables. Sa barre de défilement horizontale est **toujours invisible**. Les cartes ont un fond transparent et le texte est blanc, avec une taille de police paramétrable. La barre de progression utilise au choix la couleur du thème Home Assistant, celle du serveur (Plex/Jellyfin/Emby) ou une couleur personnalisée.
+Le carrousel se pilote au **cliquer-glisser**, comme sur une interface tactile, en plus des flèches masquables. Sa barre de défilement horizontale est **toujours invisible**. Le cadre extérieur suit désormais le thème natif Home Assistant ; les panneaux de lecture disposent de leur propre fond (léger contraste ou transparent). La couleur de progression et des badges se règle avec une seule palette.
 
 | Réglage | Valeurs proposées |
 |---|---|
@@ -36,8 +39,8 @@ Le carrousel se pilote désormais au **cliquer-glisser**, comme sur une interfac
 | Cliquer-glisser à la souris | `carousel_mouse_drag: true` / `false` |
 | Icônes vidéo/audio | `show_transcode_icons: true` / `false` |
 | Taille des polices | `font_size: 10` à `28` (pixels) |
-| Couleur de progression | `progress_color_mode: theme`, `server` ou `custom` |
-| Couleur personnalisée | `progress_custom_color: "#00BCD4"` |
+| Palette commune (progression et badges) | `accent_color_mode: theme`, `server` ou `custom` |
+| Couleur personnalisée | `accent_custom_color: "#00BCD4"` |
 | Arrêter au survol de la souris | `carousel_pause_on_hover: true` / `false` |
 
 L'animation automatique se suspend lorsque la page est masquée ou que le navigateur demande une réduction des mouvements. La pause au survol de la souris peut être activée séparément (désactivée par défaut). Le **temps entre deux changements** (`carousel_interval`) est distinct de la **durée de l'animation** (`carousel_transition_speed`).
@@ -50,7 +53,7 @@ L'animation automatique se suspend lorsque la page est masquée ou que le naviga
 4. Entrez l'adresse de Tracearr (accessible depuis Home Assistant) et votre clé API `trr_pub_...`, créée dans **Tracearr → Paramètres → Données et API → API**.
 5. Ouvrez votre tableau de bord → **Modifier → Ajouter une carte** et cherchez « Tracearr ». Les cartes sont également disponibles depuis l'éditeur manuel (exemples ci-dessous).
 
-**Si les cartes ne figurent pas dans le sélecteur :** ouvrez **Paramètres → Tableaux de bord → ⋮ → Ressources** et vérifiez qu'une seule ressource de type **Module JavaScript** pointe vers `/tracearr_ha/tracearr-card.js?v=0.1.3`. Si une ancienne ressource (`?v=0.1.0` ou `?v=0.1.1`) existe, modifiez-la plutôt que d'en créer une seconde. Rechargez ensuite le navigateur avec `Ctrl + F5`.
+**Si les cartes ne figurent pas dans le sélecteur :** ouvrez **Paramètres → Tableaux de bord → ⋮ → Ressources** et vérifiez qu'une seule ressource de type **Module JavaScript** pointe vers `/tracearr_ha/tracearr-card.js?v=0.1.4`. Si une ancienne ressource (`?v=0.1.0` ou `?v=0.1.1`) existe, modifiez-la plutôt que d'en créer une seconde. Rechargez ensuite le navigateur avec `Ctrl + F5`.
 
 **Installation manuelle :** copiez le dossier `custom_components/tracearr_ha` dans `/config/custom_components/tracearr_ha/`, puis redémarrez Home Assistant.
 
@@ -62,7 +65,15 @@ L'animation automatique se suspend lorsque la page est masquée ou que le naviga
 type: custom:tracearr-streams-card
 mode: grid
 columns: auto
-show_transcodes: true
+show_header: true
+title: Activité multimédia
+header_show_streams: true
+header_show_bandwidth: true
+header_show_video: true
+header_show_audio: true
+header_show_both: true
+header_show_transcodes_total: true
+header_show_server_counts: true
 show_progress: true
 show_quality: true
 show_paused: true
@@ -80,9 +91,10 @@ carousel_transition: zoom
 carousel_transition_speed: 800
 carousel_show_arrows: true
 carousel_mouse_drag: true
-show_transcodes: true
+header_show_server_counts: true
 show_transcode_icons: true
-progress_color_mode: server
+accent_color_mode: server
+stream_surface: soft
 font_size: 15
 ```
 
@@ -112,9 +124,41 @@ Les mêmes réglages sont accessibles depuis **l'éditeur graphique Lovelace**.
 
 Dans un tableau de bord **Sections**, utilisez la **poignée de redimensionnement** fournie par Home Assistant pour augmenter la hauteur ou la largeur. La carte déclare désormais une hauteur initiale de 4 lignes, un minimum de 2 et un maximum de 30 lignes ; contrairement à l'ancienne hauteur « auto », le redimensionnement vertical est permis. Les réglages `grid_rows` et `grid_columns` correspondent à la taille **initiale**, et la taille personnalisée par Home Assistant (`grid_options`) est prioritaire sur la hauteur CSS. Pour les vues hors Sections, utilisez `height` (pixels).
 
-Dans l'éditeur, le réglage **Couleur de la barre de lecture** accepte `theme`, `server` ou `custom` (dans ce dernier cas, choisir aussi la couleur dans le sélecteur). Le réglage **Taille de police** s'applique à tous les textes des lectures, à l'exception des icônes de statut. L'affichage de la paire d'icônes vidéo et audio se contrôle séparément avec `show_transcode_icons`; les compteurs agrégés en en-tête conservent leur réglage `show_transcodes`.
+### Personnalisation de l'en-tête
 
-La barre de défilement horizontale ne s'affiche plus jamais. **Le glissement tactile est toujours disponible** ; le cliquer-glisser à la souris et les boutons précédent/suivant sont désactivables séparément. Le clavier (flèches gauche/droite, lorsque le carrousel a le focus) fonctionne aussi. Les cartes n'ont pas de fond ajouté ; elles suivent le fond du dashboard et affichent leur texte en blanc, à l'exception des indicateurs de statut colorés.
+Les options de la section **En-tête et statistiques** permettent de masquer entièrement le bandeau (`show_header: false`), d'afficher un titre personnel (`title`) ou de ne garder que certains indicateurs. Vous pouvez afficher, indépendamment les uns des autres :
+
+| Réglage | Affichage |
+|---|---|
+| `header_show_streams` | Nombre total de flux visibles |
+| `header_show_bandwidth` | Débit cumulé en Mb/s |
+| `header_show_direct` | Lectures directes |
+| `header_show_paused` | Flux en pause |
+| `header_show_video` | Transcodages vidéo seulement |
+| `header_show_audio` | Transcodages audio seulement |
+| `header_show_both` | Transcodages vidéo et audio |
+| `header_show_transcodes_total` | Total des transcodages |
+| `header_show_server_counts` | Un compteur pour chaque serveur Plex/Jellyfin/Emby ayant au moins un flux visible |
+
+Les compteurs correspondent aux lectures visibles après application des filtres de la carte ; ils ne prétendent donc pas représenter d'autres flux cachés par les réglages. Le titre reste optionnel (`show_title`).
+
+### Fond natif et palette de couleurs
+
+L'enveloppe de la carte utilise les couleurs, les bordures et les ombres natives de Home Assistant. Pour les panneaux des lectures, le champ `stream_surface` accepte `soft` (léger contraste avec le fond) ou `transparent`.
+
+Une seule sélection **Palette commune** détermine la couleur de la barre de lecture, des badges de qualité et de débit, et des indicateurs de l'en-tête :
+
+- `accent_color_mode: theme` : couleur d'accent du thème HA ;
+- `accent_color_mode: server` : Plex orange, Jellyfin violet, Emby vert ; les statistiques générales conservent la couleur d'accent du thème, alors que les compteurs par serveur portent chacun sa couleur ;
+- `accent_color_mode: custom` : couleur `accent_custom_color` au format `#RRGGBB`.
+
+Le texte de chaque badge coloré est noir ou blanc suivant le meilleur contraste. Les icônes de statut vidéo/audio (vert direct, orange transcodage) et le message « En pause » gardent leurs couleurs de statut.
+
+L'éditeur visuel contient des **sections repliables** : En-tête et statistiques, Disposition et dimensions, Navigation et carrousel, Contenu de la lecture, Bandeau d'informations du flux, Apparence/couleurs/typographie, Filtres et tri, et Noms et avatars. Chaque instance de la carte possède ses propres paramètres.
+
+Les réglages enregistrés avec les anciennes versions restent pris en charge (`show_counter`, `show_transcodes`, `progress_color_mode`, `progress_custom_color`) et sont convertis lors du chargement. À partir de 0.1.4, préférez les nouveaux noms.
+
+La barre horizontale du carrousel reste masquée ; navigation par flèches facultatives, glissement tactile, glissement souris facultatif et clavier. Le texte et les panneaux intérieurs s'adaptent au thème.
 
 ## Personnaliser les utilisateurs
 
@@ -153,7 +197,7 @@ L'API `/streams` v2 ne fournit pas la distinction réseau local/WAN ni un identi
 
 1. **Aucun capteur :** consultez **Paramètres → Système → Journaux** et vérifiez l'URL et la clé API Tracearr.
 2. **Le SSE se reconnecte souvent :** désactivez le buffering du proxy inverse pour `text/event-stream` et augmentez le délai d'inactivité au-delà de 30 secondes (un ping arrive environ toutes les 25 secondes).
-3. **La carte est introuvable :** vérifiez la ressource `/tracearr_ha/tracearr-card.js?v=0.1.3` dans Lovelace, redémarrez HA et rechargez votre navigateur.
+3. **La carte est introuvable :** vérifiez la ressource `/tracearr_ha/tracearr-card.js?v=0.1.4` dans Lovelace, redémarrez HA et rechargez votre navigateur.
 4. **Les images sont absentes :** vérifiez que les URL `poster_url` sont bien servies par le proxy d'images de Tracearr et qu'aucune erreur n'apparaît dans les journaux réseau du navigateur.
 5. **Transcodage « Inconnu » :** Tracearr ou le serveur média n'a pas fourni assez de détails pour classer la lecture.
 6. **Le carrousel ne défile pas automatiquement :** vérifiez qu'il y a plus de flux que de cartes visibles, que la page est au premier plan, que la pause au survol est désactivée ou que la souris est sortie de la carte, et que la réduction des animations n'est pas activée dans le système.

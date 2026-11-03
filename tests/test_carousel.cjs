@@ -221,19 +221,109 @@ test('paused stream overlays poster and replaces remaining time with orange En p
   assert.match(html,/class="time-remaining"/);
 });
 
-test('playback bar respects theme, per-server and sanitized custom colors', () => {
+test('global palette styles progress and quality badges using theme, server or custom color', () => {
   const {card} = setup();
-  card._config = {...card._config,show_poster:false,show_avatar:false};
-  const s={id:'x', username:'x', server_type:'jellyfin',media_title:'Film',media_type:'movie',state:'playing',progress_ms:0,duration_ms:10000};
-  assert.match(card._streamCard(null,s), /--progress-accent:var\(--accent-color,#00BCD4\)/);
-  card._config.progress_color_mode='server';
-  assert.match(card._streamCard(null,s), /--progress-accent:var\(--stream-accent\)/);
-  card._config.progress_color_mode='custom';
-  card._config.progress_custom_color='#fF304a';
-  assert.match(card._streamCard(null,s), /--progress-accent:#fF304a/);
-  card._config.progress_custom_color='red;background:url(https://bad.example)';
-  assert.match(card._streamCard(null,s), /--progress-accent:#00BCD4/);
-  assert.doesNotMatch(card._streamCard(null,s),/bad\.example/);
+  card._config = {...card._config,show_poster:false,show_avatar:false,show_quality:true,show_bitrate:true};
+  const s={id:'x', username:'x', server_type:'jellyfin',resolution:'4K',bitrate:12000,
+    media_title:'Film',media_type:'movie',state:'playing',progress_ms:0,duration_ms:10000};
+  let html=card._streamCard(null,s);
+  assert.match(html, /--shared-accent:var\(--accent-color,#00BCD4\)/);
+  assert.match(html, /--pill-bg:var\(--accent-color,#00BCD4\)/);
+  assert.match(html, /--pill-text:#000000/);
+  assert.match(html, /class="chip">4K/);
+  assert.match(html, /class="chip">12\.0 Mb\/s/);
+  card._config.accent_color_mode='server';
+  html=card._streamCard(null,s);
+  assert.match(html, /--shared-accent:#AA5CC3/);
+  assert.match(html, /--pill-text:#000000/); // contrast on Jellyfin violet is slightly better with black
+  html=card._streamCard(null,{...s,server_type:'plex'});
+  assert.match(html, /--shared-accent:#E5A00D/);
+  assert.match(html, /--pill-text:#000000/);
+  card._config.accent_color_mode='custom';
+  card._config.accent_custom_color='#101820';
+  html=card._streamCard(null,s);
+  assert.match(html, /--shared-accent:#101820/);
+  assert.match(html, /--pill-text:#FFFFFF/);
+  card._config.accent_custom_color='#ffed00';
+  html=card._streamCard(null,s);
+  assert.match(html, /--pill-text:#000000/);
+  card._config.accent_custom_color='red;background:url(https://bad.example)';
+  html=card._streamCard(null,s);
+  assert.match(html, /--shared-accent:#00BCD4/);
+  assert.doesNotMatch(html,/bad\.example/);
+});
+
+test('header metrics are configurable independently and count only visible sessions', () => {
+  const {card}=setup();
+  const streams=[
+    {id:'1',server_id:'p',server_name:'Plex',server_type:'plex',is_transcode:true,video_decision:'transcode',audio_decision:'copy',bitrate:5000,state:'playing'},
+    {id:'2',server_id:'p',server_name:'Plex',server_type:'plex',video_decision:'directplay',audio_decision:'directplay',bitrate:3000,state:'paused'},
+    {id:'3',server_id:'j',server_name:'Jellyfin',server_type:'jellyfin',is_transcode:true,video_decision:'transcode',audio_decision:'transcode',bitrate:4000,state:'playing'},
+  ];
+  card._config={...card._config,title:'Activité multimédia',
+    show_header:true, header_show_streams:true,header_show_bandwidth:true,header_show_server_counts:true,
+    header_show_video:true,header_show_both:true,header_show_audio:false,header_show_paused:false};
+  const html=card._header(streams);
+  for(const fragment of ['Activité multimédia','3 flux','Débit : 12.0 Mb/s','Vidéo : 1','Vidéo + audio : 1','Plex : 2','Jellyfin : 1']) {
+    assert.ok(html.includes(fragment),fragment);
+  }
+  assert.doesNotMatch(html, /Audio : 0|Pause : 1/);
+  card._config.show_header=false;
+  assert.equal(card._header(streams),'');
+  card._config.show_header=true;card._config.show_title=false;
+  assert.doesNotMatch(card._header(streams),/Activité multimédia/);
+});
+
+test('server metrics use server-specific color and custom header colors apply globally', () => {
+  const {card}=setup();
+  const streams=[{server_id:'p',server_type:'plex',server_name:'Plex',video_decision:'directplay',audio_decision:'directplay'}];
+  card._config={...card._config,accent_color_mode:'server',header_show_server_counts:true};
+  assert.match(card._header(streams),/Plex : 1/);
+  assert.match(card._header(streams),/--pill-bg:#E5A00D;--pill-text:#000000/);
+  card._config.accent_color_mode='custom';card._config.accent_custom_color='#001122';
+  assert.match(card._header(streams),/--pill-bg:#001122;--pill-text:#FFFFFF/);
+});
+
+test('legacy color and summary settings are migrated, and new options win', () => {
+  const {card}=setup();
+  card.setConfig({show_counter:false,show_transcodes:true,progress_color_mode:'server'});
+  assert.equal(card._config.header_show_streams,false);
+  assert.equal(card._config.header_show_video,true);
+  assert.equal(card._config.header_show_transcodes_total,true);
+  assert.equal(card._config.accent_color_mode,'server');
+  card.setConfig({accent_color_mode:'custom',accent_custom_color:'#121212',
+    progress_color_mode:'server',header_show_video:false,show_transcodes:true});
+  assert.equal(card._config.accent_color_mode,'custom');
+  assert.equal(card._config.header_show_video,false);
+});
+
+test('native ha-card surface, nested stream panel and centered poster survive wrapped footer', () => {
+  const {card}=setup();
+  card._config={...card._config,show_poster:false,show_avatar:false};
+  card.render();
+  const html=card.shadowRoot.innerHTML;
+  assert.match(html,/ha-card \{ border-radius:var\(--ha-card-border-radius/);
+  assert.doesNotMatch(html,/background:transparent!important/);
+  assert.match(html,/\.stream \{ position:relative; display:flex; align-items:center/);
+  assert.match(html,/\.poster-wrap \{[^}]*align-self:center/s);
+  assert.match(html,/\.meta \{[^}]*flex-wrap:wrap/s);
+  card._config.stream_surface='transparent';card._renderFingerprint=null;card.render();
+  assert.match(card.shadowRoot.innerHTML,/flat-streams/);
+});
+
+test('visual editor groups settings by header, stream, footer and shared palette', () => {
+  const Editor=classes.get('tracearr-card-editor');
+  const editor=new Editor();
+  editor.setConfig({type:'custom:tracearr-streams-card'});
+  const html=editor.shadowRoot.innerHTML;
+  for(const title of ['En-tête et statistiques','Disposition et dimensions','Navigation et carrousel',
+    'Contenu de la lecture','Bandeau d\'informations du flux','Apparence, couleurs et typographie',
+    'Filtres et tri','Noms et avatars personnalisés']) {
+    assert.ok(html.includes(title.replaceAll("'",'&#39;')),title);
+  }
+  assert.match(html,/data-field="header_show_server_counts"/);
+  assert.match(html,/data-field="accent_color_mode"/);
+  assert.match(html,/data-field="show_quality"/);
 });
 
 test('native Sections height is resizable and pixel height is not forced on grid-resized cards', () => {
