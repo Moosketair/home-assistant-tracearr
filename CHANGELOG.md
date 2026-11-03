@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1 — Alpha (2026-11-03)
+
+- Fix component setup on recent Home Assistant: LovelaceData exposes `resource_mode` instead of `mode`.
+- Retain compatibility with older LovelaceData objects.
+- Update Lovelace resource cache-busting version to 0.1.1.
+- Add regression tests for storage/YAML resource modes.
+
 ## 0.1.0 — Alpha (2026-11-03)
 
 - Initial Tracearr Public API v2 Home Assistant integration.

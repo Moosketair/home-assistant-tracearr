@@ -2,7 +2,7 @@
 
 [![Validate](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml/badge.svg)](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml)
 
-**Français** · Home Assistant custom integration for Tracearr Public API v2. Compatible with streams from **Plex, Jellyfin and Emby**. **Alpha 0.1.0** — test on your installation before relying on the sensors for automations.
+**Français** · Home Assistant custom integration for Tracearr Public API v2. Compatible with streams from **Plex, Jellyfin and Emby**. **Alpha 0.1.1** — test on your installation before relying on the sensors for automations.
 
 ## What it does / Fonctionnalités
 

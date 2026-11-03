@@ -19,12 +19,18 @@ async def async_register_frontend(hass):
     # after the Home Assistant UI's custom-elements registry is initialized.
     # Unlike add_extra_js_url, this avoids a race observed in some 2026 HA builds.
     lovelace = hass.data.get("lovelace")
-    if lovelace is not None and lovelace.mode == "storage":
+    # Home Assistant 2026 exposes resource_mode rather than mode on LovelaceData.
+    # Keep the older attribute as a fallback for previous Core versions.
+    resource_mode = (
+        getattr(lovelace, "resource_mode", None)
+        or getattr(lovelace, "mode", None)
+    )
+    if resource_mode == "storage":
         resources = lovelace.resources
         if not resources.loaded:
             await resources.async_load()
         base_path = FRONTEND_URL
-        wanted = FRONTEND_URL + "?v=0.1.0"
+        wanted = FRONTEND_URL + "?v=0.1.1"
         existing = [item for item in resources.async_items() if item["url"].split("?")[0] == base_path]
         if not existing:
             await resources.async_create_item({"res_type": "module", "url": wanted})
