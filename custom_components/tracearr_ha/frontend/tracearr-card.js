@@ -264,6 +264,8 @@
     set hass(hass) {
       this._hass = hass;
       if (hass?.connection && this._connection !== hass.connection) this._subscribe(hass.connection);
+      if (this._config.header_entity_badges?.length && this._renderFingerprint !== null &&
+          this.shadowRoot?.querySelector("ha-card")) this._refreshHeader(this._streams(this._entryData()));
     }
     connectedCallback() {
       this._closed = false;
@@ -437,7 +439,8 @@
         `S${seasonStr.padStart(2,"0")}E${episodeStr.padStart(2,"0")}`;
       const fields = {
         series: c.series_show_title && stream.show_title ? stream.show_title : "",
-        season: c.series_show_season_episode && available ? seasonLabel : "",
+        season: c.series_show_season && season != null ? (c.series_episode_style === "long" ? "Saison " + seasonStr : "S" + seasonStr.padStart(2,"0")) : "",
+        episode_number: c.series_show_episode_number && episodeNum != null ? (c.series_episode_style === "long" ? "Épisode " + episodeStr : "E" + episodeStr.padStart(2,"0")) : "",
         episode: c.series_show_episode_title && stream.media_title ? stream.media_title : "",
         year: c.series_show_year && stream.year != null ? String(stream.year) : "",
       };
@@ -447,9 +450,37 @@
     _mediaMarkup(stream) {
       const fields = this._mediaFields(stream);
       if (!fields.length) return "";
+      const parts = [];
+      for (const field of fields) {
+        if (stream.media_type === "episode" && this._config.series_episode_style !== "long" &&
+            field.key === "episode_number" && parts.length && parts.at(-1).key === "season") {
+          parts[parts.length-1] = {key:"season_episode",text:parts.at(-1).text + field.text};
+        } else parts.push(field);
+      }
       // The first visible field is the main title; order is intentional.
-      return `<div class="title" title="${E(fields[0].text)}">${E(fields[0].text)}</div>` +
-        (fields.length > 1 ? `<div class="subtitle">${fields.slice(1).map(field=>E(field.text)).join(" · ")}</div>` : "");
+      return `<div class="title" title="${E(parts[0].text)}">${E(parts[0].text)}</div>` +
+        (parts.length > 1 ? `<div class="subtitle">${parts.slice(1).map(field=>E(field.text)).join(" · ")}</div>` : "");
+    }
+    // The public streams v2 response has no client IP or LAN/WAN classification.
+    // Location is explicit user configuration; never guess a missing location.
+    _networkScope(stream) {
+      const mapping = asMapping(this._config.network_locations);
+      const candidates = [
+        String(stream.server_id) + ":" + stream.username,
+        String(stream.server_type) + ":" + stream.username,
+        String(stream.server_name) + ":" + stream.username,
+        "device:" + stream.device, "player:" + stream.player, stream.username,
+      ];
+      const direct = String(stream.network_type || stream.network || "");
+      const location = candidates.map(key => mapping[key]).find(Boolean) || direct;
+      const value = String(location).trim().toLowerCase();
+      if (["local", "lan", "interne"].includes(value)) return "local";
+      if (["remote", "wan", "distant", "externe"].includes(value)) return "remote";
+      return "unknown";
+    }
+    _includeBitrate(stream) {
+      const scope = this._config.bitrate_scope || "both";
+      return scope === "both" || this._networkScope(stream) === scope;
     }
     _streamSummary(streams) {
       const sums = {total:streams.length, direct:0, video:0, audio:0, both:0,
@@ -459,7 +490,7 @@
         sums[kind]++;
         if (kind === "video" || kind === "audio" || kind === "both" || s.is_transcode) sums.transcodes++;
         if (s.state === "paused") sums.paused++;
-        sums.bandwidth += Math.max(0, Number(s.bitrate) || 0);
+        if (this._includeBitrate(s)) sums.bandwidth += Math.max(0, Number(s.bitrate) || 0);
         const id = s.server_id || `${s.server_type}:${s.server_name}`;
         const row = sums.byServer.get(id) || {name:s.server_name || s.server_type || "Serveur",type:s.server_type,count:0};
         row.count++;
@@ -478,7 +509,8 @@
         metrics.push(`<span class="metric" style="--pill-bg:${palette.bg};--pill-text:${palette.text}">${E(label)}</span>`);
       };
       add(c.header_show_streams, `${summary.total} flux`);
-      add(c.header_show_bandwidth, `Débit : ${(summary.bandwidth/1000).toFixed(1)} Mb/s`);
+      const bandwidthTitle = c.bitrate_scope === "local" ? "Débit local" : c.bitrate_scope === "remote" ? "Débit distant" : "Débit";
+      add(c.header_show_bandwidth, `${bandwidthTitle} : ${(summary.bandwidth/1000).toFixed(1)} Mb/s`);
       add(c.header_show_direct, `Direct : ${summary.direct}`);
       add(c.header_show_paused, `Pause : ${summary.paused}`);
       add(c.header_show_video, `Vidéo : ${summary.video}`);
@@ -487,6 +519,16 @@
       add(c.header_show_transcodes_total, `Transcodes : ${summary.transcodes}`);
       if (c.header_show_server_counts) {
         for (const server of summary.byServer.values()) add(true, `${server.name} : ${server.count}`,server.type);
+      }
+      for (const row of c.header_entity_badges || []) {
+        const id = String(row.entity || "");
+        if (!/^[a-z_]+\.[a-z0-9_]+$/.test(id)) continue;
+        const state = this._hass?.states?.[id];
+        const name = String(row.label || state?.attributes?.friendly_name || id);
+        const value = state?.state == null ? "Indisponible" : String(state.state);
+        const unit = state?.attributes?.unit_of_measurement;
+        const units = unit && !["unknown", "unavailable"].includes(value) ? " " + unit : "";
+        add(true, name + " : " + value + units);
       }
       const title = c.show_title ? `<h3>${E(c.title || "Lectures en cours")}</h3>` : "";
       if (!title && !metrics.length) return "";
@@ -563,7 +605,7 @@
       if (c.show_device && (s.device || s.player)) meta.push(`<span>${E(s.device || s.player)}</span>`);
       if (c.show_quality && s.resolution) meta.push(`<span class="chip">${E(s.resolution)}</span>`);
       // The separate video/audio icons take the place of the old text badge.
-      if (c.show_bitrate && s.bitrate != null) meta.push(`<span class="chip">${E((s.bitrate/1000).toFixed(1))} Mb/s</span>`);
+      if (c.show_bitrate && this._includeBitrate(s) && s.bitrate != null) meta.push(`<span class="chip">${E((s.bitrate/1000).toFixed(1))} Mb/s</span>`);
       if (c.show_codecs && (s.stream_video_codec_display || s.stream_audio_codec_display)) meta.push(`<span>${E([s.stream_video_codec_display,s.stream_audio_codec_display].filter(Boolean).join(" / "))}</span>`);
       const accent = SERVER_ACCENTS[String(s.server_type || "").toLowerCase()] || "var(--tr-accent)";
       const palette = this._palette(s.server_type);
@@ -738,20 +780,22 @@
       const {progress_ms, ...rest} = stream;
       return JSON.stringify({rest,health:entry?.servers?.find(x => x.server_id === stream.server_id)?.status});
     }
+    _refreshHeader(streams) {
+      const header = this._header(streams);
+      if (header === this._headerMarkup) return;
+      const oldHeader = this.shadowRoot.querySelector(".head");
+      const root = this.shadowRoot.querySelector(".root");
+      if (oldHeader && header) oldHeader.outerHTML = header;
+      else if (oldHeader && !header) oldHeader.remove();
+      else if (!oldHeader && header) root?.insertAdjacentHTML("afterbegin", header);
+      this._headerMarkup = header;
+    }
     _updateCarouselLive(entry, streams) {
       const carousel = this.shadowRoot.querySelector(".streams.carousel");
       if (!carousel) return;
       // Keep the carousel element and its scroll animation untouched for routine
       // SSE updates (state, bitrate, codec, server health, posters, etc.).
-      const header = this._header(streams);
-      if (header !== this._headerMarkup) {
-        const oldHeader = this.shadowRoot.querySelector(".head");
-        const root = this.shadowRoot.querySelector(".root");
-        if (oldHeader && header) oldHeader.outerHTML = header;
-        else if (oldHeader && !header) oldHeader.remove();
-        else if (!oldHeader && header) root?.insertAdjacentHTML("afterbegin", header);
-        this._headerMarkup = header;
-      }
+      this._refreshHeader(streams);
       const cards = [...carousel.querySelectorAll(".stream")];
       for (let index=0; index<streams.length; index++) {
         const stream = streams[index];
@@ -801,7 +845,7 @@
       const oldScroll = carousel?.scrollLeft || 0;
       const previousAnchor = carousel?.querySelectorAll(".stream")?.[this._carouselIndex]?.dataset?.session;
       this._stopCarouselAnimation();
-      if (c.hide_empty && !streams.length) { this.shadowRoot.innerHTML = `<style>${style}</style>`; this.style.display="none"; return; }
+      if (c.empty_mode === "hide" && !streams.length) { this.shadowRoot.innerHTML = `<style>${style}</style>`; this.style.display="none"; return; }
       this.style.display="";
       const head = this._header(streams);
       this._headerMarkup = head;
@@ -812,7 +856,7 @@
       // Always conceal the native scrollbar; navigation remains via buttons,
       // touch swipe, optional mouse drag and keyboard arrow keys.
       const classes = `streams ${E(c.mode)}`;
-      const body = `<div class="${classes}" ${c.mode === "carousel" ? `tabindex="0" role="region" aria-label="Lectures en carrousel"` : ""} style="grid-template-columns:${E(cols)};--carousel-visible:${visible}">${items || `<div class="empty-message">${entry && !entry.connected ? "Tracearr indisponible" : "Aucune lecture en cours"}</div>`}</div>`;
+      const body = !streams.length && c.empty_mode === "header_only" ? "" : `<div class="${classes}" ${c.mode === "carousel" ? `tabindex="0" role="region" aria-label="Lectures en carrousel"` : ""} style="grid-template-columns:${E(cols)};--carousel-visible:${visible}">${items || `<div class="empty-message">${E(entry && !entry.connected ? "Tracearr indisponible" : String(c.empty_message ?? "Aucune lecture en cours"))}</div>`}</div>`;
       const nav = c.mode === "carousel" && c.carousel_show_arrows && streams.length > 1 ? `<div class="carousel-nav"><button class="nav" data-step="-1" aria-label="Précédent">❮</button><span>${streams.length} lectures</span><button class="nav" data-step="1" aria-label="Suivant">❯</button></div>` : "";
       // When HA Sections assigns grid_options.rows, the native grid height wins.
       // Otherwise the optional pixel height applies (e.g. masonry dashboards).
