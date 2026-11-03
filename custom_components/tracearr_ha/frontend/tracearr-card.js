@@ -1,4 +1,4 @@
-/* Tracearr HA Lovelace cards 0.1.2 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.3 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;
@@ -6,12 +6,14 @@
   const DEFAULTS = {
     mode: "grid", columns: "auto", carousel_visible: 1, carousel_autoplay: false,
     carousel_interval: 7, carousel_transition: "slide", carousel_transition_speed: 600,
-    carousel_hide_scrollbar: false, carousel_pause_on_hover: false, compact: false, show_title: true, show_counter: true,
-    show_transcodes: false, show_poster: true, show_avatar: true,
+    carousel_hide_scrollbar: true, carousel_show_arrows: true, carousel_mouse_drag: true,
+    carousel_pause_on_hover: false, compact: false, show_title: true, show_counter: true,
+    show_transcodes: false, show_transcode_icons: true, show_poster: true, show_avatar: true,
     show_progress: true, show_quality: true, show_device: true, show_server: true,
     show_bitrate: false, show_health: true, show_codecs: false, show_year: true, show_remaining: true,
     show_paused: true, hide_empty: false, sort: "recent", filter_transcode: "all",
     selection: "recent", grid_columns: 12, grid_rows: 0, height: 0,
+    font_size: 14, progress_color_mode: "theme", progress_custom_color: "#00BCD4",
     aliases: "", avatars: "",
   };
   const E = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({
@@ -37,9 +39,12 @@
     const number = Number(value);
     return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
   };
-  const labels = {
-    direct: "Direct", video: "Transcode vidéo", audio: "Transcode audio", both: "Vidéo + audio", unknown: "Inconnu",
-  };
+  const codecState = (decision) => decision === "transcode" ? "transcode" :
+    ["directplay", "copy"].includes(decision) ? "direct" : "unknown";
+  const badgeIcon = (kind) => kind === "video" ?
+    `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v14M15 5v14M3 9h6M3 15h6M15 9h6M15 15h6"/></svg>` :
+    `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4" stroke-linecap="round"/></svg>`;
+  const validColor = (value) => /^#[0-9a-fA-F]{6}$/.test(String(value || "")) ? value : "#00BCD4";
   const asMapping = (input) => {
     if (input && typeof input === "object") return input;
     const result = {};
@@ -57,48 +62,85 @@
     } catch { return ""; }
   };
   const style = `
-    :host { display:block; color:var(--primary-text-color); container-type:inline-size; min-width:0; }
-    ha-card { --tr-accent:var(--accent-color,#00a5ad); background:var(--ha-card-background,var(--card-background-color,#20252a));
-      border-radius:var(--ha-card-border-radius,16px); overflow:hidden; color:var(--primary-text-color,#eee); height:100%; }
-    .root { padding:14px; min-width:0; overflow:auto; max-height:100%; box-sizing:border-box; }
+    :host { display:block; width:100%; height:100%; min-width:0; box-sizing:border-box;
+      color:#fff; container-type:inline-size; --tr-font-size:14px; }
+    ha-card { --tr-accent:var(--accent-color,#00bcd4); background:transparent!important;
+      background-color:transparent!important; box-shadow:none!important; border:0!important;
+      border-radius:var(--ha-card-border-radius,16px); overflow:hidden; color:#fff;
+      height:100%; min-height:0; box-sizing:border-box; }
+    .root { padding:12px; min-width:0; height:100%; box-sizing:border-box; overflow-y:auto; overflow-x:hidden;
+      color:#fff; scrollbar-width:thin; }
     .head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 12px; }
-    .head h3 { margin:0; font-size:17px; font-weight:700; }
-    .count { padding:4px 9px; background:color-mix(in srgb,var(--tr-accent) 18%,transparent); border-radius:30px; color:var(--primary-text-color); font-weight:600; font-size:12px; }
+    .head h3 { margin:0; font-size:calc(var(--tr-font-size)*1.24); font-weight:700; color:#fff; }
+    .count { padding:4px 9px; background:rgba(255,255,255,.08); border-radius:30px;
+      color:#fff; font-weight:600; font-size:calc(var(--tr-font-size)*.85); }
     .stats { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
-    .stats span { padding:5px 8px; font-size:11px; background:var(--secondary-background-color,rgba(255,255,255,.06)); border-radius:9px; }
+    .stats span { padding:5px 8px; font-size:calc(var(--tr-font-size)*.78);
+      background:rgba(255,255,255,.07); color:#fff; border-radius:9px; }
     .streams { display:flex; flex-direction:column; gap:10px; }
     .streams.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--min-column,290px)),1fr)); }
-    .streams.carousel { overflow-x:auto; flex-direction:row; scroll-snap-type:x mandatory; scrollbar-width:thin; scroll-behavior:auto; padding-bottom:4px; overscroll-behavior-x:contain; }
-    .streams.carousel.hide-scrollbar { scrollbar-width:none; -ms-overflow-style:none; }
-    .streams.carousel.hide-scrollbar::-webkit-scrollbar { display:none; }
+    .streams.carousel { overflow-x:auto; flex-direction:row; scroll-snap-type:x mandatory;
+      scrollbar-width:none; -ms-overflow-style:none; scroll-behavior:auto; padding-bottom:0;
+      overscroll-behavior-x:contain; cursor:grab; touch-action:pan-x pan-y; }
+    .streams.carousel::-webkit-scrollbar { display:none; width:0; height:0; }
+    .streams.carousel.is-dragging { cursor:grabbing; scroll-snap-type:none!important; user-select:none; }
+    .streams.carousel.is-dragging * { user-select:none; pointer-events:none; }
     .carousel .stream { flex:0 0 calc((100% - (var(--carousel-visible,1) - 1)*10px)/var(--carousel-visible,1)); scroll-snap-align:start; min-width:0; }
-    .stream { position:relative; display:flex; gap:12px; min-width:0; min-height:116px; padding:12px; box-sizing:border-box;
-      border-radius:12px; background:var(--secondary-background-color,rgba(255,255,255,.05)); border:1px solid var(--divider-color,rgba(255,255,255,.08)); }
-    .stream::before { content:""; position:absolute; left:0; top:13px; bottom:13px; width:3px; border-radius:3px; background:var(--stream-accent,var(--tr-accent)); }
-    .poster { width:73px; height:109px; flex:0 0 73px; border-radius:7px; object-fit:cover; background:rgba(100,100,100,.15); }
-    .poster.empty { display:grid; place-items:center; font-size:25px; }
-    .info { min-width:0; flex:1; display:flex; flex-direction:column; gap:5px; }
-    .user { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--secondary-text-color,#aaa); }
+    .stream { position:relative; display:flex; gap:12px; min-width:0; min-height:116px; padding:12px;
+      box-sizing:border-box; border-radius:12px; background:transparent;
+      border:1px solid var(--divider-color,rgba(255,255,255,.12)); color:#fff; }
+    .stream::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+      border-radius:3px; background:var(--stream-accent,var(--tr-accent)); }
+    .poster-wrap { position:relative; width:73px; height:109px; flex:0 0 73px; border-radius:7px;
+      overflow:hidden; background:rgba(100,100,100,.15); }
+    .poster { width:100%; height:100%; display:block; object-fit:cover; }
+    .poster.empty { display:grid; place-items:center; font-size:calc(var(--tr-font-size)*1.8); }
+    .poster-paused { position:absolute; inset:0; display:flex; justify-content:center; align-items:center;
+      background:rgba(0,0,0,.48); }
+    .pause-symbol { display:flex; gap:5px; align-items:center; justify-content:center; }
+    .pause-symbol::before,.pause-symbol::after { content:""; display:block; background:#fff; border:1px solid rgba(0,0,0,.3);
+      border-radius:2px; width:6px; height:24px; box-shadow:0 0 5px rgba(0,0,0,.45); }
+    .info { min-width:0; flex:1; display:flex; flex-direction:column; gap:5px; color:#fff; }
+    .user { display:flex; align-items:center; gap:6px; padding-right:54px;
+      font-size:calc(var(--tr-font-size)*.92); color:#fff; }
     .avatar { width:23px; height:23px; border-radius:50%; object-fit:cover; background:rgba(100,100,100,.25); }
-    .fallback-avatar { display:grid; place-items:center; font-size:11px; font-weight:bold; color:var(--primary-text-color); }
-    .title { font-weight:700; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .subtitle { color:var(--secondary-text-color,#aaa); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .progress { margin-top:auto; width:100%; height:5px; border-radius:7px; overflow:hidden; background:color-mix(in srgb,var(--tr-accent) 20%,transparent); }
-    .fill { display:block; height:100%; background:var(--tr-accent); border-radius:7px; transition:width 1s linear; }
-    .times { display:flex; justify-content:space-between; font-size:10px; color:var(--secondary-text-color,#aaa); font-variant-numeric:tabular-nums; }
-    .meta { display:flex; align-items:center; flex-wrap:wrap; gap:5px; font-size:10px; color:var(--secondary-text-color,#aaa); }
-    .chip { background:color-mix(in srgb,var(--tr-accent) 14%,transparent); border-radius:6px; padding:2px 6px; }
-    .warn { background:color-mix(in srgb,#efb252 19%,transparent); }
-    .paused { opacity:.72; }
-    .empty-message { text-align:center; padding:18px 8px; color:var(--secondary-text-color); font-size:13px; }
-    .carousel-nav { display:flex; justify-content:center; align-items:center; gap:12px; margin-top:6px; }
-    button.nav { border:0; background:var(--secondary-background-color); color:var(--primary-text-color); border-radius:8px; padding:6px 11px; cursor:pointer; }
+    .fallback-avatar { display:grid; place-items:center; font-size:calc(var(--tr-font-size)*.78); font-weight:bold; color:#fff; }
+    .title { font-weight:700; font-size:calc(var(--tr-font-size)*1.12); color:#fff;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .subtitle { color:#fff; font-size:calc(var(--tr-font-size)*.9); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .media-flags { display:flex; position:absolute; right:12px; top:12px; align-items:center; gap:8px; z-index:1; }
+    .stream-indicator { width:19px; height:19px; display:inline-flex; align-items:center;
+      justify-content:center; color:#a3a3a3; }
+    .stream-indicator svg { width:100%; height:100%; fill:none; stroke:currentColor;
+      stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+    .stream-indicator.direct { color:#12bb70; }
+    .stream-indicator.transcode { color:#ff9900; }
+    .progress { margin-top:auto; width:100%; height:6px; border-radius:7px; overflow:hidden;
+      background:color-mix(in srgb,var(--progress-accent) 24%,transparent); }
+    .fill { display:block; height:100%; background:var(--progress-accent);
+      border-radius:7px; transition:width 1s linear; }
+    .times { display:flex; justify-content:space-between; align-items:center; gap:8px;
+      font-size:calc(var(--tr-font-size)*.82); color:#fff; font-variant-numeric:tabular-nums; }
+    .time-paused { color:#ff9900; font-weight:700; }
+    .meta { display:flex; align-items:center; flex-wrap:wrap; gap:5px;
+      font-size:calc(var(--tr-font-size)*.8); color:#fff; }
+    .chip { background:rgba(255,255,255,.08); color:#fff; border-radius:6px; padding:2px 6px; }
+    .warn { background:rgba(239,178,82,.16); color:#fff; }
+    .empty-message { text-align:center; padding:18px 8px; color:#fff;
+      font-size:var(--tr-font-size); }
+    .carousel-nav { display:flex; justify-content:center; align-items:center; gap:12px;
+      margin-top:8px; font-size:calc(var(--tr-font-size)*.85); color:#fff; }
+    button.nav { border:1px solid rgba(255,255,255,.18); background:transparent; color:#fff;
+      border-radius:8px; padding:6px 11px; cursor:pointer; font-size:calc(var(--tr-font-size)*.95); }
+    button.nav:focus-visible,.streams.carousel:focus-visible { outline:2px solid var(--focus-color,#00bcd4); outline-offset:2px; }
     .compact .stream { min-height:78px; padding:8px; gap:8px; }
-    .compact .poster { width:48px; flex-basis:48px; height:72px; }
-    .compact .user { font-size:11px; }
+    .compact .poster-wrap { width:48px; flex-basis:48px; height:72px; }
+    .compact .user { font-size:calc(var(--tr-font-size)*.83); }
     .compact .info { gap:3px; }
-    @container (max-width:520px) { .streams.grid { grid-template-columns:1fr!important; } .carousel .stream { flex-basis:100%!important; } }
-    @media (prefers-reduced-motion:reduce) { .streams.carousel { scroll-behavior:auto; } .fill { transition:none; } }
+    .compact .media-flags { top:8px; right:8px; }
+    @container (max-width:520px) { .streams.grid { grid-template-columns:1fr!important; }
+      .carousel .stream { flex-basis:100%!important; } }
+    @media (prefers-reduced-motion:reduce) { .fill { transition:none; } }
   `;
 
   class BaseTracearrCard extends HTMLElement {
@@ -167,10 +209,15 @@
     }
     getCardSize() { return this._config.mode === "list" ? 5 : 4; }
     getGridOptions() {
+      // "auto" rows cannot be resized vertically in HA Sections. Always return
+      // a numeric default and sensible min/max so the native resize handle works.
       const cfg = this._config;
-      const opts = {columns: Math.max(3, Math.min(12, Number(cfg.grid_columns) || 12)), min_columns: 3};
-      if (Number(cfg.grid_rows) > 0) { opts.rows = Number(cfg.grid_rows); opts.min_rows = 2; }
-      return opts;
+      const rows = clamp(cfg.grid_rows, 2, 30, 4);
+      return {
+        columns: clamp(cfg.grid_columns, 3, 12, 12), min_columns: 3, max_columns: 12,
+        rows: Number(cfg.grid_rows) > 0 ? rows : 4,
+        min_rows: 2, max_rows: 30,
+      };
     }
     _setTimers() {
       clearInterval(this._tick);
@@ -239,8 +286,7 @@
     }
     _streamCard(entry,s) {
       const c = this._config;
-      const mode = transcodeMode(s);
-      const image = c.show_poster ? this._image(entry,s,"poster") : "";
+      const poster = c.show_poster ? this._image(entry,s,"poster") : "";
       const avatar = c.show_avatar ? this._image(entry,s,"avatar") : "";
       const name = this._name(entry,s);
       const episode = s.media_type === "episode" ? `S${String(s.season_number ?? "?").padStart(2,"0")}E${String(s.episode_number ?? "?").padStart(2,"0")}` : "";
@@ -254,17 +300,28 @@
       if (c.show_server) meta.push(`<span>${E(s.server_name || s.server_type || "")}</span>`);
       if (c.show_device && (s.device || s.player)) meta.push(`<span>${E(s.device || s.player)}</span>`);
       if (c.show_quality && s.resolution) meta.push(`<span class="chip">${E(s.resolution)}</span>`);
-      if (mode !== "direct") meta.push(`<span class="chip ${mode === "unknown" ? "warn" : ""}">${E(labels[mode])}</span>`);
+      // The separate video/audio icons take the place of the old text badge.
       if (c.show_bitrate && s.bitrate != null) meta.push(`<span class="chip">${E((s.bitrate/1000).toFixed(1))} Mb/s</span>`);
       if (c.show_codecs) meta.push(`<span>${E([s.stream_video_codec_display,s.stream_audio_codec_display].filter(Boolean).join(" / "))}</span>`);
       const accent = SERVER_ACCENTS[String(s.server_type || "").toLowerCase()] || "var(--tr-accent)";
-      return `<article class="stream ${paused?"paused":""}" data-session="${E(s.id)}" style="--stream-accent:${accent}">
-        ${c.show_poster ? (image ? `<img class="poster" src="${E(image)}" alt="Affiche" loading="lazy">` : `<div class="poster empty">▣</div>`) : ""}
+      const colorMode = c.progress_color_mode;
+      const progressColor = colorMode === "server" ? "var(--stream-accent)" :
+        colorMode === "custom" ? validColor(c.progress_custom_color) : "var(--accent-color,#00BCD4)";
+      const indicators = c.show_transcode_icons ? `<div class="media-flags" aria-label="État du flux audio et vidéo">${["video","audio"].map(kind => {
+        const decision = kind === "video" ? s.video_decision : s.audio_decision;
+        const state = codecState(decision);
+        const tip = `${kind === "video" ? "Vidéo" : "Audio"} : ${state === "transcode" ? "Transcodage" : state === "direct" ? "Lecture directe" : "Inconnu"}`;
+        return `<span class="stream-indicator ${state}" role="img" aria-label="${E(tip)}" title="${E(tip)}">${badgeIcon(kind)}</span>`;
+      }).join("")}</div>` : "";
+      const posterMarkup = c.show_poster ? `<div class="poster-wrap">${poster ? `<img class="poster" src="${E(poster)}" alt="Affiche" loading="lazy">` : `<div class="poster empty">▣</div>`}${paused ? `<span class="poster-paused" aria-label="Lecture en pause"><span class="pause-symbol" aria-hidden="true"></span></span>` : ""}</div>` : "";
+      return `<article class="stream" data-session="${E(s.id)}" style="--stream-accent:${accent};--progress-accent:${progressColor}">
+        ${posterMarkup}
+        ${indicators}
         <div class="info">
-          ${c.show_avatar ? `<div class="user">${avatar ? `<img class="avatar" src="${E(avatar)}" alt="">` : `<span class="avatar fallback-avatar">${E(name.slice(0,1).toUpperCase())}</span>`}<span>${E(name)}</span>${paused ? `<span class="chip warn">Pause</span>` : ""}</div>` : `<div class="user">${E(name)}${paused ? ` · Pause` : ""}</div>`}
+          ${c.show_avatar ? `<div class="user">${avatar ? `<img class="avatar" src="${E(avatar)}" alt="">` : `<span class="avatar fallback-avatar">${E(name.slice(0,1).toUpperCase())}</span>`}<span>${E(name)}</span></div>` : `<div class="user">${E(name)}</div>`}
           <div class="title" title="${E(title)}">${E(title)}</div>
           ${subtitle ? `<div class="subtitle">${E(subtitle)}</div>` : ""}
-          ${c.show_progress ? `<div class="progress"><span class="fill" data-id="${E(s.id)}" style="width:${ratio.toFixed(2)}%"></span></div><div class="times"><span class="time-current" data-id="${E(s.id)}">${fmtTime(s.progress_ms)}</span>${c.show_remaining ? `<span class="time-remaining" data-id="${E(s.id)}">-${fmtTime(Math.max(0,(s.duration_ms||0)-(s.progress_ms||0)))}</span>` : ""}</div>` : ""}
+          ${c.show_progress ? `<div class="progress"><span class="fill" data-id="${E(s.id)}" style="width:${ratio.toFixed(2)}%"></span></div><div class="times"><span class="time-current" data-id="${E(s.id)}">${fmtTime(s.progress_ms)}</span>${paused ? `<span class="time-paused">En pause</span>` : c.show_remaining ? `<span class="time-remaining" data-id="${E(s.id)}">-${fmtTime(Math.max(0,(s.duration_ms||0)-(s.progress_ms||0)))}</span>` : ""}</div>` : ""}
           ${meta.length ? `<div class="meta">${meta.join("<span aria-hidden=\"true\">·</span>")}</div>` : ""}
         </div>
       </article>`;
@@ -351,6 +408,49 @@
       };
       this._carouselFrame = requestAnimationFrame(step);
     }
+    _enableMouseDrag(el, cards) {
+      if (!this._config.carousel_mouse_drag || !el) return;
+      let startX = 0, scrollAtStart = 0, dragging = false;
+      el.addEventListener("pointerdown", (event) => {
+        if (event.pointerType !== "mouse" || event.button !== 0 || !cards.length) return;
+        startX = event.clientX;
+        scrollAtStart = el.scrollLeft;
+        dragging = true;
+        this._stopCarouselAnimation();
+        el.classList.add("is-dragging");
+        el.setPointerCapture?.(event.pointerId);
+      });
+      el.addEventListener("pointermove", (event) => {
+        if (!dragging) return;
+        const delta = event.clientX - startX;
+        el.scrollLeft = scrollAtStart - delta;
+        if (Math.abs(delta) > 5) event.preventDefault();
+      });
+      const end = (event) => {
+        if (!dragging) return;
+        dragging = false;
+        el.classList.remove("is-dragging");
+        if (el.hasPointerCapture?.(event.pointerId)) el.releasePointerCapture(event.pointerId);
+        const first = cards[0];
+        if (!first) return;
+        const visibleMax = this._carouselMaxIndex(cards.length, el, cards);
+        const nearest = cards.reduce((best, card, index) => {
+          if (index > visibleMax) return best;
+          const distance = Math.abs(el.scrollLeft - (card.offsetLeft - first.offsetLeft));
+          return distance < best.distance ? {index, distance} : best;
+        }, {index:0, distance:Infinity}).index;
+        this._carouselIndex = nearest;
+        this._goToCarouselIndex(el, cards, nearest);
+      };
+      el.addEventListener("pointerup", end);
+      el.addEventListener("pointercancel", end);
+      el.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+          event.preventDefault();
+          this._scroll(event.key === "ArrowRight" ? 1 : -1);
+        }
+      });
+    }
     _scroll(direction) {
       const el = this.shadowRoot.querySelector(".streams.carousel");
       if (!el) return;
@@ -398,10 +498,16 @@
       const cols = c.columns === "auto" ? "repeat(auto-fit,minmax(min(100%,var(--min-column,290px)),1fr))" : `repeat(${Math.max(1, Math.min(4,Number(c.columns)||1))}, minmax(0,1fr))`;
       const visible = clamp(c.carousel_visible, 1, 4, 1);
       const items = streams.map(s => this._streamCard(entry,s)).join("");
-      const classes = `streams ${E(c.mode)}${c.mode === "carousel" && c.carousel_hide_scrollbar ? " hide-scrollbar" : ""}`;
-      const body = `<div class="${classes}" style="grid-template-columns:${E(cols)};--carousel-visible:${visible}">${items || `<div class="empty-message">${entry && !entry.connected ? "Tracearr indisponible" : "Aucune lecture en cours"}</div>`}</div>`;
-      const nav = c.mode === "carousel" && streams.length > visible ? `<div class="carousel-nav"><button class="nav" data-step="-1" aria-label="Précédent">❮</button><span>${streams.length} lectures</span><button class="nav" data-step="1" aria-label="Suivant">❯</button></div>` : "";
-      this.shadowRoot.innerHTML = `<style>${style}</style><ha-card style="${Number(c.height)>0?`height:${Math.max(100, Math.min(2000,Number(c.height)))}px;`:""}"><div class="root ${c.compact?"compact":""}" style="--min-column:${c.compact?"210px":"290px"}">${head}${statChips}${body}${nav}</div></ha-card>`;
+      // Always conceal the native scrollbar; navigation remains via buttons,
+      // touch swipe, optional mouse drag and keyboard arrow keys.
+      const classes = `streams ${E(c.mode)}`;
+      const body = `<div class="${classes}" ${c.mode === "carousel" ? `tabindex="0" role="region" aria-label="Lectures en carrousel"` : ""} style="grid-template-columns:${E(cols)};--carousel-visible:${visible}">${items || `<div class="empty-message">${entry && !entry.connected ? "Tracearr indisponible" : "Aucune lecture en cours"}</div>`}</div>`;
+      const nav = c.mode === "carousel" && c.carousel_show_arrows && streams.length > 1 ? `<div class="carousel-nav"><button class="nav" data-step="-1" aria-label="Précédent">❮</button><span>${streams.length} lectures</span><button class="nav" data-step="1" aria-label="Suivant">❯</button></div>` : "";
+      // When HA Sections assigns grid_options.rows, the native grid height wins.
+      // Otherwise the optional pixel height applies (e.g. masonry dashboards).
+      const rowsAssigned = Number(c.grid_options?.rows) > 0;
+      const fixedHeight = Number(c.height) > 0 && !rowsAssigned ? `height:${clamp(c.height,100,2000,240)}px;` : "";
+      this.shadowRoot.innerHTML = `<style>${style}</style><ha-card style="${fixedHeight}--tr-font-size:${clamp(c.font_size,10,28,14)}px"><div class="root ${c.compact?"compact":""}" style="--min-column:${c.compact?"210px":"290px"}">${head}${statChips}${body}${nav}</div></ha-card>`;
       const newCarousel = this.shadowRoot.querySelector(".streams.carousel");
       if (newCarousel) {
         const cards = [...newCarousel.querySelectorAll(".stream")];
@@ -409,6 +515,7 @@
         if (cards.length) {
           newCarousel.scrollLeft = cards[this._carouselIndex].offsetLeft - cards[0].offsetLeft;
         } else newCarousel.scrollLeft = oldScroll;
+        this._enableMouseDrag(newCarousel, cards);
         newCarousel.addEventListener("scroll", () => {
           if (this._carouselAnimating || !cards.length) return;
           const step = cards.length > 1 ? cards[1].offsetLeft - cards[0].offsetLeft : 0;
@@ -426,7 +533,7 @@
   const editorStyle = `
     :host { display:block; font:inherit; } .editor { padding:10px 0; display:grid; gap:13px; }
     label { display:grid; gap:4px; font-size:13px; color:var(--primary-text-color); }
-    select,input[type=text],input[type=number],textarea { padding:9px; font:inherit; width:100%; min-width:0; box-sizing:border-box;
+    select,input[type=text],input[type=number],textarea,input[type=color] { padding:9px; font:inherit; width:100%; min-width:0; box-sizing:border-box;
       color:var(--primary-text-color); background:var(--card-background-color); border:1px solid var(--divider-color,#777); border-radius:7px; }
     .check { display:flex; align-items:center; gap:8px; } .check input { accent-color:var(--accent-color); }
     h4 { margin:7px 0 2px; font-size:13px; } .columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
@@ -434,7 +541,8 @@
   `;
   const fields = [
     ["show_title","Afficher le titre"], ["show_counter","Afficher le nombre de flux"],
-    ["show_transcodes","Compteurs de transcodage"], ["show_poster","Afficher les affiches"],
+    ["show_transcodes","Compteurs globaux de transcodage"], ["show_transcode_icons","Icônes vidéo / audio (vert = direct, orange = transcode)"],
+    ["show_poster","Afficher les affiches"],
     ["show_avatar","Afficher les avatars"], ["show_progress","Afficher la progression"],
     ["show_remaining","Afficher le temps restant"], ["show_quality","Afficher la résolution"],
     ["show_device","Afficher le lecteur"], ["show_server","Afficher le serveur"],
@@ -474,17 +582,25 @@
         <label>Durée de transition (ms)<input type="number" min="100" max="3000" step="100" data-field="carousel_transition_speed" value="${E(c.carousel_transition_speed)}"></label>
       </div>
       <label class="check"><input type="checkbox" data-field="carousel_autoplay" ${c.carousel_autoplay?"checked":""}>Défilement automatique</label>
-      <label class="check"><input type="checkbox" data-field="carousel_hide_scrollbar" ${c.carousel_hide_scrollbar?"checked":""}>Masquer la barre de défilement horizontale</label>
+      <small>La barre de défilement native est toujours masquée.</small>
+      <label class="check"><input type="checkbox" data-field="carousel_show_arrows" ${c.carousel_show_arrows?"checked":""}>Afficher les boutons précédent / suivant</label>
+      <label class="check"><input type="checkbox" data-field="carousel_mouse_drag" ${c.carousel_mouse_drag?"checked":""}>Navigation à la souris (cliquer-glisser)</label>
       <label class="check"><input type="checkbox" data-field="carousel_pause_on_hover" ${c.carousel_pause_on_hover?"checked":""}>Mettre en pause le défilement au survol de la souris</label>` : `<h4>Lecture individuelle</h4>${this._select("selection","Choix du flux",[["recent","Flux le plus récent"],["stream","ID de session précis"]])}
       <label>ID de session (facultatif)<input type="text" data-field="stream_id" value="${E(c.stream_id||"")}"></label>`}
       <h4>Dimensions</h4><div class="columns">
       <label>Largeur Sections (3–12 colonnes)<input type="number" min="3" max="12" data-field="grid_columns" value="${E(c.grid_columns)}"></label>
-      <label>Hauteur Sections (0 = auto)<input type="number" min="0" max="30" data-field="grid_rows" value="${E(c.grid_rows)}"></label>
-      </div><label>Hauteur CSS en pixels (0 = auto)<input type="number" min="0" max="2000" data-field="height" value="${E(c.height)}"></label>
+      <label>Hauteur initiale Sections (lignes ; 0 = 4)<input type="number" min="0" max="30" data-field="grid_rows" value="${E(c.grid_rows)}"></label>
+      </div><small>La hauteur peut ensuite être redimensionnée directement avec la poignée native du tableau de bord Sections. Minimum : 2 lignes.</small>
+      <label>Hauteur CSS en pixels (0 = auto, pour les dashboards hors Sections)<input type="number" min="0" max="2000" data-field="height" value="${E(c.height)}"></label>
       <h4>Filtrage</h4>${this._select("filter_server","Serveur",[["","Tous les serveurs"],...servers])}
       ${this._select("filter_user","Utilisateur",[["","Tous les utilisateurs"],...users.map(u=>[u,u])])}
       ${this._select("filter_transcode","Transcodage",[["all","Tous"],["direct","Direct"],["video","Vidéo seule"],["audio","Audio seul"],["both","Vidéo et audio"],["unknown","Inconnu"]])}
       ${this._select("sort","Trier par",[["recent","Date de début"],["user","Utilisateur"],["server","Serveur"]])}
+      <h4>Apparence</h4>
+      <label>Taille de la police (10–28 px)<input type="number" min="10" max="28" step="1" data-field="font_size" value="${E(c.font_size)}"></label>
+      ${this._select("progress_color_mode","Couleur de la barre de lecture",[["theme","Thème Home Assistant"],["server","Selon le serveur (Plex / Jellyfin / Emby)"],["custom","Couleur personnalisée"]])}
+      <label>Couleur personnalisée<input type="color" data-field="progress_custom_color" value="${E(validColor(c.progress_custom_color))}"></label>
+      <small>Fond transparent et informations en blanc. L'état « En pause » et les icônes de transcodage gardent leurs couleurs.</small>
       <h4>Informations visibles</h4><label>Titre personnalisé<input type="text" data-field="title" value="${E(c.title||"")}"></label>
       <div class="columns">${fields.map(([name,label])=>`<label class="check"><input type="checkbox" data-field="${name}" ${c[name]?"checked":""}>${E(label)}</label>`).join("")}</div>
       <h4>Personnalisation des utilisateurs</h4><label>Alias (un par ligne : plex:alice=Alice)<textarea data-field="aliases">${E(c.aliases||"")}</textarea></label>
