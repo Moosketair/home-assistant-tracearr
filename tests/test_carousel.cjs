@@ -149,12 +149,13 @@ test('stream left-edge colors match Plex, Jellyfin and Emby brand themes', () =>
   }
 });
 
-test('can hide scrollbar without breaking accessible scroll container', () => {
+test('carousel never renders a native scroll bar, even with an old saved false value', () => {
   const {card} = setup();
-  card._config = {...card._config, mode:'carousel',carousel_hide_scrollbar:true,show_poster:false,show_avatar:false};
+  card._config = {...card._config, mode:'carousel',carousel_hide_scrollbar:false,show_poster:false,show_avatar:false};
   card.render();
-  assert.match(card.shadowRoot.innerHTML, /streams carousel hide-scrollbar/);
-  assert.match(card.shadowRoot.innerHTML,/\.streams\.carousel\.hide-scrollbar::\-webkit-scrollbar/);
+  assert.match(card.shadowRoot.innerHTML, /streams carousel/);
+  assert.match(card.shadowRoot.innerHTML, /\.streams\.carousel::\-webkit-scrollbar \{ display:none/);
+  assert.match(card.shadowRoot.innerHTML, /scrollbar-width:none/);
 });
 
 
@@ -180,4 +181,103 @@ test('autoplay remains active while hovering unless pause on hover is opted in',
   timer.fn();
   assert.equal(card._carouselIndex, 1);
   card.disconnectedCallback();
+});
+
+
+test('video and audio icons indicate independent direct, transcode or unknown states', () => {
+  const {card} = setup();
+  card._config = {...card._config,show_poster:false,show_avatar:false};
+  const base = {id:'abc', username:'x', server_type:'plex',media_title:'Film',media_type:'movie',state:'playing',progress_ms:0,duration_ms:10000};
+  let html=card._streamCard(null,{...base,video_decision:'directplay',audio_decision:'transcode',is_transcode:true});
+  assert.match(html, /stream-indicator direct.*Vidéo : Lecture directe/s);
+  assert.match(html, /stream-indicator transcode.*Audio : Transcodage/s);
+  assert.doesNotMatch(html, /chip.*Transcode vidéo/);
+  html=card._streamCard(null,{...base,video_decision:null,audio_decision:'copy'});
+  assert.match(html, /stream-indicator unknown.*Vidéo : Inconnu/s);
+  assert.match(html, /stream-indicator direct.*Audio : Lecture directe/s);
+  card._config.show_transcode_icons=false;
+  html=card._streamCard(null,{...base,video_decision:'transcode',audio_decision:'transcode'});
+  assert.doesNotMatch(html,/media-flags/);
+});
+
+test('paused stream overlays poster and replaces remaining time with orange En pause', () => {
+  const {card} = setup();
+  card._config = {...card._config,show_poster:true,show_avatar:false,show_progress:true,show_remaining:true};
+  // Set up fake image proxy avoiding external calls.
+  card._image = (_,__,kind)=>kind==='poster'?'https://example.com/affiche.png':'';
+  const base = {id:'abc', username:'x', server_type:'plex',media_title:'Film',media_type:'movie',state:'paused',progress_ms:20000,duration_ms:100000};
+  let html=card._streamCard(null,base);
+  assert.match(html, /poster-paused/);
+  assert.match(html, /pause-symbol/);
+  assert.match(html, /class="time-paused">En pause/);
+  assert.doesNotMatch(html,/class="time-remaining"/);
+  assert.doesNotMatch(html,/class="stream paused"/);
+  card._config.show_remaining=false;
+  html=card._streamCard(null,base);
+  assert.match(html,/class="time-paused">En pause/);
+  card._config.show_remaining=true;
+  html=card._streamCard(null,{...base,state:'playing'});
+  assert.doesNotMatch(html,/poster-paused/);
+  assert.match(html,/class="time-remaining"/);
+});
+
+test('playback bar respects theme, per-server and sanitized custom colors', () => {
+  const {card} = setup();
+  card._config = {...card._config,show_poster:false,show_avatar:false};
+  const s={id:'x', username:'x', server_type:'jellyfin',media_title:'Film',media_type:'movie',state:'playing',progress_ms:0,duration_ms:10000};
+  assert.match(card._streamCard(null,s), /--progress-accent:var\(--accent-color,#00BCD4\)/);
+  card._config.progress_color_mode='server';
+  assert.match(card._streamCard(null,s), /--progress-accent:var\(--stream-accent\)/);
+  card._config.progress_color_mode='custom';
+  card._config.progress_custom_color='#fF304a';
+  assert.match(card._streamCard(null,s), /--progress-accent:#fF304a/);
+  card._config.progress_custom_color='red;background:url(https://bad.example)';
+  assert.match(card._streamCard(null,s), /--progress-accent:#00BCD4/);
+  assert.doesNotMatch(card._streamCard(null,s),/bad\.example/);
+});
+
+test('native Sections height is resizable and pixel height is not forced on grid-resized cards', () => {
+  const {card} = setup();
+  let opts=card.getGridOptions();
+  assert.equal(opts.rows,4);
+  assert.equal(opts.min_rows,2);
+  assert.equal(opts.max_rows,30);
+  card._config.grid_rows=7;
+  opts=card.getGridOptions();
+  assert.equal(opts.rows,7);
+  card._config.height=330;
+  card._config.font_size=18;
+  card.render();
+  assert.match(card.shadowRoot.innerHTML,/height:330px/);
+  assert.match(card.shadowRoot.innerHTML,/--tr-font-size:18px/);
+  card._config.grid_options={columns:6, rows:3};
+  card._renderFingerprint=null;
+  card.render();
+  assert.doesNotMatch(card.shadowRoot.innerHTML,/height:330px/);
+});
+
+test('arrows can be hidden but carousel keyboard controls and dragging remain supported', () => {
+  const {card,carousel,cards,listeners}=setup({count:3,visible:1,effect:'none'});
+  card._config.carousel_show_arrows=false;
+  card._config.carousel_mouse_drag=true;
+  const classes=new Set();
+  carousel.classList={add:c=>classes.add(c),remove:c=>classes.delete(c)};
+  carousel.setPointerCapture=()=>{};
+  carousel.hasPointerCapture=()=>false;
+  card._enableMouseDrag(carousel,cards);
+  const get = name => listeners.find(l=>l.event===name).fn;
+  get('pointerdown')({pointerType:'mouse',button:0,clientX:220,pointerId:1});
+  assert.ok(classes.has('is-dragging'));
+  get('pointermove')({clientX:100,preventDefault:()=>{}});
+  assert.equal(carousel.scrollLeft,120);
+  get('pointerup')({pointerId:1});
+  assert.equal(card._carouselIndex,1);
+  assert.equal(carousel.scrollLeft,110);
+  assert.ok(!classes.has('is-dragging'));
+  get('keydown')({key:'ArrowRight',preventDefault:()=>{}});
+  assert.equal(card._carouselIndex,2);
+  card._payload={entries:[{id:'a',connected:true,streams:cards.map((c,i)=>({id:String(i),username:'x',server_type:'plex',media_title:'Film',media_type:'movie',state:'playing',started_at:String(i),progress_ms:0,duration_ms:10000}))}]};
+  card._renderFingerprint=null;
+  card.render();
+  assert.doesNotMatch(card.shadowRoot.innerHTML,/data-step="-1"/);
 });
