@@ -453,7 +453,7 @@ test('movie title and year are independent of TV year and may be reordered', () 
   const episode={id:'tv',media_type:'episode',show_title:'Ma série',media_title:'Pilote',
     season_number:2,episode_number:4,year:2024};
   assert.deepEqual(Array.from(card._mediaFields(movie), x=>x.text), ['Le Voyage','2026']);
-  assert.deepEqual(Array.from(card._mediaFields(episode), x=>x.text), ['Ma série','S02E04','Pilote','2024']);
+  assert.deepEqual(Array.from(card._mediaFields(episode), x=>x.text), ['Ma série','S02','E04','Pilote','2024']);
   card._config.movie_show_year=false;
   card._config.series_show_year=true;
   assert.ok(!card._mediaMarkup(movie).includes('2026'));
@@ -462,7 +462,8 @@ test('movie title and year are independent of TV year and may be reordered', () 
   assert.ok(!card._mediaMarkup(episode).includes('Pilote'));
   card._config.series_show_title=false;
   assert.ok(!card._mediaMarkup(episode).includes('Ma série'));
-  card._config.series_show_season_episode=false;
+  card._config.series_show_season=false;
+  card._config.series_show_episode_number=false;
   assert.ok(!card._mediaMarkup(episode).includes('S02E04'));
   assert.match(card._mediaMarkup(episode),/class="title" title="2024"/);
   card._config.movie_show_title=false;
@@ -476,14 +477,15 @@ test('custom title, episode and year order works with short and long season form
   card._config.series_episode_style='long';
   card._config.series_field_order='year,episode,series,season';
   assert.deepEqual(Array.from(card._mediaFields(s), x=>x.text),
-    ['2022','Rencontre','Les Lacs','Saison 1 · Épisode 7']);
+    ['2022','Rencontre','Les Lacs','Saison 1','Épisode 7']);
   let html=card._mediaMarkup(s);
   assert.match(html,/class="title" title="2022"/);
   assert.match(html,/Rencontre · Les Lacs · Saison 1 · Épisode 7/);
   card._config.series_field_order='season,year,season,invalid,episode,series';
   assert.deepEqual(Array.from(card._mediaFields(s), x=>x.text),
-    ['Saison 1 · Épisode 7','2022','Rencontre','Les Lacs']);
+    ['Saison 1','2022','Rencontre','Les Lacs','Épisode 7']);
   card._config.series_episode_style='short';
+  card._config.series_field_order='season,episode_number,year,episode,series';
   assert.match(card._mediaMarkup(s),/S01E07/);
   card._config.movie_field_order='year,title';
   assert.deepEqual(Array.from(card._mediaFields({media_type:'movie',media_title:'Dune',year:2021}), x=>x.text),
@@ -523,7 +525,7 @@ test('media editor exposes individual toggles and reorder buttons', () => {
   const html=editor.shadowRoot.innerHTML;
   assert.match(html,/Titres, saisons et années/);
   for(const field of ['movie_show_title','movie_show_year','series_show_title',
-    'series_show_episode_title','series_show_season_episode','series_show_year',
+    'series_show_episode_title','series_show_season','series_show_episode_number','series_show_year',
     'series_episode_style','header_badge_color_mode','header_badge_custom_color']) {
     assert.match(html,new RegExp('data-field="'+field+'"'));
   }
