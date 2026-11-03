@@ -1,5 +1,13 @@
 # Historique des versions
 
+## 0.1.7 — Alpha (2026-11-03)
+
+- Interrupteurs indépendants pour la saison et le numéro d’épisode, migration des réglages précédents.
+- Affichage des débits pour tous les flux, les flux locaux ou les flux distants, avec classification manuelle lorsqu’elle est nécessaire.
+- Badges liés à n’importe quelle entité Home Assistant, avec sélecteur natif et mise à jour en direct de l’état.
+- Message d’absence de lecture personnalisable, en-tête seul ou carte masquée.
+- Mise à jour de la ressource Lovelace et tests de compatibilité.
+
 ## 0.1.6 — Alpha (2026-11-03)
 
 - Options séparées pour les titres et les années des films et des séries, le titre de l’épisode et la saison/numéro d’épisode.
