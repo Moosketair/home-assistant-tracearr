@@ -1,4 +1,4 @@
-/* Tracearr HA Lovelace cards 0.1.7 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.8 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;
@@ -9,7 +9,7 @@
     carousel_hide_scrollbar: true, carousel_show_arrows: true, carousel_mouse_drag: true,
     carousel_pause_on_hover: false, compact: false, show_title: true, show_counter: true,
     show_transcodes: false, show_transcode_icons: true, show_poster: true, show_avatar: true,
-    show_progress: true, show_quality: true, show_device: true, show_server: true,
+    show_progress: true, show_end_time: false, show_quality: true, show_device: true, show_server: true,
     show_bitrate: false, show_health: true, show_codecs: false, show_year: true, show_remaining: true,
     show_paused: true, hide_empty: false, empty_mode: "message", empty_message: "Aucune lecture en cours",
     sort: "recent", filter_transcode: "all",
@@ -18,6 +18,9 @@
     header_show_video: false, header_show_audio: false, header_show_both: false,
     header_show_transcodes_total: false, header_show_server_counts: false,
     header_entity_badges: [],
+    header_positive_only: false, header_blink_positive: false,
+    header_blink_seconds: 2, header_show_names: true,
+    header_zero_color_mode: "normal", header_zero_custom_color: "#576574",
     stream_surface: "soft",
     selection: "recent", grid_columns: 12, grid_rows: 0, height: 0,
     font_size: 14, accent_color_mode: "theme", accent_custom_color: "#00BCD4",
@@ -41,6 +44,22 @@
     return s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor(s % 3600 / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}` :
       `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   };
+  // Calculate the displayed seconds as a *pair*, never by independently
+  // rounding elapsed and remaining milliseconds. This guarantees that both
+  // clocks change on the same tick and add up to the displayed duration.
+  const playbackSeconds = (progressMs, durationMs) => {
+    const duration = Math.max(0, Number(durationMs) || 0);
+    const progress = Math.max(0, Math.min(duration || Infinity, Number(progressMs) || 0));
+    const total = Math.ceil(duration / 1000);
+    const elapsed = Math.min(total, Math.floor(progress / 1000));
+    return {elapsed, remaining: Math.max(0, total - elapsed), total};
+  };
+  const formattedSeconds = seconds => fmtTime(seconds * 1000);
+  const timeOfDay = (epochMs) => new Intl.DateTimeFormat("fr-FR", {
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).format(new Date(epochMs));
+  const estimatedEnd = (clock, now, wallNow) => clock && clock.state === "playing" && clock.duration > 0
+    ? timeOfDay(wallNow + Math.max(0, clock.duration - Math.min(clock.duration, now))) : "";
   const transcodeMode = (s) => {
     if (s.video_decision === "transcode" && s.audio_decision === "transcode") return "both";
     if (s.video_decision === "transcode") return "video";
@@ -67,9 +86,11 @@
   };
   const codecState = (decision) => decision === "transcode" ? "transcode" :
     ["directplay", "copy"].includes(decision) ? "direct" : "unknown";
+  // Original inline pictograms: a movie clapperboard/play button and a
+  // speaker with sound waves, using simple geometric paths (no Flaticon assets).
   const badgeIcon = (kind) => kind === "video" ?
-    `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v14M15 5v14M3 9h6M3 15h6M15 9h6M15 15h6"/></svg>` :
-    `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4" stroke-linecap="round"/></svg>`;
+    `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.8" y="8.5" width="18.4" height="12.3" rx="1.8"/><path d="M3.8 8.5 2.6 5.9a1.5 1.5 0 0 1 1-2L18.9 1.7a1.4 1.4 0 0 1 1.6 1.1l.4 2.3-17.1 3.4ZM8.3 3.2l3.1 4.1m2.2-4.8 3.2 4.1"/><path d="m9.5 11.8 5.7 3-5.7 3.1v-6.1Z" fill="currentColor" stroke="none"/></svg>` :
+    `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4.2L12.8 4v16l-5.6-5H3V9Z"/><path d="M16.1 8.1c1.9 2 1.9 5.8 0 7.8m2.7-10.7c3.3 3.7 3.3 10 0 13.7"/></svg>`;
   const validColor = (value) => /^#[0-9a-fA-F]{6}$/.test(String(value || "")) ? value : "#00BCD4";
   // Centralized palette: progress, metric pills and per-stream badges share the
   // same choice. Contrast uses WCAG relative luminance (black or white).
@@ -119,9 +140,12 @@
       color:var(--primary-text-color,#fff); overflow-wrap:anywhere; }
     .head-metrics { display:flex; flex:1 1 auto; flex-wrap:wrap; align-items:center; gap:5px;
       min-width:0; justify-content:flex-end; }
-    .metric { display:inline-flex; align-items:center; padding:4px 9px; border-radius:20px;
+    .metric { display:inline-flex; align-items:center; gap:4px; padding:4px 9px; border-radius:20px;
       font-size:calc(var(--tr-font-size)*.80); font-weight:600; background:var(--pill-bg);
       color:var(--pill-text); white-space:nowrap; }
+    .metric ha-icon { --mdc-icon-size:16px; width:16px; height:16px; display:inline-flex; }
+    .metric.blink-positive { animation:tracearr-badge-pulse var(--badge-blink,2s) ease-in-out infinite; }
+    @keyframes tracearr-badge-pulse { 0%,100% { opacity:1; } 50% { opacity:.22; } }
     .streams { display:flex; flex-direction:column; gap:10px; }
     .streams.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--min-column,290px)),1fr)); }
     .streams.carousel { overflow-x:auto; flex-direction:row; scroll-snap-type:x mandatory;
@@ -167,8 +191,10 @@
       background:color-mix(in srgb,var(--shared-accent) 24%,transparent); }
     .fill { display:block; height:100%; background:var(--shared-accent);
       border-radius:7px; transition:width .3s linear; }
-    .times { display:flex; justify-content:space-between; align-items:center; gap:8px;
+    .times { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:5px 8px;
       font-size:calc(var(--tr-font-size)*.82); font-variant-numeric:tabular-nums; }
+    .time-right { display:flex; justify-content:flex-end; flex-wrap:wrap; align-items:center; gap:4px 12px; }
+    .time-end { white-space:nowrap; opacity:.9; }
     .time-paused { color:#ff9900; font-weight:700; }
     /* Footer information wraps freely; the poster remains vertically centered beside it. */
     .meta { display:flex; align-items:center; flex-wrap:wrap; gap:5px;
@@ -192,7 +218,7 @@
     .compact .media-flags { top:8px; right:8px; }
     @container (max-width:520px) { .streams.grid { grid-template-columns:1fr!important; }
       .carousel .stream { flex-basis:100%!important; } }
-    @media (prefers-reduced-motion:reduce) { .fill { transition:none; } }
+    @media (prefers-reduced-motion:reduce) { .fill { transition:none; } .metric.blink-positive { animation:none; } }
   `;
 
   function normalizeConfig(config) {
@@ -207,11 +233,13 @@
     // A single pre-0.1.6 show_year switch controlled both movie and episode years.
     if (!("movie_show_year" in config) && "show_year" in config) result.movie_show_year = !!config.show_year;
     if (!("series_show_year" in config) && "show_year" in config) result.series_show_year = !!config.show_year;
+    // Preserve existing dashboards: the old single switch controlled both numbers.
     if (!("series_show_season" in config) && "series_show_season_episode" in config)
       result.series_show_season = !!config.series_show_season_episode;
     if (!("series_show_episode_number" in config) && "series_show_season_episode" in config)
       result.series_show_episode_number = !!config.series_show_season_episode;
     result.movie_field_order = normalizedOrder(result.movie_field_order, MOVIE_FIELDS).join(",");
+    // Place the newly separated episode number after season in old saved orders.
     const oldOrder = String(result.series_field_order || "").split(",").map(x => x.trim());
     if (!oldOrder.includes("episode_number")) {
       const seasonIndex = oldOrder.indexOf("season");
@@ -221,9 +249,17 @@
     if (!("empty_mode" in config) && config.hide_empty) result.empty_mode = "hide";
     if (!["message", "header_only", "hide"].includes(result.empty_mode)) result.empty_mode = "message";
     if (!["both", "local", "remote"].includes(result.bitrate_scope)) result.bitrate_scope = "both";
+    result.header_blink_seconds = clamp(result.header_blink_seconds, .5, 20, 2);
     result.header_entity_badges = Array.isArray(result.header_entity_badges) ? result.header_entity_badges.slice(0, 20)
       .filter(row => row && typeof row === "object" && typeof row.entity === "string")
-      .map(row => ({entity:row.entity, label:String(row.label || "")})) : [];
+      .map(row => ({...row, entity:row.entity, label:String(row.label || ""),
+        show_name: typeof row.show_name === "boolean" ? row.show_name : undefined,
+        show_icon: !!row.show_icon,
+        only_positive: !!row.only_positive, blink_positive: !!row.blink_positive,
+        blink_seconds: row.blink_seconds ? clamp(row.blink_seconds,.5,20,2) : undefined,
+        zero_color_mode: row.zero_color_mode === "custom" ? "custom" : "inherit",
+        zero_custom_color: validColor(row.zero_custom_color || "#576574"),
+      })) : [];
     return result;
   }
 
@@ -264,6 +300,9 @@
     set hass(hass) {
       this._hass = hass;
       if (hass?.connection && this._connection !== hass.connection) this._subscribe(hass.connection);
+      // Entity badges read the current HA state, independent of Tracearr SSE.
+      // Updating only the header prevents unrelated sensor changes from resetting
+      // the carousel animation, scroll position or playback clocks.
       if (this._config.header_entity_badges?.length && this._renderFingerprint !== null &&
           this.shadowRoot?.querySelector("ha-card")) this._refreshHeader(this._streams(this._entryData()));
     }
@@ -431,16 +470,13 @@
       }
       const season = stream.season_number;
       const episodeNum = stream.episode_number;
-      const available = season != null || episodeNum != null;
-      const seasonStr = season == null ? "?" : String(season);
-      const episodeStr = episodeNum == null ? "?" : String(episodeNum);
-      const seasonLabel = c.series_episode_style === "long" ?
-        `Saison ${seasonStr} · Épisode ${episodeStr}` :
-        `S${seasonStr.padStart(2,"0")}E${episodeStr.padStart(2,"0")}`;
+      const long = c.series_episode_style === "long";
       const fields = {
         series: c.series_show_title && stream.show_title ? stream.show_title : "",
-        season: c.series_show_season && season != null ? (c.series_episode_style === "long" ? "Saison " + seasonStr : "S" + seasonStr.padStart(2,"0")) : "",
-        episode_number: c.series_show_episode_number && episodeNum != null ? (c.series_episode_style === "long" ? "Épisode " + episodeStr : "E" + episodeStr.padStart(2,"0")) : "",
+        season: c.series_show_season && season != null ?
+          (long ? `Saison ${season}` : `S${String(season).padStart(2,"0")}`) : "",
+        episode_number: c.series_show_episode_number && episodeNum != null ?
+          (long ? `Épisode ${episodeNum}` : `E${String(episodeNum).padStart(2,"0")}`) : "",
         episode: c.series_show_episode_title && stream.media_title ? stream.media_title : "",
         year: c.series_show_year && stream.year != null ? String(stream.year) : "",
       };
@@ -452,26 +488,25 @@
       if (!fields.length) return "";
       const parts = [];
       for (const field of fields) {
+        // Join S01 + E02 only when adjacent, preserving the user's field order.
         if (stream.media_type === "episode" && this._config.series_episode_style !== "long" &&
             field.key === "episode_number" && parts.length && parts.at(-1).key === "season") {
-          parts[parts.length-1] = {key:"season_episode",text:parts.at(-1).text + field.text};
+          parts[parts.length-1] = {key:"season_episode", text:parts.at(-1).text + field.text};
         } else parts.push(field);
       }
-      // The first visible field is the main title; order is intentional.
       return `<div class="title" title="${E(parts[0].text)}">${E(parts[0].text)}</div>` +
         (parts.length > 1 ? `<div class="subtitle">${parts.slice(1).map(field=>E(field.text)).join(" · ")}</div>` : "");
     }
-    // The public streams v2 response has no client IP or LAN/WAN classification.
-    // Location is explicit user configuration; never guess a missing location.
+    // Tracearr v2 has no local/WAN flag or client IP in /streams.
+    // Users can explicitly map stable server-account and client-device names.
     _networkScope(stream) {
+      const direct = String(stream.network_type || stream.network || "").toLowerCase();
       const mapping = asMapping(this._config.network_locations);
       const candidates = [
-        String(stream.server_id) + ":" + stream.username,
-        String(stream.server_type) + ":" + stream.username,
-        String(stream.server_name) + ":" + stream.username,
-        "device:" + stream.device, "player:" + stream.player, stream.username,
+        `${stream.server_id}:${stream.username}`, `${stream.server_type}:${stream.username}`,
+        `${stream.server_name}:${stream.username}`, `device:${stream.device}`,
+        `player:${stream.player}`, stream.username,
       ];
-      const direct = String(stream.network_type || stream.network || "");
       const location = candidates.map(key => mapping[key]).find(Boolean) || direct;
       const value = String(location).trim().toLowerCase();
       if (["local", "lan", "interne"].includes(value)) return "local";
@@ -503,23 +538,41 @@
       if (!c.show_header) return "";
       const summary = this._streamSummary(streams);
       const metrics = [];
-      const add = (active,label,colorType=null) => {
-        if (!active) return;
-        const palette = this._headerPalette(colorType);
-        metrics.push(`<span class="metric" style="--pill-bg:${palette.bg};--pill-text:${palette.text}">${E(label)}</span>`);
+      // Each numeric metric can be hidden at zero, blink while positive, and
+      // use a distinct zero-state color. Custom HA badges may override each.
+      const add = (enabled, name, display, value, colorType=null, custom=null) => {
+        if (!enabled) return;
+        const count = Number(value);
+        const positive = Number.isFinite(count) && count > 0;
+        const hideZero = c.header_positive_only || !!custom?.only_positive;
+        if (hideZero && !positive) return;
+        const blinking = positive && (c.header_blink_positive || !!custom?.blink_positive);
+        const duration = clamp(custom?.blink_seconds ?? c.header_blink_seconds,.5,20,2);
+        const zeroMode = custom?.zero_color_mode === "custom" ? "custom" : c.header_zero_color_mode;
+        const zeroColor = custom?.zero_color_mode === "custom" ? custom.zero_custom_color : c.header_zero_custom_color;
+        const palette = !positive && zeroMode === "custom" ? this._paletteForMode("custom",null,zeroColor) : this._headerPalette(colorType);
+        const showName = custom?.show_name ?? c.header_show_names;
+        const safeIcon = String(custom?.icon || "");
+        const iconMarkup = custom?.show_icon && /^(mdi|hass):[a-z0-9-]+$/.test(safeIcon) ?
+          `<ha-icon icon="${E(safeIcon)}" aria-hidden="true"></ha-icon>` : "";
+        const output = `${showName && name ? `${E(name)} : ` : ""}${E(display)}`;
+        metrics.push(`<span class="metric${blinking ? " blink-positive" : ""}" style="--pill-bg:${palette.bg};--pill-text:${palette.text};--badge-blink:${duration}s" title="${E(name || display)}">${iconMarkup}${output}</span>`);
       };
-      add(c.header_show_streams, `${summary.total} flux`);
-      const bandwidthTitle = c.bitrate_scope === "local" ? "Débit local" : c.bitrate_scope === "remote" ? "Débit distant" : "Débit";
-      add(c.header_show_bandwidth, `${bandwidthTitle} : ${(summary.bandwidth/1000).toFixed(1)} Mb/s`);
-      add(c.header_show_direct, `Direct : ${summary.direct}`);
-      add(c.header_show_paused, `Pause : ${summary.paused}`);
-      add(c.header_show_video, `Vidéo : ${summary.video}`);
-      add(c.header_show_audio, `Audio : ${summary.audio}`);
-      add(c.header_show_both, `Vidéo + audio : ${summary.both}`);
-      add(c.header_show_transcodes_total, `Transcodes : ${summary.transcodes}`);
+      // Preserve the existing stream-count format "2 flux" when names are on.
+      add(c.header_show_streams, "", c.header_show_names ? `${summary.total} flux` : String(summary.total), summary.total);
+      const bandwidthTitle = c.bitrate_scope === "local" ? "Débit local" :
+        c.bitrate_scope === "remote" ? "Débit distant" : "Débit";
+      add(c.header_show_bandwidth, bandwidthTitle, `${(summary.bandwidth/1000).toFixed(1)} Mb/s`, summary.bandwidth);
+      add(c.header_show_direct, "Direct", summary.direct, summary.direct);
+      add(c.header_show_paused, "Pause", summary.paused, summary.paused);
+      add(c.header_show_video, "Vidéo", summary.video, summary.video);
+      add(c.header_show_audio, "Audio", summary.audio, summary.audio);
+      add(c.header_show_both, "Vidéo + audio", summary.both, summary.both);
+      add(c.header_show_transcodes_total, "Transcodes", summary.transcodes, summary.transcodes);
       if (c.header_show_server_counts) {
-        for (const server of summary.byServer.values()) add(true, `${server.name} : ${server.count}`,server.type);
+        for (const server of summary.byServer.values()) add(true,server.name,server.count,server.count,server.type);
       }
+      // Custom badges consume the entity's current state, unit and icon.
       for (const row of c.header_entity_badges || []) {
         const id = String(row.entity || "");
         if (!/^[a-z_]+\.[a-z0-9_]+$/.test(id)) continue;
@@ -527,8 +580,11 @@
         const name = String(row.label || state?.attributes?.friendly_name || id);
         const value = state?.state == null ? "Indisponible" : String(state.state);
         const unit = state?.attributes?.unit_of_measurement;
-        const units = unit && !["unknown", "unavailable"].includes(value) ? " " + unit : "";
-        add(true, name + " : " + value + units);
+        const units = unit && !["unknown", "unavailable"].includes(value) ? ` ${unit}` : "";
+        const domain = id.split(".")[0];
+        const fallback = ({counter:"mdi:counter", sensor:"mdi:gauge", binary_sensor:"mdi:check-circle-outline",
+          input_number:"mdi:numeric", number:"mdi:numeric", light:"mdi:lightbulb", switch:"mdi:toggle-switch"})[domain] || "mdi:information-outline";
+        add(true, name, `${value}${units}`, value, null, {...row,icon:state?.attributes?.icon || fallback});
       }
       const title = c.show_title ? `<h3>${E(c.title || "Lectures en cours")}</h3>` : "";
       if (!title && !metrics.length) return "";
@@ -598,6 +654,9 @@
       const clock = this._syncPosition(s);
       const displayPosition = Math.max(clock.lastRendered, this._positionAt(clock));
       const ratio = clock.duration > 0 ? 100 * Math.min(1, displayPosition / clock.duration) : 0;
+      const timePair = playbackSeconds(displayPosition, clock.duration);
+      const endLabel = c.show_end_time && clock.state === "playing" && clock.duration > 0 ?
+        `<span class="time-end" data-id="${E(s.id)}">Fin estimée : ${E(estimatedEnd(clock,displayPosition,Date.now()))}</span>` : "";
       const paused = s.state === "paused";
       const meta = [];
       if (c.show_health && entry?.servers?.find(server => server.server_id === s.server_id)?.status === "down") meta.push(`<span class="chip warn">Serveur hors ligne</span>`);
@@ -605,7 +664,8 @@
       if (c.show_device && (s.device || s.player)) meta.push(`<span>${E(s.device || s.player)}</span>`);
       if (c.show_quality && s.resolution) meta.push(`<span class="chip">${E(s.resolution)}</span>`);
       // The separate video/audio icons take the place of the old text badge.
-      if (c.show_bitrate && this._includeBitrate(s) && s.bitrate != null) meta.push(`<span class="chip">${E((s.bitrate/1000).toFixed(1))} Mb/s</span>`);
+      if (c.show_bitrate && this._includeBitrate(s) && s.bitrate != null)
+        meta.push(`<span class="chip">${E((s.bitrate/1000).toFixed(1))} Mb/s</span>`);
       if (c.show_codecs && (s.stream_video_codec_display || s.stream_audio_codec_display)) meta.push(`<span>${E([s.stream_video_codec_display,s.stream_audio_codec_display].filter(Boolean).join(" / "))}</span>`);
       const accent = SERVER_ACCENTS[String(s.server_type || "").toLowerCase()] || "var(--tr-accent)";
       const palette = this._palette(s.server_type);
@@ -623,28 +683,40 @@
         <div class="info">
           ${c.show_avatar ? `<div class="user">${avatar ? `<img class="avatar" src="${E(avatar)}" alt="">` : `<span class="avatar fallback-avatar">${E(name.slice(0,1).toUpperCase())}</span>`}<span>${E(name)}</span></div>` : `<div class="user">${E(name)}</div>`}
           ${mediaMarkup}
-          ${c.show_progress ? `<div class="progress"><span class="fill" data-id="${E(s.id)}" style="width:${ratio.toFixed(2)}%"></span></div><div class="times"><span class="time-current" data-id="${E(s.id)}">${fmtTime(displayPosition)}</span>${paused ? `<span class="time-paused">En pause</span>` : c.show_remaining ? `<span class="time-remaining" data-id="${E(s.id)}">-${fmtTime(Math.max(0,clock.duration-displayPosition))}</span>` : ""}</div>` : ""}
+          ${c.show_progress ? `<div class="progress"><span class="fill" data-id="${E(s.id)}" style="width:${ratio.toFixed(2)}%"></span></div>` : ""}
+          ${c.show_progress || c.show_end_time ? `<div class="times"><span class="time-current" data-id="${E(s.id)}">${formattedSeconds(timePair.elapsed)}</span><div class="time-right">${paused ? `<span class="time-paused">En pause</span>` : c.show_remaining && c.show_progress ? `<span class="time-remaining" data-id="${E(s.id)}">-${formattedSeconds(timePair.remaining)}</span>` : ""}${endLabel}</div></div>` : ""}
           ${meta.length ? `<div class="meta">${meta.join("<span aria-hidden=\"true\">·</span>")}</div>` : ""}
         </div>
       </article>`;
     }
     _updateProgress() {
       if (!this.shadowRoot || !this.isConnected) return;
-      this.shadowRoot.querySelectorAll(".fill[data-id]").forEach(el => {
-        const item = this._positions.get(el.dataset.id);
+      // Capture one monotonic tick shared by the bar, elapsed, remaining and
+      // end-time estimate. All visible seconds derive from the same integer.
+      const now = this._now();
+      const wallNow = Date.now();
+      this.shadowRoot.querySelectorAll(".time-current[data-id]").forEach(currentNode => {
+        const id = currentNode.dataset.id;
+        const item = this._positions.get(id);
         if (!item || !item.duration) return;
-        const current = Math.max(item.lastRendered, this._positionAt(item));
+        const current = Math.max(item.lastRendered, this._positionAt(item,now));
         item.lastRendered = Math.min(item.duration, current);
-        el.style.width = `${(100*item.lastRendered/item.duration).toFixed(2)}%`;
-        const currentNode = this.shadowRoot.querySelector(`.time-current[data-id="${CSS.escape(el.dataset.id)}"]`);
-        const remainingNode = this.shadowRoot.querySelector(`.time-remaining[data-id="${CSS.escape(el.dataset.id)}"]`);
-        if (currentNode) {
-          const text = fmtTime(item.lastRendered);
-          if (currentNode.textContent !== text) currentNode.textContent = text;
-        }
+        const pair = playbackSeconds(item.lastRendered,item.duration);
+        const selectorId = CSS.escape(id);
+        const fillNode = this.shadowRoot.querySelector(`.fill[data-id="${selectorId}"]`);
+        if (fillNode) fillNode.style.width = `${(100*item.lastRendered/item.duration).toFixed(2)}%`;
+        const left = formattedSeconds(pair.elapsed);
+        if (currentNode.textContent !== left) currentNode.textContent = left;
+        const remainingNode = this.shadowRoot.querySelector(`.time-remaining[data-id="${selectorId}"]`);
         if (remainingNode) {
-          const text = `-${fmtTime(Math.max(0,item.duration-item.lastRendered))}`;
-          if (remainingNode.textContent !== text) remainingNode.textContent = text;
+          const right = `-${formattedSeconds(pair.remaining)}`;
+          if (remainingNode.textContent !== right) remainingNode.textContent = right;
+        }
+        const endNode = this.shadowRoot.querySelector(`.time-end[data-id="${selectorId}"]`);
+        if (endNode) {
+          const end = estimatedEnd(item,item.lastRendered,wallNow);
+          const label = end ? `Fin estimée : ${end}` : "";
+          if (endNode.textContent !== label) endNode.textContent = label;
         }
       });
     }
@@ -856,7 +928,9 @@
       // Always conceal the native scrollbar; navigation remains via buttons,
       // touch swipe, optional mouse drag and keyboard arrow keys.
       const classes = `streams ${E(c.mode)}`;
-      const body = !streams.length && c.empty_mode === "header_only" ? "" : `<div class="${classes}" ${c.mode === "carousel" ? `tabindex="0" role="region" aria-label="Lectures en carrousel"` : ""} style="grid-template-columns:${E(cols)};--carousel-visible:${visible}">${items || `<div class="empty-message">${E(entry && !entry.connected ? "Tracearr indisponible" : String(c.empty_message ?? "Aucune lecture en cours"))}</div>`}</div>`;
+      const emptyText = entry && !entry.connected ? "Tracearr indisponible" : String(c.empty_message ?? "Aucune lecture en cours");
+      const body = !streams.length && c.empty_mode === "header_only" ? "" :
+        `<div class="${classes}" ${c.mode === "carousel" ? `tabindex="0" role="region" aria-label="Lectures en carrousel"` : ""} style="grid-template-columns:${E(cols)};--carousel-visible:${visible}">${items || `<div class="empty-message">${E(emptyText)}</div>`}</div>`;
       const nav = c.mode === "carousel" && c.carousel_show_arrows && streams.length > 1 ? `<div class="carousel-nav"><button class="nav" data-step="-1" aria-label="Précédent">❮</button><span>${streams.length} lectures</span><button class="nav" data-step="1" aria-label="Suivant">❯</button></div>` : "";
       // When HA Sections assigns grid_options.rows, the native grid height wins.
       // Otherwise the optional pixel height applies (e.g. masonry dashboards).
@@ -913,9 +987,11 @@
       border:1px solid var(--divider-color,#7775); border-radius:6px; color:var(--primary-text-color);
       cursor:pointer; padding:5px 8px; font:inherit; }
     .move-controls button:disabled { opacity:.3; cursor:default; }
-    .badge-row { display:grid; gap:8px; border:1px solid var(--divider-color,#7775); padding:9px; border-radius:8px; margin:6px 0; }
+    .badge-row { display:grid; gap:8px; border:1px solid var(--divider-color,#7775);
+      padding:9px; border-radius:8px; margin:6px 0; }
     .badge-row ha-entity-picker { display:block; width:100%; }
-    .badge-row button,.add-badge { border:1px solid var(--divider-color,#7775); border-radius:7px; padding:8px; color:var(--primary-text-color);
+    .badge-row button,.add-badge { border:1px solid var(--divider-color,#7775);
+      border-radius:7px; padding:8px; color:var(--primary-text-color);
       background:var(--secondary-background-color,transparent); cursor:pointer; text-align:left; }
   `;
   class TracearrCardEditor extends HTMLElement {
@@ -931,7 +1007,7 @@
     }
     set hass(hass) {
       this._hass=hass;
-      this.shadowRoot?.querySelectorAll("ha-entity-picker[data-badge-index]").forEach(p => {p.hass=hass;});
+      this.shadowRoot?.querySelectorAll("ha-entity-picker[data-badge-index]").forEach(p => { p.hass = hass; });
       if (hass?.connection && this._connection !== hass.connection) {
         this._connection=hass.connection;
         hass.connection.sendMessagePromise({type:"tracearr_ha/get"}).then(r=>{
@@ -955,26 +1031,34 @@
     }
     _checks(fields) { return `<div class="columns">${fields.map(([key,label])=>this._toggle(key,label)).join("")}</div>`; }
     _number(name,label,min,max) {
-      return `<label>${E(label)}<input type="number" min="${min}" max="${max}" data-field="${E(name)}" value="${E(this._config[name])}"></label>`;
+      return `<label>${E(label)}<input type="number" min="${min}" max="${max}" step="${Number.isInteger(min) ? 1 : .5}" data-field="${E(name)}" value="${E(this._config[name])}"></label>`;
     }
     _orderEditor(configKey, fields) {
       const order = normalizedOrder(this._config[configKey], fields);
       return `<div class="order-list">${order.map((field,index) => `<div class="order-row"><span>${E(MEDIA_LABELS[field])}</span><div class="move-controls"><button type="button" data-order="${E(configKey)}" data-index="${index}" data-direction="-1" ${index===0?"disabled":""} aria-label="Monter ${E(MEDIA_LABELS[field])}">↑</button><button type="button" data-order="${E(configKey)}" data-index="${index}" data-direction="1" ${index===order.length-1?"disabled":""} aria-label="Descendre ${E(MEDIA_LABELS[field])}">↓</button></div></div>`).join("")}</div>`;
     }
     _emit() {
-      this.dispatchEvent(new CustomEvent("config-changed", {detail:{config:this._config}, bubbles:true, composed:true}));
+      this.dispatchEvent(new CustomEvent("config-changed",{detail:{config:this._config},bubbles:true,composed:true}));
     }
     _entityBadgeEditor() {
-      const rows=this._config.header_entity_badges || [];
-      return '<div class="group-label">Badges d’entités Home Assistant</div>' +
-        '<small>Ajoutez un compteur, un capteur ou toute autre entité. Les valeurs se mettent à jour automatiquement.</small>' +
-        rows.map((row,i) => '<div class="badge-row">' +
-          '<label>Entité<ha-entity-picker data-badge-index="' + i + '"></ha-entity-picker></label>' +
-          '<label>Nom facultatif<input type="text" data-badge-label="' + i +
-            '" placeholder="Nom de l’entité" value="' + E(row.label || "") + '"></label>' +
-          '<button type="button" data-badge-remove="' + i + '">Supprimer</button></div>').join("") +
-        '<button type="button" class="add-badge" data-badge-add ' +
-          (rows.length >= 20 ? "disabled" : "") + '>+ Ajouter un badge</button>';
+      const rows = this._config.header_entity_badges || [];
+      return `<div class="group-label">Badges d'entités Home Assistant</div>`+
+        `<small>Ajoutez un capteur, compteur ou toute autre entité ; son état sera actualisé automatiquement.</small>`+
+        rows.map((row,index) => `<div class="badge-row" data-badge-row="${index}">`+
+          `<label>Entité<ha-entity-picker data-badge-index="${index}" aria-label="Choisir une entité"></ha-entity-picker></label>`+
+          `<label>Nom facultatif<input type="text" data-badge-label="${index}" placeholder="Nom de l'entité" value="${E(row.label || "")}"></label>`+
+          `<div class="columns">`+
+            `<label class="check"><input type="checkbox" data-badge-setting="show_name" data-badge-index="${index}" ${(row.show_name ?? this._config.header_show_names) ? "checked" : ""}>Afficher le nom</label>`+
+            `<label class="check"><input type="checkbox" data-badge-setting="show_icon" data-badge-index="${index}" ${row.show_icon ? "checked" : ""}>Icône de l'entité</label>`+
+            `<label class="check"><input type="checkbox" data-badge-setting="only_positive" data-badge-index="${index}" ${row.only_positive ? "checked" : ""}>Afficher si supérieur à 0</label>`+
+            `<label class="check"><input type="checkbox" data-badge-setting="blink_positive" data-badge-index="${index}" ${row.blink_positive ? "checked" : ""}>Clignoter si supérieur à 0</label>`+
+          `</div>`+
+          `<label>Durée d'un clignotement (secondes)<input type="number" min="0.5" max="20" step="0.5" data-badge-setting="blink_seconds" data-badge-index="${index}" value="${E(row.blink_seconds ?? this._config.header_blink_seconds)}"></label>`+
+          `<label>Couleur si valeur à zéro<select data-badge-setting="zero_color_mode" data-badge-index="${index}"><option value="inherit" ${row.zero_color_mode !== "custom" ? "selected" : ""}>Réglage global</option><option value="custom" ${row.zero_color_mode === "custom" ? "selected" : ""}>Couleur particulière</option></select></label>`+
+          `<label>Couleur personnalisée à zéro<input type="color" data-badge-setting="zero_custom_color" data-badge-index="${index}" value="${E(validColor(row.zero_custom_color || "#576574"))}"></label>`+
+          `<button class="remove-badge" type="button" data-badge-remove="${index}" aria-label="Supprimer le badge">Supprimer</button>`+
+          `</div>`).join("")+
+        `<button type="button" class="add-badge" data-badge-add ${rows.length>=20?"disabled":""}>+ Ajouter un badge</button>`;
     }
     render() {
       const c=this._config;
@@ -1003,6 +1087,18 @@
         this._select("header_badge_color_mode","Palette des statistiques",[["inherit","Utiliser la palette globale"],["theme","Thème Home Assistant"],["server","Couleur du serveur (comptages par serveur)"],["custom","Couleur personnalisée"]])+
         `<label>Couleur personnalisée de l'en-tête<input type="color" data-field="header_badge_custom_color" value="${E(validColor(c.header_badge_custom_color))}"></label>`+
         `<small>En mode serveur, les statistiques globales utilisent la couleur du thème ; chaque compteur Plex/Jellyfin/Emby conserve sa couleur propre.</small>`+
+        `<div class="group-label">Comportement des badges d'en-tête</div>`+
+        this._checks([
+          ["header_show_names","Afficher les noms des statistiques"],
+          ["header_positive_only","Masquer les badges à zéro"],
+          ["header_blink_positive","Clignoter quand la valeur est supérieure à zéro"],
+        ])+
+        this._number("header_blink_seconds","Durée du cycle de clignotement (secondes)",0.5,20)+
+        this._select("header_zero_color_mode","Couleur quand la valeur est zéro",[
+          ["normal","Palette habituelle"],["custom","Couleur spécifique"],
+        ])+
+        `<label>Couleur à zéro<input type="color" data-field="header_zero_custom_color" value="${E(validColor(c.header_zero_custom_color))}"></label>`+
+        `<small>Pour les entités, vous pouvez aussi choisir ces comportements individuellement. Les animations sont désactivées si le navigateur demande de réduire les mouvements.</small>`+
         this._entityBadgeEditor();
       const layout=(isIndividual ? this._select("selection","Choix de la lecture",[["recent","Lecture la plus récente"],["stream","Session précise"]])+
         `<label>ID de session<input type="text" data-field="stream_id" value="${E(c.stream_id||"")}"></label>` :
@@ -1023,6 +1119,7 @@
       const content=this._checks([
         ["show_poster","Affiche"],["show_avatar","Avatar utilisateur"],
         ["show_progress","Barre de lecture"],["show_remaining","Temps restant / En pause"],
+        ["show_end_time","Heure de fin estimée (pendant lecture)"],
         ["show_transcode_icons","Icônes vidéo et audio"],
       ]);
       const media = `<div class="group-label">Films</div>`+
@@ -1031,7 +1128,8 @@
         this._orderEditor("movie_field_order",MOVIE_FIELDS)+
         `<div class="group-label">Séries et épisodes</div>`+
         this._checks([["series_show_title","Titre de la série"],["series_show_episode_title","Nom de l'épisode"],
-          ["series_show_season","Afficher la saison"],["series_show_episode_number","Afficher le numéro d'épisode"],["series_show_year","Année de la série"]])+
+          ["series_show_season","Afficher la saison"],["series_show_episode_number","Afficher le numéro d'épisode"],
+          ["series_show_year","Année de la série"]])+
         this._select("series_episode_style","Format de saison et épisode",[["short","S01E02"],["long","Saison 1 · Épisode 2"]])+
         `<small>Ordre d'affichage de toutes les informations :</small>`+
         this._orderEditor("series_field_order",SERIES_FIELDS)+
@@ -1043,12 +1141,12 @@
       ])+`<small>Les badges de résolution et de débit adoptent la palette globale avec une écriture blanche ou noire automatique.</small>`;
       const network=this._select("bitrate_scope","Débits à afficher (sur les flux et dans l'en-tête)",[
           ["both","Tous les débits"],["local","Flux locaux uniquement"],["remote","Flux distants uniquement"]])+
-        '<label>Correspondances LAN/WAN (une règle par ligne)<textarea data-field="network_locations" placeholder="plex:alice=remote&#10;device:Apple TV=local">' + E(c.network_locations || "") + '</textarea></label>' +
-        '<small>L’API Tracearr v2 ne fournit ni IP ni indication LAN/WAN. Saisissez une règle serveur:utilisateur=local/remote, device:Nom=local/remote, player:Nom=local/remote ou utilisateur=local/remote. Les flux non classés sont exclus du débit en mode local/distant.</small>';
+        `<label>Correspondances LAN/WAN (une règle par ligne)<textarea data-field="network_locations" placeholder="plex:alice=remote&#10;device:Apple TV=local">${E(c.network_locations||"")}</textarea></label>`+
+        `<small>L’API publique Tracearr v2 ne transmet ni IP ni indicateur LAN/WAN. Pour filtrer, renseignez des correspondances manuelles : serveur:utilisateur=local/remote, device:Nom=local/remote, player:Nom=local/remote ou utilisateur=local/remote. Les flux sans correspondance restent inconnus et ne sont pas comptés en mode local/distant.</small>`;
       const empty=this._select("empty_mode","Quand aucun flux n'est actif",[
           ["message","Afficher un message"],["header_only","Afficher uniquement l'en-tête"],["hide","Masquer complètement la carte"]])+
-        '<label>Message personnalisé<input type="text" data-field="empty_message" value="' + E(c.empty_message ?? "Aucune lecture en cours") + '"></label>' +
-        '<small>En cas de déconnexion, « Tracearr indisponible » est prioritaire.</small>';
+        `<label>Message personnalisé<input type="text" data-field="empty_message" value="${E(c.empty_message??"Aucune lecture en cours")}"></label>`+
+        `<small>Le message est remplacé par « Tracearr indisponible » si la connexion est perdue.</small>`;
       const colors=this._select("accent_color_mode","Palette commune (progression, badges, statistiques)",[
           ["theme","Couleur du thème Home Assistant"],["server","Selon Plex / Jellyfin / Emby"],["custom","Couleur personnalisée"],
         ])+
@@ -1082,6 +1180,7 @@
         };
         el.addEventListener("change",fn);
       });
+      // HA's native searchable entity picker; each badge can display any domain.
       this.shadowRoot.querySelectorAll("ha-entity-picker[data-badge-index]").forEach(picker => {
         const index=Number(picker.dataset.badgeIndex);
         picker.hass=this._hass;
@@ -1105,19 +1204,32 @@
           this._emit();
         });
       });
+      this.shadowRoot.querySelectorAll("[data-badge-setting]").forEach(input => {
+        input.addEventListener("change", () => {
+          const rows = [...(this._config.header_entity_badges || [])];
+          const index = Number(input.dataset.badgeIndex);
+          if (!rows[index]) return;
+          const field = input.dataset.badgeSetting;
+          const value = input.type === "checkbox" ? input.checked :
+            input.type === "number" ? clamp(input.value,.5,20,2) : input.value;
+          rows[index] = {...rows[index], [field]: value};
+          this._config = {...this._config,header_entity_badges:rows};
+          this._emit();
+        });
+      });
       this.shadowRoot.querySelector("button[data-badge-add]")?.addEventListener("click", () => {
         const rows=[...(this._config.header_entity_badges || [])];
         if (rows.length>=20) return;
         this._captureOpenSections();
         this._config={...this._config,header_entity_badges:[...rows,{entity:"",label:""}]};
-        this.render();this._emit();
+        this.render(); this._emit();
       });
       this.shadowRoot.querySelectorAll("button[data-badge-remove]").forEach(btn => {
         btn.addEventListener("click", () => {
           const index=Number(btn.dataset.badgeRemove);
           this._captureOpenSections();
           this._config={...this._config,header_entity_badges:this._config.header_entity_badges.filter((_,i)=>i!==index)};
-          this.render();this._emit();
+          this.render(); this._emit();
         });
       });
       this.shadowRoot.querySelectorAll("button[data-order]").forEach(btn => btn.addEventListener("click", () => {

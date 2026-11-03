@@ -568,46 +568,242 @@ test('manual arrow navigation resets autoplay delay to prevent immediate early j
   card.disconnectedCallback();
 });
 
-
-// 0.1.7 regression tests
-test('season and episode number can be displayed independently', () => {
-  const {card}=setup();
-  const stream={media_type:'episode',show_title:'Série',media_title:'Pilote',season_number:2,episode_number:4,year:2026};
+// 0.1.7 — individual season/episode, HA entity badges, selective bandwidth and empty state.
+test('season and episode number have separate switches, formats and independently ordered fields', () => {
+  const {card} = setup();
+  const episode = {media_type:'episode', show_title:'Série', media_title:'Fin de partie',
+    season_number:3, episode_number:9, year:2026};
+  assert.match(card._mediaMarkup(episode), /S03E09/);
   card._config.series_show_season=false;
-  assert.match(card._mediaMarkup(stream),/E04/);
-  assert.doesNotMatch(card._mediaMarkup(stream),/S02/);
+  assert.doesNotMatch(card._mediaMarkup(episode), /S03/);
+  assert.match(card._mediaMarkup(episode), /E09/);
   card._config.series_show_season=true;
   card._config.series_show_episode_number=false;
-  assert.match(card._mediaMarkup(stream),/S02/);
-  assert.doesNotMatch(card._mediaMarkup(stream),/E04/);
+  assert.match(card._mediaMarkup(episode), /S03/);
+  assert.doesNotMatch(card._mediaMarkup(episode), /E09/);
+  card._config.series_episode_style='long';
+  assert.match(card._mediaMarkup(episode), /Saison 3/);
+  assert.doesNotMatch(card._mediaMarkup(episode), /Épisode 9/);
+  card._config.series_show_season=false;
+  card._config.series_show_episode_number=true;
+  assert.match(card._mediaMarkup(episode), /Épisode 9/);
+  assert.doesNotMatch(card._mediaMarkup(episode), /Saison 3/);
+  card._config.series_field_order='episode_number,year,series,episode,season';
+  assert.match(card._mediaMarkup(episode), /class="title" title="Épisode 9"/);
 });
-test('header badges use actual Home Assistant states and escape arbitrary labels', () => {
+
+test('legacy season and episode toggle migrates to two independent controls and keeps order', () => {
   const {card}=setup();
-  card._config.header_entity_badges=[{entity:'counter.seerr',label:'Demandes'},{entity:'sensor.temp',label:''}];
-  card._hass={states:{'counter.seerr':{state:'3',attributes:{}},'sensor.temp':{state:'20.5',attributes:{friendly_name:'Salon',unit_of_measurement:'°C'}}}};
-  const html=card._header([]);
-  assert.match(html,/Demandes : 3/);
-  assert.match(html,/Salon : 20.5 °C/);
+  card.setConfig({series_show_season_episode:false,series_field_order:'episode,year,series,season'});
+  assert.equal(card._config.series_show_season,false);
+  assert.equal(card._config.series_show_episode_number,false);
+  assert.deepEqual(card._config.series_field_order.split(','), ['episode','year','series','season','episode_number']);
+  card.setConfig({series_show_season_episode:false,series_show_season:true});
+  assert.equal(card._config.series_show_season,true);
+  assert.equal(card._config.series_show_episode_number,false);
 });
-test('local and remote bitrate filters exclude unclassified streams', () => {
+
+test('bandwidth shows all, LAN or WAN only when manually classifiable', () => {
   const {card}=setup();
-  const a={id:'a',server_type:'plex',username:'Alice',bitrate:6000,media_type:'movie',media_title:'Film',progress_ms:0,duration_ms:10000};
-  const b={...a,id:'b',username:'Bob',bitrate:2000};
-  card._config.network_locations='plex:Alice=remote';
+  const alice={id:'a',server_id:'srv',server_name:'Plex',server_type:'plex',username:'Alice',bitrate:6000,
+    media_title:'Film',media_type:'movie',duration_ms:10000,progress_ms:0};
+  const bob={...alice,id:'b',server_type:'jellyfin',username:'Bob',device:'Apple TV',bitrate:2000};
+  const unknown={...alice,id:'c',server_type:'emby',username:'Carol',device:'Unknown',bitrate:1000};
+  card._config={...card._config,show_bitrate:true,header_show_bandwidth:true,
+    network_locations:'plex:Alice=remote\ndevice:Apple TV=local'};
+  assert.equal(card._networkScope(alice),'remote');
+  assert.equal(card._networkScope(bob),'local');
+  assert.equal(card._networkScope(unknown),'unknown');
+  assert.match(card._header([alice,bob,unknown]),/Débit : 9.0 Mb\/s/);
   card._config.bitrate_scope='remote';
-  assert.equal(card._streamSummary([a,b]).bandwidth,6000);
+  assert.match(card._header([alice,bob,unknown]),/Débit distant : 6.0 Mb\/s/);
+  assert.match(card._streamCard(null,alice),/6\.0 Mb\/s/);
+  assert.doesNotMatch(card._streamCard(null,bob),/2\.0 Mb\/s/);
+  assert.doesNotMatch(card._streamCard(null,unknown),/1\.0 Mb\/s/);
   card._config.bitrate_scope='local';
-  assert.equal(card._streamSummary([a,b]).bandwidth,0);
-  card._config.bitrate_scope='both';
-  assert.equal(card._streamSummary([a,b]).bandwidth,8000);
+  assert.match(card._header([alice,bob,unknown]),/Débit local : 2.0 Mb\/s/);
+  assert.doesNotMatch(card._streamCard(null,alice),/6\.0 Mb\/s/);
+  assert.match(card._streamCard(null,bob),/2\.0 Mb\/s/);
+  card._config.network_locations='';
+  assert.match(card._header([alice,bob,unknown]),/Débit local : 0.0 Mb\/s/);
 });
-test('empty header only and custom message are selectable', () => {
+
+test('arbitrary Home Assistant sensor, counter and units are safely shown as header badges', () => {
   const {card}=setup();
-  card._payload={entries:[{id:'x',connected:true,streams:[]}]};
-  card.setConfig({empty_mode:'message',empty_message:'Personne ne regarde'});
-  assert.match(card.shadowRoot.innerHTML,/Personne ne regarde/);
-  card.setConfig({empty_mode:'header_only'});
-  assert.doesNotMatch(card.shadowRoot.innerHTML,/Personne ne regarde/);
-  card.setConfig({empty_mode:'hide'});
+  card._config={...card._config,header_entity_badges:[
+    {entity:'counter.overseer_demande',label:'Demandes'},
+    {entity:'sensor.puissance',label:''},
+    {entity:'sensor.inconnu',label:'Autre'},
+    {entity:'sensor.invalid<script>',label:'Intrusion'}
+  ]};
+  card._hass={states:{
+    'counter.overseer_demande':{state:'4',attributes:{friendly_name:'Demande Seerr'}},
+    'sensor.puissance':{state:'870',attributes:{friendly_name:'PAC <salon>',unit_of_measurement:'W'}},
+  }};
+  const html=card._header([]);
+  assert.match(html,/Demandes : 4/);
+  assert.match(html,/PAC &lt;salon&gt; : 870 W/);
+  assert.match(html,/Autre : Indisponible/);
+  assert.doesNotMatch(html,/Intrusion/);
+});
+
+test('new Home Assistant state update refreshes only the header, preserving the carousel shell', () => {
+  const {card}=setup();
+  const entry={id:'entry',streams:[]};
+  card._payload={entries:[entry]};
+  card._config.header_entity_badges=[{entity:'counter.demande',label:'Demandes'}];
+  card.render();
+  let called=0;
+  card._refreshHeader=(streams)=>{called++;assert.equal(streams.length,0);};
+  const before=card.shadowRoot.renders;
+  card.hass={states:{'counter.demande':{state:'2',attributes:{}}}};
+  assert.equal(called,1);
+  assert.equal(card.shadowRoot.renders,before);
+  card.hass={states:{'counter.demande':{state:'3',attributes:{}}}};
+  assert.equal(called,2);
+});
+
+test('empty state offers a custom message, header only or completely hidden card', () => {
+  const {card}=setup();
+  card._payload={entries:[{id:'entry',connected:true,streams:[],servers:[]}]};
+  card._config={...card._config, empty_mode:'message',empty_message:'Tout le monde dort !'};
+  card.render();
+  assert.match(card.shadowRoot.innerHTML,/Tout le monde dort !/);
+  card._config.empty_mode='header_only';card._renderFingerprint=null;card.render();
+  assert.match(card.shadowRoot.innerHTML,/Lectures en cours/);
+  assert.doesNotMatch(card.shadowRoot.innerHTML,/Tout le monde dort !/);
+  card._config.empty_mode='hide';card._renderFingerprint=null;card.render();
   assert.equal(card.style.display,'none');
+  card.setConfig({hide_empty:true});
+  assert.equal(card._config.empty_mode,'hide');
+  card.setConfig({hide_empty:true,empty_mode:'header_only'});
+  assert.equal(card._config.empty_mode,'header_only');
+});
+
+test('new editor exposes entity picker, independent season options, network scope and empty behavior', () => {
+  const Editor=classes.get('tracearr-card-editor');
+  const editor=new Editor();
+  editor.setConfig({type:'custom:tracearr-streams-card',header_entity_badges:[{entity:'counter.overseer_demande',label:'Demandes'}]});
+  const html=editor.shadowRoot.innerHTML;
+  for(const key of ['series_show_season','series_show_episode_number','bitrate_scope','network_locations','empty_mode','empty_message'])
+    assert.match(html,new RegExp(`data-field="${key}"`));
+  assert.match(html,/ha-entity-picker data-badge-index="0"/);
+  assert.match(html,/data-badge-label="0"/);
+  assert.match(html,/data-badge-remove="0"/);
+  assert.match(html,/data-badge-add/);
+  assert.match(html,/Comportement sans lecture/);
+  assert.match(html,/Débit et localisation des flux/);
+});
+
+// 0.1.8: paired clocks, projected end-time, clearer video/audio pictograms and
+// advanced per-entity dashboard metrics.
+test('elapsed and remaining switch simultaneously and add up to displayed duration', () => {
+  time=0;
+  const {card}=setup();
+  const duration=120250;
+  const clock={progress:61540,at:0,state:'playing',duration,lastRendered:61540};
+  card._positions.set('clock',clock);
+  const elapsed={dataset:{id:'clock'},textContent:''};
+  const remaining={dataset:{id:'clock'},textContent:''};
+  const fill={style:{}};
+  const end={dataset:{id:'clock'},textContent:''};
+  card.shadowRoot.querySelectorAll = selector => selector === '.time-current[data-id]' ? [elapsed] : [];
+  card.shadowRoot.querySelector = selector => selector.includes('.time-remaining') ? remaining :
+    selector.includes('.fill[') ? fill : selector.includes('.time-end') ? end : null;
+  card._updateProgress();
+  assert.equal(elapsed.textContent,'1:01');
+  assert.equal(remaining.textContent,'-1:00');
+  assert.match(end.textContent,/Fin estimée : \d{2}:\d{2}/);
+  const firstPair=[elapsed.textContent,remaining.textContent];
+  time=400;card._updateProgress();
+  assert.deepEqual([elapsed.textContent,remaining.textContent],firstPair);
+  time=500;card._updateProgress();
+  assert.equal(elapsed.textContent,'1:02');
+  assert.equal(remaining.textContent,'-0:59');
+  assert.ok(fill.style.width.endsWith('%'));
+  time=1600;card._updateProgress();
+  assert.equal(elapsed.textContent,'1:03');
+  assert.equal(remaining.textContent,'-0:58');
+});
+
+test('finish time independently appears in playing streams but not paused ones', () => {
+  const {card}=setup();
+  card._config={...card._config,show_progress:false,show_end_time:true,show_poster:false,show_avatar:false};
+  const stream={id:'x',username:'Test',server_type:'plex',media_title:'Film',media_type:'movie',
+    state:'playing',progress_ms:120000,duration_ms:3600000,started_at:'2026-11-03T18:00:00'};
+  let html=card._streamCard(null,stream);
+  assert.match(html,/Fin estimée : \d{2}:\d{2}/);
+  assert.doesNotMatch(html,/class="progress"/);
+  html=card._streamCard(null,{...stream,state:'paused'});
+  assert.doesNotMatch(html,/Fin estimée/);
+  assert.match(html,/En pause/);
+  card._config.show_end_time=false;
+  html=card._streamCard(null,stream);
+  assert.doesNotMatch(html,/Fin estimée/);
+});
+
+test('new icons are a clapperboard with play triangle and speaker with sound waves', () => {
+  const {card}=setup();
+  card._config={...card._config,show_poster:false,show_avatar:false};
+  const html=card._streamCard(null,{id:'x',username:'Test',server_type:'plex',media_title:'Test',
+    media_type:'movie',state:'playing',progress_ms:0,duration_ms:10000,
+    video_decision:'directplay',audio_decision:'transcode'});
+  assert.match(html,/viewBox="0 0 24 24"/);
+  assert.match(html,/m9\.5 11\.8 5\.7 3/);
+  assert.match(html,/M3 9h4\.2L12\.8 4/);
+});
+
+test('header badges: zero color, hide zero, and blink only for positive values', () => {
+  const {card}=setup();
+  card._config={...card._config,header_show_video:true,header_show_streams:true,
+    header_blink_positive:true,header_blink_seconds:1.5,
+    header_zero_color_mode:'custom',header_zero_custom_color:'#102030'};
+  let html=card._header([]);
+  assert.match(html,/--pill-bg:#102030;--pill-text:#FFFFFF/);
+  assert.doesNotMatch(html,/class="metric blink-positive"/);
+  card._config.header_positive_only=true;
+  html=card._header([]);
+  assert.doesNotMatch(html,/class="metric/);
+  card._config.header_positive_only=false;
+  html=card._header([{id:'a',state:'playing',server_id:'plex',server_type:'plex',server_name:'Plex',video_decision:'transcode',audio_decision:'directplay'}]);
+  assert.match(html,/class="metric blink-positive"/);
+  assert.match(html,/--badge-blink:1\.5s/);
+  assert.match(html,/Vidéo : 1/);
+});
+
+test('entity badge permits icon-only, individual duration, and selective visibility', () => {
+  const {card}=setup();
+  card._config={...card._config,header_show_streams:false,header_entity_badges:[
+    {entity:'counter.seerr',label:'Demandes',show_name:false,show_icon:true,
+      only_positive:true,blink_positive:true,blink_seconds:3},
+    {entity:'sensor.salon',label:'Salon',show_name:true,show_icon:false,only_positive:false,
+      zero_color_mode:'custom',zero_custom_color:'#234567'},
+  ]};
+  card._hass={states:{
+    'counter.seerr':{state:'4',attributes:{icon:'mdi:bell-badge',friendly_name:'Demandes'}},
+    'sensor.salon':{state:'0',attributes:{friendly_name:'Salon'}},
+  }};
+  let html=card._header([]);
+  assert.match(html,/ha-icon icon="mdi:bell-badge"/);
+  assert.doesNotMatch(html,/Demandes : 4/);
+  assert.match(html,/--badge-blink:3s/);
+  assert.match(html,/Salon : 0/);
+  assert.match(html,/--pill-bg:#234567/);
+  card._hass.states['counter.seerr'].state='0';
+  html=card._header([]);
+  assert.doesNotMatch(html,/mdi:bell-badge/);
+  assert.match(html,/Salon : 0/);
+});
+
+test('card editor exposes end time and advanced entity badge options', () => {
+  const Editor=classes.get('tracearr-card-editor');
+  const editor=new Editor();
+  editor.setConfig({type:'custom:tracearr-streams-card',header_entity_badges:[{entity:'counter.seerr',label:'Demandes'}]});
+  const html=editor.shadowRoot.innerHTML;
+  for(const key of ['show_end_time','header_positive_only','header_blink_positive',
+      'header_blink_seconds','header_zero_color_mode','header_zero_custom_color','header_show_names'])
+    assert.match(html,new RegExp(`data-field="${key}"`));
+  for(const key of ['show_name','show_icon','only_positive','blink_positive',
+    'blink_seconds','zero_color_mode','zero_custom_color'])
+    assert.match(html,new RegExp(`data-badge-setting="${key}"`));
 });

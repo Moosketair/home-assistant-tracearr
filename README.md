@@ -4,7 +4,7 @@
 
 **Suivez en temps réel les lectures Plex, Jellyfin et Emby directement dans votre tableau de bord Home Assistant.** Une intégration HACS, des capteurs et deux cartes Lovelace entièrement personnalisables : liste verticale, grille adaptative ou carrousel.
 
-**Version 0.1.7 Alpha.** Ce projet est en cours de test sur de vraies installations Home Assistant. N'utilisez pas encore ses capteurs pour des automatismes critiques.
+**Version 0.1.8 Alpha.** Ce projet est en cours de test sur de vraies installations Home Assistant. N'utilisez pas encore ses capteurs pour des automatismes critiques.
 
 ## Fonctionnalités
 
@@ -17,10 +17,10 @@
 - **Couleurs par serveur :** liseré latéral jaune/orange pour Plex, violet pour Jellyfin et vert pour Emby.
 - **Affichage adaptable :** redimensionnement natif en largeur ET en hauteur dans les dashboards Home Assistant *Sections* ; hauteur CSS facultative pour les autres dashboards et mode compact.
 - **Éditeur visuel organisé par catégories :** en-tête, dimensions, navigation, contenu des lectures, informations de bas de carte, palette, filtres et alias.
-- **En-tête personnalisable :** masquer le bandeau, changer son titre et sélectionner individuellement les compteurs (flux, débit cumulé, transcodages vidéo/audio/mixtes/total, direct, pause et flux par serveur).
+- **En-tête personnalisable :** masquer le bandeau, changer son titre et sélectionner individuellement les compteurs (flux, débit cumulé, transcodages vidéo/audio/mixtes/total, direct, pause et flux par serveur). Ajouter autant de badges d’entités Home Assistant (capteurs, compteurs, etc.) que souhaité, jusqu’à 20, avec nom facultatif et valeur mise à jour en direct.
 - **Couleurs partagées :** même palette pour barres de progression, bulles de qualité/débit et compteurs, avec choix automatique de la couleur du texte (noir ou blanc).
 - **Aspect Home Assistant natif :** carte extérieure `ha-card` avec le fond, les bordures et l'ombre du thème ; sous-cartes légèrement contrastées ou transparentes. Affiches centrées verticalement lorsque les détails se répartissent sur plusieurs lignes.
-- **Informations par lecture :** affiche, utilisateur, titre, épisode, progression, durée restante, lecteur, résolution, codecs et débit. Icônes vidéo/audio indépendantes (vert = direct/copie, orange = transcodage, gris = inconnu), masquables. En pause : symbole sur l’affiche et « En pause » orange en remplacement du temps restant.
+- **Informations par lecture :** affiche, utilisateur, titre, épisode, saison et numéro d’épisode indépendamment masquables, progression, durée restante, lecteur, résolution, codecs et débit. Icônes vidéo/audio indépendantes (vert = direct/copie, orange = transcodage, gris = inconnu), masquables. En pause : symbole sur l’affiche et « En pause » orange en remplacement du temps restant.
 
 ### Réglages du carrousel et de la présentation
 
@@ -53,7 +53,7 @@ L'animation automatique se suspend lorsque la page est masquée ou que le naviga
 4. Entrez l'adresse de Tracearr (accessible depuis Home Assistant) et votre clé API `trr_pub_...`, créée dans **Tracearr → Paramètres → Données et API → API**.
 5. Ouvrez votre tableau de bord → **Modifier → Ajouter une carte** et cherchez « Tracearr ». Les cartes sont également disponibles depuis l'éditeur manuel (exemples ci-dessous).
 
-**Si les cartes ne figurent pas dans le sélecteur :** ouvrez **Paramètres → Tableaux de bord → ⋮ → Ressources** et vérifiez qu'une seule ressource de type **Module JavaScript** pointe vers `/tracearr_ha/tracearr-card.js?v=0.1.7`. Si une ancienne ressource (`?v=0.1.0` ou `?v=0.1.1`) existe, modifiez-la plutôt que d'en créer une seconde. Rechargez ensuite le navigateur avec `Ctrl + F5`.
+**Si les cartes ne figurent pas dans le sélecteur :** ouvrez **Paramètres → Tableaux de bord → ⋮ → Ressources** et vérifiez qu'une seule ressource de type **Module JavaScript** pointe vers `/tracearr_ha/tracearr-card.js?v=0.1.8`. Si une ancienne ressource (`?v=0.1.0` ou `?v=0.1.1`) existe, modifiez-la plutôt que d'en créer une seconde. Rechargez ensuite le navigateur avec `Ctrl + F5`.
 
 **Installation manuelle :** copiez le dossier `custom_components/tracearr_ha` dans `/config/custom_components/tracearr_ha/`, puis redémarrez Home Assistant.
 
@@ -142,12 +142,12 @@ Les options de la section **En-tête et statistiques** permettent de masquer ent
 
 Les compteurs correspondent aux lectures visibles après application des filtres de la carte ; ils ne prétendent donc pas représenter d'autres flux cachés par les réglages. Le titre reste optionnel (`show_title`).
 
-### Titres, saisons, épisodes et années (0.1.6)
+### Titres, saisons, épisodes et années (0.1.7)
 
 La nouvelle catégorie de l'éditeur **Titres, saisons et années** sépare totalement les films des séries :
 
 - **Films** : afficher ou cacher le titre (`movie_show_title`) et l'année (`movie_show_year`), choisir leur ordre (`movie_field_order`).
-- **Séries** : afficher ou cacher le **titre de série** (`series_show_title`), le **nom de l'épisode** (`series_show_episode_title`), la **saison et le numéro de l'épisode** (`series_show_season_episode`) et l'**année** (`series_show_year`).
+- **Séries** : afficher ou cacher le **titre de série** (`series_show_title`), le **nom de l'épisode** (`series_show_episode_title`), la **saison** (`series_show_season`) et le **numéro d’épisode** (`series_show_episode_number`) indépendamment et l'**année** (`series_show_year`).
 - **Format de saison/épisode** : `series_episode_style: short` donne `S01E02` ; `long` donne `Saison 1 · Épisode 2`.
 - **Ordre libre** : dans l'éditeur visuel, utilisez les boutons ↑ et ↓ pour réorganiser chaque champ. Le premier champ affiché occupe la ligne de titre en caractères plus gros ; les suivants sont affichés en dessous, dans l'ordre choisi. L'ordre fonctionne également si certains éléments sont masqués.
 
@@ -169,6 +169,50 @@ series_field_order: series,season,episode_number,episode,year
 ```
 
 **Important** : l'année provient du champ `year` fourni par Tracearr ; selon le serveur, ce champ peut correspondre à l'année de l'épisode plutôt qu'à la première année de diffusion de toute la série.
+
+### Badges Home Assistant en en-tête (0.1.7)
+
+Dans **En-tête et statistiques → Badges d'entités Home Assistant**, cliquez sur **Ajouter un badge**, puis choisissez une entité grâce à la recherche native Home Assistant. Vous pouvez ajouter un nom personnalisé ou laisser le nom de l'entité. Sa valeur et son unité sont actualisées à chaque changement d'état, sans reconstruire le carrousel.
+
+Vous pouvez sélectionner **n'importe quelle entité Home Assistant** : par exemple `counter.overseer_demande`, `sensor.temperature_salon` ou un `input_number`. Les entités indisponibles affichent « Indisponible ». La couleur suit le réglage existant des badges d'en-tête. Il est possible d'ajouter jusqu'à 20 badges.
+
+Exemple YAML facultatif :
+
+```yaml
+header_entity_badges:
+  - entity: counter.overseer_demande
+    label: Demandes Seerr
+  - entity: sensor.temperature_salon
+    label: Salon
+```
+
+### Débits locaux et distants (0.1.7)
+
+Dans **Débit et localisation des flux**, choisissez l'affichage du débit pour **Tous les flux**, **Local uniquement**, ou **Distant uniquement**. Ce réglage affecte à la fois les badges de débit individuels et le débit agrégé de l'en-tête.
+
+**Limitation importante :** l'API publique Tracearr v2 utilisée par cette intégration ne fournit pas l'adresse IP du client ni le statut LAN/WAN. On ne peut donc pas détecter automatiquement les flux locaux ou distants depuis cette API. La carte utilise des correspondances **manuelles**, saisies une par ligne :
+
+```yaml
+bitrate_scope: remote
+network_locations: |
+  plex:alice=remote
+  device:Apple TV=local
+  player:Plex for Android=remote
+```
+
+Les règles peuvent utiliser `identifiantServeur:utilisateur`, `plex:utilisateur`, `jellyfin:utilisateur`, `device:Nom`, `player:Nom` ou seulement le nom d'utilisateur. Indiquez `local` ou `remote`. Une règle par utilisateur/appareil est indicative et ne suit pas automatiquement les déplacements de l'appareil. En mode « Local » ou « Distant », les flux non classés **ne sont pas comptés** ; le mode « Tous » n'utilise pas les correspondances.
+
+### Comportement sans lecture (0.1.7)
+
+Dans **Comportement sans lecture**, choisissez entre **Afficher un message**, **En-tête uniquement** ou **Masquer complètement la carte**. Le champ `empty_message` personnalise le texte lorsque personne ne regarde ; si Tracearr est déconnecté, le message « Tracearr indisponible » reste prioritaire.
+
+```yaml
+empty_mode: header_only  # message, header_only, hide
+empty_message: Rien à regarder en ce moment
+```
+
+`hide_empty: true` reste interprété comme `empty_mode: hide` pour les anciennes cartes, sauf si le nouveau mode est déjà défini.
+
 
 ### Fond natif et palette de couleurs
 
@@ -215,7 +259,7 @@ Les avatars peuvent être remplacés de la même façon avec des URL d'images HT
 
 ### Limites connues
 
-L'API `/streams` v2 ne fournit pas la distinction réseau local/WAN ni un identifiant d'utilisateur stable par session. La carte n'invente donc pas ces informations. Les lectures individuelles peuvent être choisies par utilisateur, serveur ou ID de session. L'arrêt à distance d'un flux n'est pas implémenté. L'option « Masquer si aucune lecture » masque le contenu de la carte ; une cellule de la mise en page Home Assistant peut rester réservée.
+L'API `/streams` v2 ne fournit pas la distinction réseau local/WAN ni un identifiant d'utilisateur stable par session. La carte ne classe les flux locaux ou distants que si vous ajoutez une correspondance manuelle ; elle n'invente pas ces informations. Les lectures individuelles peuvent être choisies par utilisateur, serveur ou ID de session. L'arrêt à distance d'un flux n'est pas implémenté. L'option « Masquer complètement la carte » masque le contenu de la carte ; une cellule de la mise en page Home Assistant peut rester réservée.
 
 ## Compatibilité
 
@@ -227,7 +271,7 @@ L'API `/streams` v2 ne fournit pas la distinction réseau local/WAN ni un identi
 
 1. **Aucun capteur :** consultez **Paramètres → Système → Journaux** et vérifiez l'URL et la clé API Tracearr.
 2. **Le SSE se reconnecte souvent :** désactivez le buffering du proxy inverse pour `text/event-stream` et augmentez le délai d'inactivité au-delà de 30 secondes (un ping arrive environ toutes les 25 secondes).
-3. **La carte est introuvable :** vérifiez la ressource `/tracearr_ha/tracearr-card.js?v=0.1.7` dans Lovelace, redémarrez HA et rechargez votre navigateur.
+3. **La carte est introuvable :** vérifiez la ressource `/tracearr_ha/tracearr-card.js?v=0.1.8` dans Lovelace, redémarrez HA et rechargez votre navigateur.
 4. **Les images sont absentes :** vérifiez que les URL `poster_url` sont bien servies par le proxy d'images de Tracearr et qu'aucune erreur n'apparaît dans les journaux réseau du navigateur.
 5. **Transcodage « Inconnu » :** Tracearr ou le serveur média n'a pas fourni assez de détails pour classer la lecture.
 6. **Le carrousel ne défile pas automatiquement :** vérifiez qu'il y a plus de flux que de cartes visibles, que la page est au premier plan, que la pause au survol est désactivée ou que la souris est sortie de la carte, et que la réduction des animations n'est pas activée dans le système.
@@ -257,40 +301,11 @@ La suite de tests couvre notamment la classification des transcodages, les évé
 
 Les temps « déjà lu » et « restant » sont calculés localement à partir d’une horloge monotone. Les petits décalages des mises à jour SSE de Tracearr sont corrigés progressivement sans faire reculer le chronomètre. Un vrai saut dans la lecture (avance ou retour volontaire) reste pris en compte. En pause, le temps est figé. Les temps restent indicatifs et peuvent être décalés si le serveur signale tardivement une mise en tampon.
 
-## Nouveautés 0.1.7
+### Chronomètres, heure de fin et badges (0.1.8)
 
-### Saison et numéro d’épisode séparés
-
-Les options `series_show_season` et `series_show_episode_number` permettent de masquer individuellement la saison ou le numéro d’épisode. Le format `series_episode_style` (`short` ou `long`) et l’ordre `series_field_order` restent configurables. L’ancienne option `series_show_season_episode` reste compatible.
-
-### Badges pour toute entité Home Assistant
-
-Dans l’éditeur **En-tête et statistiques**, choisissez **Ajouter un badge**, sélectionnez une entité Home Assistant (capteur, compteur ou autre) et saisissez un titre facultatif. Les valeurs et unités se mettent à jour sans reconstruire le carrousel.
-
-```yaml
-header_entity_badges:
-  - entity: counter.overseer_demande
-    label: Demandes Seerr
-  - entity: sensor.temperature_salon
-    label: Salon
-```
-
-### Débit local, distant ou total
-
-Dans **Débit et localisation des flux**, `bitrate_scope` accepte `both`, `local` ou `remote`. Le filtre s’applique aux badges de débit par flux et au débit total de l’en-tête.
-
-**Attention :** l’API publique Tracearr v2 ne transmet pas l’adresse IP ni le statut LAN/WAN dans `/streams`. Il faut renseigner des correspondances manuelles ; un flux non classé n’est pas inclus dans un débit local/distant.
-
-```yaml
-bitrate_scope: remote
-network_locations: |
-  plex:alice=remote
-  device:Apple TV=local
-  player:Plex for Android=remote
-```
-
-Utilisez un identifiant serveur et utilisateur (`uuid:utilisateur`), `plex:utilisateur`, `device:Nom`, `player:Nom` ou simplement `utilisateur`. Une règle liée à un appareil peut devenir inexacte s’il change de réseau.
-
-### Aucun flux en cours
-
-`empty_mode` peut prendre `message` (texte personnalisé via `empty_message`), `header_only` (en-tête uniquement) ou `hide` (carte masquée). L’ancien `hide_empty: true` reste compatible.
+- **Heure de fin estimée** : option `show_end_time: true` dans « Contenu de la lecture ». L’estimation est calculée à partir de la durée restante et de l’heure locale du navigateur. Elle disparaît en pause : aucun horaire de fin fiable n’existe tant que la lecture est interrompue.
+- **Temps synchronisés** : temps écoulé et restant sont dérivés d’une même valeur entière de secondes, donc ils basculent ensemble. Un seek peut toujours modifier les temps.
+- **Badges d’en-tête** : `header_positive_only` masque les statistiques à zéro, `header_blink_positive` active l’animation au-dessus de zéro, `header_blink_seconds` règle la durée du cycle (0,5 à 20 s), `header_show_names` masque les intitulés, `header_zero_color_mode: custom` et `header_zero_custom_color` définissent le fond des badges nuls.
+- **Badges d’entités** : chaque ligne de `header_entity_badges` peut définir `show_name`, `show_icon`, `only_positive`, `blink_positive`, `blink_seconds`, `zero_color_mode` et `zero_custom_color`. Les icônes utilisent d’abord l’attribut `icon` de l’entité Home Assistant ; un pictogramme MDI adapté sert de secours.
+- Les réglages existants des dashboards sont conservés par défaut ; sans activer les nouvelles options, les couleurs et affichages restent inchangés. Le clignotement s’efface si les préférences du système réduisent les animations.
+- Les deux pictogrammes de transcodage vidéo/audio sont des tracés SVG originaux inspirés d’icônes multimédias courantes, sans intégrer d’assets Flaticon nécessitant une attribution.

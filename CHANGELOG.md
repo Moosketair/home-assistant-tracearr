@@ -1,12 +1,23 @@
 # Historique des versions
 
+## 0.1.8 — Alpha (2026-11-03)
+
+- Horloges écoulée/restante calculées à partir du même nombre entier de secondes, sur une seule mise à jour, pour supprimer les décalages d’arrondi.
+- Heure de fin de lecture estimée (HH:mm), masquée lors des pauses et activable indépendamment de la barre.
+- Nouvelles icônes originales de clap vidéo et haut-parleur, sans reprendre les fichiers graphiques soumis à attribution.
+- Badges d’en-tête : masquage des valeurs à zéro, clignotement au-dessus de zéro avec période réglable, couleur spécifique à zéro et affichage des noms facultatif.
+- Par badge d’entité Home Assistant : icône du capteur, nom facultatif, visibilité si valeur positive, animation, durée et couleur à zéro personnalisable.
+- Respect de `prefers-reduced-motion` pour ne pas imposer le clignotement.
+
+
 ## 0.1.7 — Alpha (2026-11-03)
 
-- Interrupteurs indépendants pour la saison et le numéro d’épisode, migration des réglages précédents.
-- Affichage des débits pour tous les flux, les flux locaux ou les flux distants, avec classification manuelle lorsqu’elle est nécessaire.
-- Badges liés à n’importe quelle entité Home Assistant, avec sélecteur natif et mise à jour en direct de l’état.
-- Message d’absence de lecture personnalisable, en-tête seul ou carte masquée.
-- Mise à jour de la ressource Lovelace et tests de compatibilité.
+- Séparation des interrupteurs « Afficher la saison » et « Afficher le numéro d’épisode », avec maintien de l'ordre personnalisable et des formats `S01E02` / `Saison 1 · Épisode 2`. Compatibilité avec l'ancien réglage `series_show_season_episode`.
+- Filtre des badges de débit et du total de débit : Tous, Local ou Distant. La classification s’appuie sur des correspondances explicitement saisies pour les comptes/appareils, car Tracearr v2 ne fournit pas les IP ni le statut LAN/WAN dans `/streams`.
+- Badges d’en-tête liés à des entités Home Assistant arbitraires, avec sélecteur natif, nom facultatif, valeur et unité actualisées en direct, jusqu'à 20 badges par carte. Une mise à jour d'un capteur ne reconstruit pas le carrousel.
+- Trois comportements en l’absence de flux : message personnalisable, en-tête seul, ou carte complètement masquée. Conservation de l’ancien `hide_empty`.
+- Tests JavaScript de migration, affichage et ordre des épisodes, compteurs Home Assistant, réseau non classé, mise à jour du bandeau et états vides.
+
 
 ## 0.1.6 — Alpha (2026-11-03)
 
