@@ -4,7 +4,7 @@
 
 **Suivez en temps réel les lectures Plex, Jellyfin et Emby directement dans votre tableau de bord Home Assistant.** Une intégration HACS, des capteurs et deux cartes Lovelace entièrement personnalisables : liste verticale, grille adaptative ou carrousel.
 
-**Version 0.1.5 Alpha.** Ce projet est en cours de test sur de vraies installations Home Assistant. N'utilisez pas encore ses capteurs pour des automatismes critiques.
+**Version 0.1.6 Alpha.** Ce projet est en cours de test sur de vraies installations Home Assistant. N'utilisez pas encore ses capteurs pour des automatismes critiques.
 
 ## Fonctionnalités
 
@@ -53,7 +53,7 @@ L'animation automatique se suspend lorsque la page est masquée ou que le naviga
 4. Entrez l'adresse de Tracearr (accessible depuis Home Assistant) et votre clé API `trr_pub_...`, créée dans **Tracearr → Paramètres → Données et API → API**.
 5. Ouvrez votre tableau de bord → **Modifier → Ajouter une carte** et cherchez « Tracearr ». Les cartes sont également disponibles depuis l'éditeur manuel (exemples ci-dessous).
 
-**Si les cartes ne figurent pas dans le sélecteur :** ouvrez **Paramètres → Tableaux de bord → ⋮ → Ressources** et vérifiez qu'une seule ressource de type **Module JavaScript** pointe vers `/tracearr_ha/tracearr-card.js?v=0.1.5`. Si une ancienne ressource (`?v=0.1.0` ou `?v=0.1.1`) existe, modifiez-la plutôt que d'en créer une seconde. Rechargez ensuite le navigateur avec `Ctrl + F5`.
+**Si les cartes ne figurent pas dans le sélecteur :** ouvrez **Paramètres → Tableaux de bord → ⋮ → Ressources** et vérifiez qu'une seule ressource de type **Module JavaScript** pointe vers `/tracearr_ha/tracearr-card.js?v=0.1.6`. Si une ancienne ressource (`?v=0.1.0` ou `?v=0.1.1`) existe, modifiez-la plutôt que d'en créer une seconde. Rechargez ensuite le navigateur avec `Ctrl + F5`.
 
 **Installation manuelle :** copiez le dossier `custom_components/tracearr_ha` dans `/config/custom_components/tracearr_ha/`, puis redémarrez Home Assistant.
 
@@ -142,23 +142,52 @@ Les options de la section **En-tête et statistiques** permettent de masquer ent
 
 Les compteurs correspondent aux lectures visibles après application des filtres de la carte ; ils ne prétendent donc pas représenter d'autres flux cachés par les réglages. Le titre reste optionnel (`show_title`).
 
+### Titres, saisons, épisodes et années (0.1.6)
+
+La nouvelle catégorie de l'éditeur **Titres, saisons et années** sépare totalement les films des séries :
+
+- **Films** : afficher ou cacher le titre (`movie_show_title`) et l'année (`movie_show_year`), choisir leur ordre (`movie_field_order`).
+- **Séries** : afficher ou cacher le **titre de série** (`series_show_title`), le **nom de l'épisode** (`series_show_episode_title`), la **saison et le numéro de l'épisode** (`series_show_season_episode`) et l'**année** (`series_show_year`).
+- **Format de saison/épisode** : `series_episode_style: short` donne `S01E02` ; `long` donne `Saison 1 · Épisode 2`.
+- **Ordre libre** : dans l'éditeur visuel, utilisez les boutons ↑ et ↓ pour réorganiser chaque champ. Le premier champ affiché occupe la ligne de titre en caractères plus gros ; les suivants sont affichés en dessous, dans l'ordre choisi. L'ordre fonctionne également si certains éléments sont masqués.
+
+Exemple YAML (tous les réglages sont aussi disponibles dans l'éditeur) :
+
+```yaml
+type: custom:tracearr-streams-card
+mode: carousel
+movie_show_title: true
+movie_show_year: false
+movie_field_order: title,year
+series_show_title: true
+series_show_episode_title: true
+series_show_season_episode: true
+series_show_year: true
+series_episode_style: long
+series_field_order: series,episode,season,year
+```
+
+**Important** : l'année provient du champ `year` fourni par Tracearr ; selon le serveur, ce champ peut correspondre à l'année de l'épisode plutôt qu'à la première année de diffusion de toute la série.
+
 ### Fond natif et palette de couleurs
 
 L'enveloppe de la carte utilise les couleurs, les bordures et les ombres natives de Home Assistant. Pour les panneaux des lectures, le champ `stream_surface` accepte `soft` (léger contraste avec le fond) ou `transparent`.
 
-Une seule sélection **Palette commune** détermine la couleur de la barre de lecture, des badges de qualité et de débit, et des indicateurs de l'en-tête :
+Une sélection **Palette commune** détermine la couleur de la barre de lecture et des badges de qualité et de débit. Par défaut, les badges de l'en-tête reprennent cette palette :
 
 - `accent_color_mode: theme` : couleur d'accent du thème HA ;
 - `accent_color_mode: server` : Plex orange, Jellyfin violet, Emby vert ; les statistiques générales conservent la couleur d'accent du thème, alors que les compteurs par serveur portent chacun sa couleur ;
 - `accent_color_mode: custom` : couleur `accent_custom_color` au format `#RRGGBB`.
 
+Une option **Couleur des badges d'en-tête** (dans **En-tête et statistiques**) permet désormais d'appliquer **une couleur indépendante** : `header_badge_color_mode: inherit` (palette commune), `theme`, `server` (couleur dédiée aux compteurs de chaque serveur, thème pour les métriques générales) ou `custom` avec `header_badge_custom_color: "#223344"`.
+
 Le texte de chaque badge coloré est noir ou blanc suivant le meilleur contraste. Les icônes de statut vidéo/audio (vert direct, orange transcodage) et le message « En pause » gardent leurs couleurs de statut.
 
-L'éditeur visuel contient des **sections repliables** : En-tête et statistiques, Disposition et dimensions, Navigation et carrousel, Contenu de la lecture, Bandeau d'informations du flux, Apparence/couleurs/typographie, Filtres et tri, et Noms et avatars. Chaque instance de la carte possède ses propres paramètres.
+L'éditeur visuel contient des **sections repliables** : En-tête et statistiques, Disposition et dimensions, Navigation et carrousel, Contenu de la lecture, Titres/saisons/années, Bandeau d'informations du flux, Apparence/couleurs/typographie, Filtres et tri, et Noms et avatars. Chaque instance de la carte possède ses propres paramètres.
 
-Les réglages enregistrés avec les anciennes versions restent pris en charge (`show_counter`, `show_transcodes`, `progress_color_mode`, `progress_custom_color`) et sont convertis lors du chargement. À partir de 0.1.4, préférez les nouveaux noms.
+Les réglages enregistrés avec les anciennes versions restent pris en charge (`show_counter`, `show_transcodes`, `progress_color_mode`, `progress_custom_color`) et sont convertis lors du chargement. Le réglage hérité `show_year` est automatiquement appliqué aux deux nouveaux interrupteurs d'année, sauf si l'un d'eux a déjà été personnalisé. À partir de 0.1.6, utilisez les réglages séparés.
 
-La barre horizontale du carrousel reste masquée ; navigation par flèches facultatives, glissement tactile, glissement souris facultatif et clavier. Le texte et les panneaux intérieurs s'adaptent au thème.
+La barre horizontale du carrousel reste masquée ; navigation par flèches facultatives, glissement tactile, glissement souris facultatif et clavier. **Les événements SSE de progression, de pause, de transcodage, de débit ou de santé serveur ne reconstruisent plus le conteneur du carrousel**, ce qui préserve la transition en cours. Une arrivée ou disparition de flux nécessite une actualisation de la liste, mais conserve le flux visible s'il existe encore. Après une navigation manuelle, l'intervalle de défilement automatique recommence au début. Le texte et les panneaux intérieurs s'adaptent au thème.
 
 ## Personnaliser les utilisateurs
 
@@ -197,7 +226,7 @@ L'API `/streams` v2 ne fournit pas la distinction réseau local/WAN ni un identi
 
 1. **Aucun capteur :** consultez **Paramètres → Système → Journaux** et vérifiez l'URL et la clé API Tracearr.
 2. **Le SSE se reconnecte souvent :** désactivez le buffering du proxy inverse pour `text/event-stream` et augmentez le délai d'inactivité au-delà de 30 secondes (un ping arrive environ toutes les 25 secondes).
-3. **La carte est introuvable :** vérifiez la ressource `/tracearr_ha/tracearr-card.js?v=0.1.5` dans Lovelace, redémarrez HA et rechargez votre navigateur.
+3. **La carte est introuvable :** vérifiez la ressource `/tracearr_ha/tracearr-card.js?v=0.1.6` dans Lovelace, redémarrez HA et rechargez votre navigateur.
 4. **Les images sont absentes :** vérifiez que les URL `poster_url` sont bien servies par le proxy d'images de Tracearr et qu'aucune erreur n'apparaît dans les journaux réseau du navigateur.
 5. **Transcodage « Inconnu » :** Tracearr ou le serveur média n'a pas fourni assez de détails pour classer la lecture.
 6. **Le carrousel ne défile pas automatiquement :** vérifiez qu'il y a plus de flux que de cartes visibles, que la page est au premier plan, que la pause au survol est désactivée ou que la souris est sortie de la carte, et que la réduction des animations n'est pas activée dans le système.
@@ -223,6 +252,6 @@ La suite de tests couvre notamment la classification des transcodages, les évé
 
 **Licence MIT.** Projet communautaire indépendant, sans affiliation avec Tracearr, Home Assistant, Plex, Jellyfin ou Emby.
 
-### Stabilité des chronomètres (v0.1.5)
+### Chronomètres et temps de lecture
 
-Les temps « déjà lu » et « restant » utilisent une horloge monotone locale. Les positions envoyées par Tracearr peuvent être légèrement en retard : la carte corrige doucement les écarts sans faire reculer les compteurs. Les déplacements volontaires dans le film restent pris en compte et les compteurs se figent en pause.
+Les temps « déjà lu » et « restant » sont calculés localement à partir d’une horloge monotone. Les petits décalages des mises à jour SSE de Tracearr sont corrigés progressivement sans faire reculer le chronomètre. Un vrai saut dans la lecture (avance ou retour volontaire) reste pris en compte. En pause, le temps est figé. Les temps restent indicatifs et peuvent être décalés si le serveur signale tardivement une mise en tampon.

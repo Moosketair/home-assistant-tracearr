@@ -1,11 +1,22 @@
 # Historique des versions
 
+## 0.1.6 — Alpha (2026-11-03)
+
+- Options séparées pour les titres et les années des films et des séries, le titre de l’épisode et la saison/numéro d’épisode.
+- Choix du format de saison/épisode : `S01E02` ou `Saison 1 · Épisode 2`.
+- Ordre libre des informations (année incluse) par boutons haut/bas dans l’éditeur graphique, séparément pour films et séries.
+- Couleur indépendante des badges de l’en-tête : palette commune, thème Home Assistant, couleurs Plex/Jellyfin/Emby ou couleur personnalisée, avec contraste automatique.
+- Correction des changements brusques du carrousel lors de mises à jour SSE des états, débits et métadonnées : mise à jour des cartes en place, sans interrompre le défilement du conteneur.
+- Conservation de la lecture affichée si la liste change et que ce flux existe toujours ; intervalle de défilement réinitialisé après les navigations manuelles.
+- Nouveaux tests de non-régression pour les ordres, les filtres de visibilité, la palette des badges et la stabilité du carrousel.
+
 ## 0.1.5 — Alpha (2026-11-03)
 
-- Correction des temps déjà lu et restant qui avançaient ou reculaient par à-coups lors des mises à jour SSE.
-- Horloge monotone locale et actualisation visuelle à 250 ms ; correction douce des petites divergences.
-- Conservation de l'horloge lors des rafraîchissements de la carte, de la pause et de la reprise ; les véritables déplacements dans le film restent détectés.
-- Quatre nouveaux tests JavaScript couvrant les positions irrégulières, les pauses/reprises, les sauts et la cadence.
+- Correction des oscillations des temps de lecture et du temps restant observées dans les cartes : les positions SSE légèrement en retard ne réinitialisent plus l’horloge toutes les deux secondes.
+- Horloge monotone locale pour l’animation à 250 ms, avec synchronisation douce (200 ms maximum par nouvel échantillon), sans retour en arrière durant une lecture normale.
+- Détection des déplacements volontaires dans le film (avance/retour de plusieurs secondes) : synchronisation immédiate de la nouvelle position.
+- Les reconstructions de la carte préservent l’horloge de chaque session ; mise en pause fige les compteurs et reprise les relance.
+- Tests de non-régression avec échantillons SSE irréguliers, mise en pause/reprise et sauts volontaires.
 
 
 ## 0.1.4 — Alpha (2026-11-03)

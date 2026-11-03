@@ -45,7 +45,7 @@ function setup({count=3, visible=1, effect='none', duration=600}={}) {
   const card = new Card();
   const animations = [];
   const cards = Array.from({length:count}, (_,i) => ({
-    offsetLeft: i * 110,
+    offsetLeft: i * 110, dataset:{session:`s${i+1}`},
     getBoundingClientRect() { return {width:100}; },
     animate(keyframes, opts) { animations.push({card:i, keyframes, opts}); },
   }));
@@ -75,7 +75,7 @@ function flushFrame(at) {
 test('autoplay advances through all items and wraps to first (instead of jumping back)', () => {
   const {card, carousel} = setup({count:3});
   card._setTimers();
-  const timer = [...timers.values()].find(t => t.duration === 7000);
+  const timer = [...timers.values()].filter(t => t.duration === 7000).at(-1);
   assert.ok(timer, 'autoplay timer configured');
   for (const [index, left] of [[1,110],[2,220],[0,0],[1,110]]) {
     timer.fn();
@@ -176,7 +176,7 @@ test('autoplay remains active while hovering unless pause on hover is opted in',
   const {card} = setup({count:3});
   card.matches = () => true;
   card._setTimers();
-  const timer = [...timers.values()].find(t => t.duration === 7000);
+  const timer = [...timers.values()].filter(t => t.duration === 7000).at(-1);
   timer.fn();
   assert.equal(card._carouselIndex, 1);
   card._config.carousel_pause_on_hover = true;
@@ -443,5 +443,125 @@ test('progress clock uses monotonic time and a 250ms UI tick', () => {
   const {card} = setup();
   card._setTimers();
   assert.ok([...timers.values()].some(t => t.duration === 250));
+  card.disconnectedCallback();
+});
+
+
+test('movie title and year are independent of TV year and may be reordered', () => {
+  const {card}=setup();
+  const movie={id:'film',media_type:'movie',media_title:'Le Voyage',year:2026};
+  const episode={id:'tv',media_type:'episode',show_title:'Ma série',media_title:'Pilote',
+    season_number:2,episode_number:4,year:2024};
+  assert.deepEqual(Array.from(card._mediaFields(movie), x=>x.text), ['Le Voyage','2026']);
+  assert.deepEqual(Array.from(card._mediaFields(episode), x=>x.text), ['Ma série','S02E04','Pilote','2024']);
+  card._config.movie_show_year=false;
+  card._config.series_show_year=true;
+  assert.ok(!card._mediaMarkup(movie).includes('2026'));
+  assert.match(card._mediaMarkup(episode),/2024/);
+  card._config.series_show_episode_title=false;
+  assert.ok(!card._mediaMarkup(episode).includes('Pilote'));
+  card._config.series_show_title=false;
+  assert.ok(!card._mediaMarkup(episode).includes('Ma série'));
+  card._config.series_show_season_episode=false;
+  assert.ok(!card._mediaMarkup(episode).includes('S02E04'));
+  assert.match(card._mediaMarkup(episode),/class="title" title="2024"/);
+  card._config.movie_show_title=false;
+  assert.equal(card._mediaMarkup(movie),'');
+});
+
+test('custom title, episode and year order works with short and long season formats', () => {
+  const {card}=setup();
+  const s={id:'tv',media_type:'episode',show_title:'Les Lacs',media_title:'Rencontre',year:2022,
+    season_number:1,episode_number:7};
+  card._config.series_episode_style='long';
+  card._config.series_field_order='year,episode,series,season';
+  assert.deepEqual(Array.from(card._mediaFields(s), x=>x.text),
+    ['2022','Rencontre','Les Lacs','Saison 1 · Épisode 7']);
+  let html=card._mediaMarkup(s);
+  assert.match(html,/class="title" title="2022"/);
+  assert.match(html,/Rencontre · Les Lacs · Saison 1 · Épisode 7/);
+  card._config.series_field_order='season,year,season,invalid,episode,series';
+  assert.deepEqual(Array.from(card._mediaFields(s), x=>x.text),
+    ['Saison 1 · Épisode 7','2022','Rencontre','Les Lacs']);
+  card._config.series_episode_style='short';
+  assert.match(card._mediaMarkup(s),/S01E07/);
+  card._config.movie_field_order='year,title';
+  assert.deepEqual(Array.from(card._mediaFields({media_type:'movie',media_title:'Dune',year:2021}), x=>x.text),
+    ['2021','Dune']);
+});
+
+test('header metric badge color can differ from global palette with accessible contrast', () => {
+  const {card}=setup();
+  const entries=[{server_id:'p',server_name:'Plex',server_type:'plex',media_type:'movie'}];
+  card._config={...card._config, header_show_server_counts:true,
+    accent_color_mode:'server', header_badge_color_mode:'custom',header_badge_custom_color:'#202020'};
+  let html=card._header(entries);
+  assert.match(html,/--pill-bg:#202020;--pill-text:#FFFFFF/g);
+  card._config.header_badge_color_mode='server';
+  html=card._header(entries);
+  assert.match(html,/Plex : 1/);
+  assert.match(html,/--pill-bg:#E5A00D;--pill-text:#000000/);
+  card._config.header_badge_color_mode='theme';
+  html=card._header(entries);
+  assert.doesNotMatch(html,/--pill-bg:#E5A00D/);
+});
+
+test('legacy show_year migrates to independent movie and series year settings', () => {
+  const {card}=setup();
+  card.setConfig({show_year:false});
+  assert.equal(card._config.movie_show_year,false);
+  assert.equal(card._config.series_show_year,false);
+  card.setConfig({show_year:false,movie_show_year:true});
+  assert.equal(card._config.movie_show_year,true);
+  assert.equal(card._config.series_show_year,false);
+});
+
+test('media editor exposes individual toggles and reorder buttons', () => {
+  const Editor=classes.get('tracearr-card-editor');
+  const editor=new Editor();
+  editor.setConfig({type:'custom:tracearr-streams-card'});
+  const html=editor.shadowRoot.innerHTML;
+  assert.match(html,/Titres, saisons et années/);
+  for(const field of ['movie_show_title','movie_show_year','series_show_title',
+    'series_show_episode_title','series_show_season_episode','series_show_year',
+    'series_episode_style','header_badge_color_mode','header_badge_custom_color']) {
+    assert.match(html,new RegExp('data-field="'+field+'"'));
+  }
+  assert.match(html,/data-order="series_field_order"/);
+  assert.match(html,/data-order="movie_field_order"/);
+});
+
+test('changing bitrate/state/health does not rebuild carousel or reset autoplay animation', () => {
+  time=0;
+  const {card,carousel}=setup({count:2,effect:'slide'});
+  const streams=[1,2].map(n=>({id:`s${n}`,username:'Bob',server_id:'p',server_type:'plex',
+    server_name:'Plex',media_type:'movie',media_title:`Film ${n}`,state:'playing',
+    started_at:`${n}`,bitrate:1000,duration_ms:120000,progress_ms:5000}));
+  const entry={id:'e',streams,servers:[{server_id:'p',status:'up'}],connected:true};
+  card._payload={entries:[entry]};
+  card._config={...card._config,mode:'carousel',carousel_visible:1,
+    show_poster:false,show_avatar:false,show_bitrate:true,header_show_bandwidth:true};
+  card.render();
+  const before=card.shadowRoot.renders;
+  card._carouselIndex=1;
+  carousel.scrollLeft=110;
+  streams[0].bitrate=5000;
+  streams[1].state='paused';
+  entry.servers[0].status='down';
+  card.render();
+  assert.equal(card.shadowRoot.renders,before,'stable carousel shell survives SSE changes');
+  assert.equal(card._carouselIndex,1);
+  assert.equal(carousel.scrollLeft,110);
+});
+
+test('manual arrow navigation resets autoplay delay to prevent immediate early jump', () => {
+  const {card}=setup({count:3});
+  card._setTimers();
+  const previous=card._carouselTimer;
+  card._scroll(1); // user click
+  assert.equal(card._carouselIndex,1);
+  assert.notEqual(card._carouselTimer,previous);
+  assert.ok(!timers.has(previous));
+  assert.ok(timers.has(card._carouselTimer));
   card.disconnectedCallback();
 });

@@ -1,4 +1,4 @@
-/* Tracearr HA Lovelace cards 0.1.5 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.6 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;
@@ -19,6 +19,13 @@
     stream_surface: "soft",
     selection: "recent", grid_columns: 12, grid_rows: 0, height: 0,
     font_size: 14, accent_color_mode: "theme", accent_custom_color: "#00BCD4",
+    // Independent movie / TV fields, with a rearrangeable visual order.
+    movie_show_title: true, movie_show_year: true, movie_field_order: "title,year",
+    series_show_title: true, series_show_episode_title: true,
+    series_show_season_episode: true, series_show_year: true,
+    series_episode_style: "short", series_field_order: "series,season,episode,year",
+    // Header metric pills may have a separate palette from stream badges.
+    header_badge_color_mode: "inherit", header_badge_custom_color: "#00BCD4",
     aliases: "", avatars: "",
   };
   const E = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({
@@ -38,6 +45,16 @@
     if (["copy", "directplay"].includes(s.video_decision) || ["copy", "directplay"].includes(s.audio_decision)) return "direct";
     return "unknown";
   };
+  const MOVIE_FIELDS = Object.freeze(["title", "year"]);
+  const SERIES_FIELDS = Object.freeze(["series", "season", "episode", "year"]);
+  const MEDIA_LABELS = Object.freeze({
+    title: "Titre du film", series: "Titre de la série", season: "Saison et épisode",
+    episode: "Nom de l’épisode", year: "Année",
+  });
+  function normalizedOrder(order, allowed) {
+    const values = String(order || "").split(",").map(v => v.trim());
+    return [...new Set([...values.filter(v => allowed.includes(v)), ...allowed])];
+  }
   const SERVER_ACCENTS = Object.freeze({ plex: "#E5A00D", jellyfin: "#AA5CC3", emby: "#52B54B" });
   const TRANSITION_EFFECTS = ["slide", "fade", "zoom", "flip", "none"];
   const clamp = (value, min, max, fallback) => {
@@ -134,7 +151,7 @@
     .fallback-avatar { display:grid; place-items:center; font-size:calc(var(--tr-font-size)*.78); font-weight:bold; }
     .title { font-weight:700; font-size:calc(var(--tr-font-size)*1.12);
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .subtitle { font-size:calc(var(--tr-font-size)*.9); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .subtitle { font-size:calc(var(--tr-font-size)*.9); white-space:normal; overflow-wrap:anywhere; }
     .media-flags { display:flex; position:absolute; right:12px; top:12px; align-items:center; gap:8px; z-index:1; }
     .stream-indicator { width:19px; height:19px; display:inline-flex; align-items:center;
       justify-content:center; color:#a3a3a3; }
@@ -183,6 +200,11 @@
     }
     if (!("accent_color_mode" in config) && config.progress_color_mode) result.accent_color_mode = config.progress_color_mode;
     if (!("accent_custom_color" in config) && config.progress_custom_color) result.accent_custom_color = config.progress_custom_color;
+    // A single pre-0.1.6 show_year switch controlled both movie and episode years.
+    if (!("movie_show_year" in config) && "show_year" in config) result.movie_show_year = !!config.show_year;
+    if (!("series_show_year" in config) && "show_year" in config) result.series_show_year = !!config.show_year;
+    result.movie_field_order = normalizedOrder(result.movie_field_order, MOVIE_FIELDS).join(",");
+    result.series_field_order = normalizedOrder(result.series_field_order, SERIES_FIELDS).join(",");
     return result;
   }
 
@@ -204,6 +226,8 @@
       this._carouselAnimating = false;
       this._carouselIndex = 0;
       this._renderFingerprint = null;
+      this._liveFingerprints = new Map();
+      this._headerMarkup = "";
       this._entry = null;
     }
     static getStubConfig() { return {...DEFAULTS}; }
@@ -212,6 +236,7 @@
       if (!config || !["list", "grid", "carousel", undefined].includes(config.mode)) throw Error("Invalid Tracearr layout");
       this._config = normalizeConfig(config);
       this._renderFingerprint = null;
+      this._liveFingerprints.clear();
       this._carouselIndex = 0;
       this._stopCarouselAnimation();
       this._setTimers();
@@ -268,13 +293,17 @@
       this._tick = this._carouselTimer = null;
       if (this._closed) return;
       this._tick = setInterval(() => this._updateProgress(), 250);
-      if (this._config.mode === "carousel" && this._config.carousel_autoplay) {
-        const duration = clamp(this._config.carousel_interval, 3, 120, 7);
-        this._carouselTimer = setInterval(() => {
-          if (!this.isConnected || (this._config.carousel_pause_on_hover && this.matches(":hover")) || document.hidden || window.matchMedia("(prefers-reduced-motion:reduce)").matches) return;
-          this._scroll(1);
-        }, duration * 1000);
-      }
+      this._armCarouselAutoplay();
+    }
+    _armCarouselAutoplay() {
+      clearInterval(this._carouselTimer);
+      this._carouselTimer = null;
+      if (this._closed || this._config.mode !== "carousel" || !this._config.carousel_autoplay) return;
+      const duration = clamp(this._config.carousel_interval, 3, 120, 7);
+      this._carouselTimer = setInterval(() => {
+        if (!this.isConnected || (this._config.carousel_pause_on_hover && this.matches(":hover")) || document.hidden || window.matchMedia("(prefers-reduced-motion:reduce)").matches) return;
+        this._scroll(1, true);
+      }, duration * 1000);
     }
     _entryData() {
       const all = this._payload?.entries || [];
@@ -321,7 +350,7 @@
       if (cached && cached.expires > Date.now()) return cached.url;
       if (!cached?.pending && this._hass?.connection) {
         const pending = this._hass.connection.sendMessagePromise({type:"auth/sign_path", path, expires:600})
-          .then(result => { this._images.set(path,{url:result.path,expires:Date.now()+540000}); if (!this._closed) { this._renderFingerprint = null; this.render(); } })
+          .then(result => { this._images.set(path,{url:result.path,expires:Date.now()+540000}); if (!this._closed) { this._liveFingerprints.delete(s.id); this.render(); } })
           .catch(() => { this._images.set(path,{url:"",expires:Date.now()+60000}); });
         this._images.set(path,{pending,expires:Date.now()+60000});
       }
@@ -355,6 +384,54 @@
       const foreground = contrastColor(raw || this._themeAccent());
       return {bg:cssColor, text:foreground};
     }
+    _headerPalette(serverType) {
+      const mode = this._config.header_badge_color_mode || "inherit";
+      if (mode === "inherit") return this._palette(serverType, !serverType);
+      if (mode === "server") return this._paletteForMode("server", serverType);
+      if (mode === "custom") return this._paletteForMode("custom", serverType, this._config.header_badge_custom_color);
+      return this._paletteForMode("theme", serverType);
+    }
+    _paletteForMode(mode, serverType, customColor) {
+      const raw = mode === "server" ? SERVER_ACCENTS[String(serverType || "").toLowerCase()] :
+        mode === "custom" ? validColor(customColor) : null;
+      const bg = raw || "var(--accent-color,#00BCD4)";
+      return {bg, text:contrastColor(raw || this._themeAccent())};
+    }
+    _mediaFields(stream) {
+      const c = this._config;
+      const episode = stream.media_type === "episode";
+      if (!episode) {
+        const fields = {
+          title: c.movie_show_title && stream.media_title ? stream.media_title : "",
+          year: c.movie_show_year && stream.year != null ? String(stream.year) : "",
+        };
+        return normalizedOrder(c.movie_field_order, MOVIE_FIELDS)
+          .map(key => ({key, text:fields[key]})).filter(item => item.text);
+      }
+      const season = stream.season_number;
+      const episodeNum = stream.episode_number;
+      const available = season != null || episodeNum != null;
+      const seasonStr = season == null ? "?" : String(season);
+      const episodeStr = episodeNum == null ? "?" : String(episodeNum);
+      const seasonLabel = c.series_episode_style === "long" ?
+        `Saison ${seasonStr} · Épisode ${episodeStr}` :
+        `S${seasonStr.padStart(2,"0")}E${episodeStr.padStart(2,"0")}`;
+      const fields = {
+        series: c.series_show_title && stream.show_title ? stream.show_title : "",
+        season: c.series_show_season_episode && available ? seasonLabel : "",
+        episode: c.series_show_episode_title && stream.media_title ? stream.media_title : "",
+        year: c.series_show_year && stream.year != null ? String(stream.year) : "",
+      };
+      return normalizedOrder(c.series_field_order, SERIES_FIELDS)
+        .map(key => ({key, text:fields[key]})).filter(item => item.text);
+    }
+    _mediaMarkup(stream) {
+      const fields = this._mediaFields(stream);
+      if (!fields.length) return "";
+      // The first visible field is the main title; order is intentional.
+      return `<div class="title" title="${E(fields[0].text)}">${E(fields[0].text)}</div>` +
+        (fields.length > 1 ? `<div class="subtitle">${fields.slice(1).map(field=>E(field.text)).join(" · ")}</div>` : "");
+    }
     _streamSummary(streams) {
       const sums = {total:streams.length, direct:0, video:0, audio:0, both:0,
         transcodes:0, unknown:0, paused:0, bandwidth:0, byServer:new Map()};
@@ -378,7 +455,7 @@
       const metrics = [];
       const add = (active,label,colorType=null) => {
         if (!active) return;
-        const palette = this._palette(colorType, !colorType);
+        const palette = this._headerPalette(colorType);
         metrics.push(`<span class="metric" style="--pill-bg:${palette.bg};--pill-text:${palette.text}">${E(label)}</span>`);
       };
       add(c.header_show_streams, `${summary.total} flux`);
@@ -456,9 +533,7 @@
       const poster = c.show_poster ? this._image(entry,s,"poster") : "";
       const avatar = c.show_avatar ? this._image(entry,s,"avatar") : "";
       const name = this._name(entry,s);
-      const episode = s.media_type === "episode" ? `S${String(s.season_number ?? "?").padStart(2,"0")}E${String(s.episode_number ?? "?").padStart(2,"0")}` : "";
-      const title = s.media_type === "episode" && s.show_title ? s.show_title : (s.media_title || "Média inconnu");
-      const subtitle = [s.media_type === "episode" ? `${episode} ${s.media_title || ""}` : "", c.show_year && s.year ? String(s.year) : ""].filter(Boolean).join(" · ");
+      const mediaMarkup = this._mediaMarkup(s);
       const clock = this._syncPosition(s);
       const displayPosition = Math.max(clock.lastRendered, this._positionAt(clock));
       const ratio = clock.duration > 0 ? 100 * Math.min(1, displayPosition / clock.duration) : 0;
@@ -486,8 +561,7 @@
         ${indicators}
         <div class="info">
           ${c.show_avatar ? `<div class="user">${avatar ? `<img class="avatar" src="${E(avatar)}" alt="">` : `<span class="avatar fallback-avatar">${E(name.slice(0,1).toUpperCase())}</span>`}<span>${E(name)}</span></div>` : `<div class="user">${E(name)}</div>`}
-          <div class="title" title="${E(title)}">${E(title)}</div>
-          ${subtitle ? `<div class="subtitle">${E(subtitle)}</div>` : ""}
+          ${mediaMarkup}
           ${c.show_progress ? `<div class="progress"><span class="fill" data-id="${E(s.id)}" style="width:${ratio.toFixed(2)}%"></span></div><div class="times"><span class="time-current" data-id="${E(s.id)}">${fmtTime(displayPosition)}</span>${paused ? `<span class="time-paused">En pause</span>` : c.show_remaining ? `<span class="time-remaining" data-id="${E(s.id)}">-${fmtTime(Math.max(0,clock.duration-displayPosition))}</span>` : ""}</div>` : ""}
           ${meta.length ? `<div class="meta">${meta.join("<span aria-hidden=\"true\">·</span>")}</div>` : ""}
         </div>
@@ -615,6 +689,7 @@
         }, {index:0, distance:Infinity}).index;
         this._carouselIndex = nearest;
         this._goToCarouselIndex(el, cards, nearest);
+        this._armCarouselAutoplay();
       };
       el.addEventListener("pointerup", end);
       el.addEventListener("pointercancel", end);
@@ -625,7 +700,10 @@
         }
       });
     }
-    _scroll(direction) {
+    _scroll(direction, fromAutoplay=false) {
+      // Never cut an animation short if the configured interval fires while a
+      // previous transition is still running.
+      if (fromAutoplay && this._carouselAnimating) return;
       const el = this.shadowRoot.querySelector(".streams.carousel");
       if (!el) return;
       const cards = [...el.querySelectorAll(".stream")];
@@ -634,6 +712,43 @@
       const next = this._carouselIndex + (direction > 0 ? 1 : -1);
       this._carouselIndex = next > max ? 0 : next < 0 ? max : next;
       this._goToCarouselIndex(el, cards, this._carouselIndex);
+      if (!fromAutoplay) this._armCarouselAutoplay();
+    }
+
+    _liveSnapshot(stream, entry) {
+      const {progress_ms, ...rest} = stream;
+      return JSON.stringify({rest,health:entry?.servers?.find(x => x.server_id === stream.server_id)?.status});
+    }
+    _updateCarouselLive(entry, streams) {
+      const carousel = this.shadowRoot.querySelector(".streams.carousel");
+      if (!carousel) return;
+      // Keep the carousel element and its scroll animation untouched for routine
+      // SSE updates (state, bitrate, codec, server health, posters, etc.).
+      const header = this._header(streams);
+      if (header !== this._headerMarkup) {
+        const oldHeader = this.shadowRoot.querySelector(".head");
+        const root = this.shadowRoot.querySelector(".root");
+        if (oldHeader && header) oldHeader.outerHTML = header;
+        else if (oldHeader && !header) oldHeader.remove();
+        else if (!oldHeader && header) root?.insertAdjacentHTML("afterbegin", header);
+        this._headerMarkup = header;
+      }
+      const cards = [...carousel.querySelectorAll(".stream")];
+      for (let index=0; index<streams.length; index++) {
+        const stream = streams[index];
+        const signature = this._liveSnapshot(stream,entry);
+        if (this._liveFingerprints.get(stream.id) === signature) continue;
+        const card = cards[index];
+        if (!card || card.dataset.session !== String(stream.id)) continue;
+        const template = document.createElement("template");
+        template.innerHTML = this._streamCard(entry,stream);
+        const fresh = template.content?.firstElementChild;
+        if (fresh) {
+          card.innerHTML = fresh.innerHTML;
+          card.style.cssText = fresh.style.cssText;
+          this._liveFingerprints.set(stream.id,signature);
+        }
+      }
     }
 
     render() {
@@ -641,13 +756,14 @@
       const c = this._config;
       if (!this.shadowRoot) return;
       const streams = this._streams(entry);
-      // Progress arrives frequently over SSE. Updating DOM for every tick destroys
-      // the native carousel's scroll position and interrupts transitions.
+      // Keep a stable carousel shell while live SSE properties change. The
+      // original full DOM rebuild used to teleport the slider without any
+      // transition whenever pause/bitrate/health/codec updates arrived.
       const fingerprint = JSON.stringify({
         config: c,
-        streams: streams.map(({progress_ms, ...rest}) => rest),
-        stats: entry?.stats,
-        servers: entry?.servers,
+        streams: c.mode === "carousel" ? streams.map(s => s.id) : streams.map(({progress_ms, ...rest}) => rest),
+        stats: c.mode === "carousel" ? undefined : entry?.stats,
+        servers: c.mode === "carousel" ? undefined : entry?.servers,
         aliases: entry?.aliases,
         avatars: entry?.avatars,
         connected: entry?.connected,
@@ -657,16 +773,20 @@
       const now = this._now();
       for (const stream of streams) this._syncPosition(stream, now);
       if (fingerprint === this._renderFingerprint && this.shadowRoot.querySelector("ha-card")) {
+        if (c.mode === "carousel") this._updateCarouselLive(entry, streams);
         this._updateProgress();
         return;
       }
       this._renderFingerprint = fingerprint;
       const carousel = this.shadowRoot.querySelector(".streams.carousel");
       const oldScroll = carousel?.scrollLeft || 0;
+      const previousAnchor = carousel?.querySelectorAll(".stream")?.[this._carouselIndex]?.dataset?.session;
       this._stopCarouselAnimation();
       if (c.hide_empty && !streams.length) { this.shadowRoot.innerHTML = `<style>${style}</style>`; this.style.display="none"; return; }
       this.style.display="";
       const head = this._header(streams);
+      this._headerMarkup = head;
+      this._liveFingerprints = new Map(streams.map(s => [s.id, this._liveSnapshot(s,entry)]));
       const cols = c.columns === "auto" ? "repeat(auto-fit,minmax(min(100%,var(--min-column,290px)),1fr))" : `repeat(${Math.max(1, Math.min(4,Number(c.columns)||1))}, minmax(0,1fr))`;
       const visible = clamp(c.carousel_visible, 1, 4, 1);
       const items = streams.map(s => this._streamCard(entry,s)).join("");
@@ -683,11 +803,18 @@
       const newCarousel = this.shadowRoot.querySelector(".streams.carousel");
       if (newCarousel) {
         const cards = [...newCarousel.querySelectorAll(".stream")];
+        if (previousAnchor) {
+          const anchored = streams.findIndex(s => s.id === previousAnchor);
+          if (anchored >= 0) this._carouselIndex = anchored;
+        }
         this._carouselIndex = Math.min(this._carouselIndex, this._carouselMaxIndex(cards.length, newCarousel, cards));
         if (cards.length) {
           newCarousel.scrollLeft = cards[this._carouselIndex].offsetLeft - cards[0].offsetLeft;
         } else newCarousel.scrollLeft = oldScroll;
         this._enableMouseDrag(newCarousel, cards);
+        // A touch swipe is manual navigation too: give the user the entire
+        // interval before automatically advancing again.
+        newCarousel.addEventListener("touchend", () => this._armCarouselAutoplay(), {passive:true});
         newCarousel.addEventListener("scroll", () => {
           if (this._carouselAnimating || !cards.length) return;
           const step = cards.length > 1 ? cards[1].offsetLeft - cards[0].offsetLeft : 0;
@@ -714,6 +841,15 @@
     .check { display:flex; align-items:center; gap:8px; } .check input { accent-color:var(--accent-color); flex-shrink:0; }
     .columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
     textarea { min-height:64px; resize:vertical; } small { font-size:11px; color:var(--secondary-text-color); }
+    .group-label { font-weight:700; font-size:13px; padding-top:5px; }
+    .order-list { display:grid; gap:5px; }
+    .order-row { display:flex; justify-content:space-between; align-items:center; gap:8px;
+      border:1px solid var(--divider-color,#7775); border-radius:7px; padding:4px 6px 4px 10px; font-size:13px; }
+    .move-controls { display:flex; gap:4px; }
+    .move-controls button { background:var(--secondary-background-color,transparent);
+      border:1px solid var(--divider-color,#7775); border-radius:6px; color:var(--primary-text-color);
+      cursor:pointer; padding:5px 8px; font:inherit; }
+    .move-controls button:disabled { opacity:.3; cursor:default; }
   `;
   class TracearrCardEditor extends HTMLElement {
     constructor() {
@@ -753,6 +889,10 @@
     _number(name,label,min,max) {
       return `<label>${E(label)}<input type="number" min="${min}" max="${max}" data-field="${E(name)}" value="${E(this._config[name])}"></label>`;
     }
+    _orderEditor(configKey, fields) {
+      const order = normalizedOrder(this._config[configKey], fields);
+      return `<div class="order-list">${order.map((field,index) => `<div class="order-row"><span>${E(MEDIA_LABELS[field])}</span><div class="move-controls"><button type="button" data-order="${E(configKey)}" data-index="${index}" data-direction="-1" ${index===0?"disabled":""} aria-label="Monter ${E(MEDIA_LABELS[field])}">↑</button><button type="button" data-order="${E(configKey)}" data-index="${index}" data-direction="1" ${index===order.length-1?"disabled":""} aria-label="Descendre ${E(MEDIA_LABELS[field])}">↓</button></div></div>`).join("")}</div>`;
+    }
     render() {
       const c=this._config;
       const entries=this._payload.entries||[];
@@ -775,7 +915,11 @@
           ["header_show_video","Transcode vidéo seul"],["header_show_audio","Transcode audio seul"],
           ["header_show_both","Transcode vidéo + audio"],["header_show_transcodes_total","Total transcodages"],
           ["header_show_server_counts","Nombre de flux par serveur"],
-        ]);
+        ])+
+        `<div class="group-label">Couleur des badges d'en-tête</div>`+
+        this._select("header_badge_color_mode","Palette des statistiques",[["inherit","Utiliser la palette globale"],["theme","Thème Home Assistant"],["server","Couleur du serveur (comptages par serveur)"],["custom","Couleur personnalisée"]])+
+        `<label>Couleur personnalisée de l'en-tête<input type="color" data-field="header_badge_custom_color" value="${E(validColor(c.header_badge_custom_color))}"></label>`+
+        `<small>En mode serveur, les statistiques globales utilisent la couleur du thème ; chaque compteur Plex/Jellyfin/Emby conserve sa couleur propre.</small>`;
       const layout=(isIndividual ? this._select("selection","Choix de la lecture",[["recent","Lecture la plus récente"],["stream","Session précise"]])+
         `<label>ID de session<input type="text" data-field="stream_id" value="${E(c.stream_id||"")}"></label>` :
         this._select("mode","Disposition",[["list","Liste verticale"],["grid","Grille adaptative"],["carousel","Carrousel"]])+
@@ -795,8 +939,19 @@
       const content=this._checks([
         ["show_poster","Affiche"],["show_avatar","Avatar utilisateur"],
         ["show_progress","Barre de lecture"],["show_remaining","Temps restant / En pause"],
-        ["show_year","Année ou épisode"],["show_transcode_icons","Icônes vidéo et audio"],
+        ["show_transcode_icons","Icônes vidéo et audio"],
       ]);
+      const media = `<div class="group-label">Films</div>`+
+        this._checks([["movie_show_title","Afficher le titre"],["movie_show_year","Afficher l'année"]])+
+        `<small>Ordre d'affichage (flèches pour déplacer les champs, même masqués) :</small>`+
+        this._orderEditor("movie_field_order",MOVIE_FIELDS)+
+        `<div class="group-label">Séries et épisodes</div>`+
+        this._checks([["series_show_title","Titre de la série"],["series_show_episode_title","Nom de l'épisode"],
+          ["series_show_season_episode","Saison / numéro d'épisode"],["series_show_year","Année de la série"]])+
+        this._select("series_episode_style","Format de saison et épisode",[["short","S01E02"],["long","Saison 1 · Épisode 2"]])+
+        `<small>Ordre d'affichage de toutes les informations :</small>`+
+        this._orderEditor("series_field_order",SERIES_FIELDS)+
+        `<small>Les réglages d'année sont indépendants entre films et séries.</small>`;
       const footer=this._checks([
         ["show_server","Nom du serveur"],["show_device","Appareil / lecteur"],
         ["show_quality","Résolution"],["show_bitrate","Débit du flux"],
@@ -817,6 +972,7 @@
         this._group("layout","Disposition et dimensions",layout),
         ...(!isIndividual ? [this._group("carousel","Navigation et carrousel",carousel)] : []),
         this._group("content","Contenu de la lecture",content),
+        this._group("media","Titres, saisons et années",media),
         this._group("footer","Bandeau d'informations du flux",footer),
         this._group("colors","Apparence, couleurs et typographie",colors),
         this._group("source","Filtres et tri",source),
@@ -832,6 +988,18 @@
         };
         el.addEventListener("change",fn);
       });
+      this.shadowRoot.querySelectorAll("button[data-order]").forEach(btn => btn.addEventListener("click", () => {
+        const key=btn.dataset.order;
+        const allowed=key==="movie_field_order" ? MOVIE_FIELDS : SERIES_FIELDS;
+        const order=normalizedOrder(this._config[key],allowed);
+        const index=Number(btn.dataset.index), next=index+Number(btn.dataset.direction);
+        if (index<0 || index>=order.length || next<0 || next>=order.length) return;
+        [order[index],order[next]]=[order[next],order[index]];
+        this._captureOpenSections();
+        this._config={...this._config,[key]:order.join(",")};
+        this.render();
+        this.dispatchEvent(new CustomEvent("config-changed",{detail:{config:this._config},bubbles:true,composed:true}));
+      }));
     }
   }
   customElements.define("tracearr-streams-card",TracearrStreamsCard);
