@@ -1,4 +1,4 @@
-/* Tracearr HA Lovelace cards 0.1.6 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.7 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;
@@ -11,19 +11,23 @@
     show_transcodes: false, show_transcode_icons: true, show_poster: true, show_avatar: true,
     show_progress: true, show_quality: true, show_device: true, show_server: true,
     show_bitrate: false, show_health: true, show_codecs: false, show_year: true, show_remaining: true,
-    show_paused: true, hide_empty: false, sort: "recent", filter_transcode: "all",
+    show_paused: true, hide_empty: false, empty_mode: "message", empty_message: "Aucune lecture en cours",
+    sort: "recent", filter_transcode: "all",
     show_header: true, header_show_streams: true, header_show_bandwidth: false,
     header_show_direct: false, header_show_paused: false,
     header_show_video: false, header_show_audio: false, header_show_both: false,
     header_show_transcodes_total: false, header_show_server_counts: false,
+    header_entity_badges: [],
     stream_surface: "soft",
     selection: "recent", grid_columns: 12, grid_rows: 0, height: 0,
     font_size: 14, accent_color_mode: "theme", accent_custom_color: "#00BCD4",
     // Independent movie / TV fields, with a rearrangeable visual order.
     movie_show_title: true, movie_show_year: true, movie_field_order: "title,year",
     series_show_title: true, series_show_episode_title: true,
-    series_show_season_episode: true, series_show_year: true,
-    series_episode_style: "short", series_field_order: "series,season,episode,year",
+    series_show_season_episode: true, series_show_season: true, series_show_episode_number: true,
+    series_show_year: true,
+    series_episode_style: "short", series_field_order: "series,season,episode_number,episode,year",
+    bitrate_scope: "both", network_locations: "",
     // Header metric pills may have a separate palette from stream badges.
     header_badge_color_mode: "inherit", header_badge_custom_color: "#00BCD4",
     aliases: "", avatars: "",
@@ -46,10 +50,10 @@
     return "unknown";
   };
   const MOVIE_FIELDS = Object.freeze(["title", "year"]);
-  const SERIES_FIELDS = Object.freeze(["series", "season", "episode", "year"]);
+  const SERIES_FIELDS = Object.freeze(["series", "season", "episode_number", "episode", "year"]);
   const MEDIA_LABELS = Object.freeze({
-    title: "Titre du film", series: "Titre de la série", season: "Saison et épisode",
-    episode: "Nom de l’épisode", year: "Année",
+    title: "Titre du film", series: "Titre de la série", season: "Saison",
+    episode_number: "Numéro d’épisode", episode: "Nom de l’épisode", year: "Année",
   });
   function normalizedOrder(order, allowed) {
     const values = String(order || "").split(",").map(v => v.trim());
@@ -203,8 +207,23 @@
     // A single pre-0.1.6 show_year switch controlled both movie and episode years.
     if (!("movie_show_year" in config) && "show_year" in config) result.movie_show_year = !!config.show_year;
     if (!("series_show_year" in config) && "show_year" in config) result.series_show_year = !!config.show_year;
+    if (!("series_show_season" in config) && "series_show_season_episode" in config)
+      result.series_show_season = !!config.series_show_season_episode;
+    if (!("series_show_episode_number" in config) && "series_show_season_episode" in config)
+      result.series_show_episode_number = !!config.series_show_season_episode;
     result.movie_field_order = normalizedOrder(result.movie_field_order, MOVIE_FIELDS).join(",");
-    result.series_field_order = normalizedOrder(result.series_field_order, SERIES_FIELDS).join(",");
+    const oldOrder = String(result.series_field_order || "").split(",").map(x => x.trim());
+    if (!oldOrder.includes("episode_number")) {
+      const seasonIndex = oldOrder.indexOf("season");
+      oldOrder.splice(seasonIndex < 0 ? oldOrder.length : seasonIndex + 1, 0, "episode_number");
+    }
+    result.series_field_order = normalizedOrder(oldOrder.join(","), SERIES_FIELDS).join(",");
+    if (!("empty_mode" in config) && config.hide_empty) result.empty_mode = "hide";
+    if (!["message", "header_only", "hide"].includes(result.empty_mode)) result.empty_mode = "message";
+    if (!["both", "local", "remote"].includes(result.bitrate_scope)) result.bitrate_scope = "both";
+    result.header_entity_badges = Array.isArray(result.header_entity_badges) ? result.header_entity_badges.slice(0, 20)
+      .filter(row => row && typeof row === "object" && typeof row.entity === "string")
+      .map(row => ({entity:row.entity, label:String(row.label || "")})) : [];
     return result;
   }
 
