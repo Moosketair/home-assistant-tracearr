@@ -567,3 +567,47 @@ test('manual arrow navigation resets autoplay delay to prevent immediate early j
   assert.ok(timers.has(card._carouselTimer));
   card.disconnectedCallback();
 });
+
+
+// 0.1.7 regression tests
+test('season and episode number can be displayed independently', () => {
+  const {card}=setup();
+  const stream={media_type:'episode',show_title:'Série',media_title:'Pilote',season_number:2,episode_number:4,year:2026};
+  card._config.series_show_season=false;
+  assert.match(card._mediaMarkup(stream),/E04/);
+  assert.doesNotMatch(card._mediaMarkup(stream),/S02/);
+  card._config.series_show_season=true;
+  card._config.series_show_episode_number=false;
+  assert.match(card._mediaMarkup(stream),/S02/);
+  assert.doesNotMatch(card._mediaMarkup(stream),/E04/);
+});
+test('header badges use actual Home Assistant states and escape arbitrary labels', () => {
+  const {card}=setup();
+  card._config.header_entity_badges=[{entity:'counter.seerr',label:'Demandes'},{entity:'sensor.temp',label:''}];
+  card._hass={states:{'counter.seerr':{state:'3',attributes:{}},'sensor.temp':{state:'20.5',attributes:{friendly_name:'Salon',unit_of_measurement:'°C'}}}};
+  const html=card._header([]);
+  assert.match(html,/Demandes : 3/);
+  assert.match(html,/Salon : 20.5 °C/);
+});
+test('local and remote bitrate filters exclude unclassified streams', () => {
+  const {card}=setup();
+  const a={id:'a',server_type:'plex',username:'Alice',bitrate:6000,media_type:'movie',media_title:'Film',progress_ms:0,duration_ms:10000};
+  const b={...a,id:'b',username:'Bob',bitrate:2000};
+  card._config.network_locations='plex:Alice=remote';
+  card._config.bitrate_scope='remote';
+  assert.equal(card._streamSummary([a,b]).bandwidth,6000);
+  card._config.bitrate_scope='local';
+  assert.equal(card._streamSummary([a,b]).bandwidth,0);
+  card._config.bitrate_scope='both';
+  assert.equal(card._streamSummary([a,b]).bandwidth,8000);
+});
+test('empty header only and custom message are selectable', () => {
+  const {card}=setup();
+  card._payload={entries:[{id:'x',connected:true,streams:[]}]};
+  card.setConfig({empty_mode:'message',empty_message:'Personne ne regarde'});
+  assert.match(card.shadowRoot.innerHTML,/Personne ne regarde/);
+  card.setConfig({empty_mode:'header_only'});
+  assert.doesNotMatch(card.shadowRoot.innerHTML,/Personne ne regarde/);
+  card.setConfig({empty_mode:'hide'});
+  assert.equal(card.style.display,'none');
+});
