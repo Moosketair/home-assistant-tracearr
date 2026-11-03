@@ -819,6 +819,8 @@ test('device location defaults to integration settings with card-level overrides
   card._config.bitrate_scope='remote';
   assert.equal(card._includeBitrate(shield),true);
   assert.equal(card._includeBitrate(apple),false);
+  card._config.network_locations='device:Shield=local';
+  assert.equal(card._networkScope(shield),'local', 'card-specific rule wins over server-scoped global rule');
   card._config.network_locations='server-1:device:Shield=local';
   assert.equal(card._networkScope(shield),'local');
   // A card override does not mutate the global integration settings.

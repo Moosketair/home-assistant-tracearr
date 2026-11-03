@@ -518,8 +518,8 @@
       const direct = String(stream.network_type || stream.network || "").toLowerCase();
       // Global device rules live in the integration options; individual cards
       // can override them without changing the settings of other dashboards.
-      const mapping = {...asMapping(this._entryData()?.network_locations),
-        ...asMapping(this._config.network_locations)};
+      const globalMapping = asMapping(this._entryData()?.network_locations);
+      const cardMapping = asMapping(this._config.network_locations);
       const candidates = [
         stream.device && `${stream.server_id}:device:${stream.device}`,
         stream.device && `device:${stream.device}`,
@@ -528,7 +528,10 @@
         `${stream.server_id}:${stream.username}`, `${stream.server_type}:${stream.username}`,
         `${stream.server_name}:${stream.username}`, stream.username,
       ].filter(Boolean);
-      const location = candidates.map(key => mapping[key]).find(Boolean) || direct;
+      // A card exception takes precedence even if the global rule uses a more
+      // specific server-scoped key than the card's unscoped device name.
+      const location = candidates.map(key => cardMapping[key]).find(Boolean)
+        || candidates.map(key => globalMapping[key]).find(Boolean) || direct;
       const value = String(location).trim().toLowerCase();
       if (["local", "lan", "interne"].includes(value)) return "local";
       if (["remote", "wan", "distant", "externe"].includes(value)) return "remote";
