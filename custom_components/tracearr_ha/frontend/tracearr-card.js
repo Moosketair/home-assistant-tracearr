@@ -1,4 +1,4 @@
-/* Tracearr HA Lovelace cards 0.1.4 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.5 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;
@@ -145,7 +145,7 @@
     .progress { margin-top:auto; width:100%; height:6px; border-radius:7px; overflow:hidden;
       background:color-mix(in srgb,var(--shared-accent) 24%,transparent); }
     .fill { display:block; height:100%; background:var(--shared-accent);
-      border-radius:7px; transition:width 1s linear; }
+      border-radius:7px; transition:width .3s linear; }
     .times { display:flex; justify-content:space-between; align-items:center; gap:8px;
       font-size:calc(var(--tr-font-size)*.82); font-variant-numeric:tabular-nums; }
     .time-paused { color:#ff9900; font-weight:700; }
@@ -267,7 +267,7 @@
       clearInterval(this._carouselTimer);
       this._tick = this._carouselTimer = null;
       if (this._closed) return;
-      this._tick = setInterval(() => this._updateProgress(), 1000);
+      this._tick = setInterval(() => this._updateProgress(), 250);
       if (this._config.mode === "carousel" && this._config.carousel_autoplay) {
         const duration = clamp(this._config.carousel_interval, 3, 120, 7);
         this._carouselTimer = setInterval(() => {
@@ -396,6 +396,61 @@
       if (!title && !metrics.length) return "";
       return `<header class="head">${title}${metrics.length ? `<div class="head-metrics">${metrics.join("")}</div>` : ""}</header>`;
     }
+    // API samples may be slightly older than the local playback time. Keep a
+    // monotonic client-side clock for ordinary SSE updates; only snap when the
+    // *difference between two API samples* is evidence of a real seek.
+    _now() { return performance.now(); }
+    _positionAt(clock, now=this._now()) {
+      if (!clock) return 0;
+      const delta = clock.state === "playing" ? Math.max(0, now - clock.at) : 0;
+      return clock.duration > 0 ? Math.min(clock.duration, clock.progress + delta) : clock.progress + delta;
+    }
+    _syncPosition(stream, now=this._now()) {
+      const id = stream.id;
+      const duration = Math.max(0, Number(stream.duration_ms) || 0);
+      const source = Math.max(0, Math.min(duration || Infinity, Number(stream.progress_ms) || 0));
+      const state = stream.state === "playing" ? "playing" : "paused";
+      // Session IDs can be reused; do not preserve an old film's clock.
+      const media = [stream.started_at || "", stream.media_id || stream.rating_key || stream.media_title || ""].join("|");
+      const old = this._positions.get(id);
+      if (!old || old.media !== media || (old.duration && duration && Math.abs(old.duration-duration) > 10000)) {
+        const fresh = {progress:source, at:now, duration, state, media,
+          lastRaw:source, lastRawAt:now, lastRendered:source};
+        this._positions.set(id, fresh);
+        return fresh;
+      }
+      const predicted = this._positionAt(old, now);
+      const sinceRaw = Math.max(0, now - old.lastRawAt);
+      const sampleDelta = source - old.lastRaw;
+      // Rewinds greater than 4 seconds or a jump > 8 seconds beyond the
+      // elapsed time since the previous distinct source sample indicate seeks.
+      // Ordinary delayed/stale samples never force a backward jump.
+      const seek = sampleDelta < -4000 || sampleDelta > sinceRaw + 8000;
+      let position = seek ? source : predicted;
+      if (!seek && source !== old.lastRaw) {
+        // Gentle drift correction: at most 200ms per new API sample, so a 2s
+        // sample cadence can never create a visible 2s leap or rewind.
+        const error = source - predicted;
+        position += Math.max(-200, Math.min(200, error * 0.12));
+      }
+      if (!seek && state === "paused") {
+        // Paused streams must not drift or be nudged by delayed progress packets;
+        // a deliberate seek is the only reason to change a paused position.
+        position = old.state === "playing" ? Math.max(predicted, old.lastRendered) :
+          Math.max(old.progress, old.lastRendered);
+      }
+      if (!seek) position = Math.max(position, old.lastRendered);
+      old.progress = duration > 0 ? Math.min(duration, position) : position;
+      old.at = now;
+      old.duration = duration;
+      old.state = state;
+      if (seek) old.lastRendered = old.progress;
+      if (source !== old.lastRaw) {
+        old.lastRaw = source;
+        old.lastRawAt = now;
+      }
+      return old;
+    }
     _streamCard(entry,s) {
       const c = this._config;
       const poster = c.show_poster ? this._image(entry,s,"poster") : "";
@@ -404,9 +459,10 @@
       const episode = s.media_type === "episode" ? `S${String(s.season_number ?? "?").padStart(2,"0")}E${String(s.episode_number ?? "?").padStart(2,"0")}` : "";
       const title = s.media_type === "episode" && s.show_title ? s.show_title : (s.media_title || "Média inconnu");
       const subtitle = [s.media_type === "episode" ? `${episode} ${s.media_title || ""}` : "", c.show_year && s.year ? String(s.year) : ""].filter(Boolean).join(" · ");
-      const ratio = s.duration_ms > 0 ? 100 * Math.min(1, (s.progress_ms || 0) / s.duration_ms) : 0;
+      const clock = this._syncPosition(s);
+      const displayPosition = Math.max(clock.lastRendered, this._positionAt(clock));
+      const ratio = clock.duration > 0 ? 100 * Math.min(1, displayPosition / clock.duration) : 0;
       const paused = s.state === "paused";
-      this._positions.set(s.id, {progress:s.progress_ms || 0, duration:s.duration_ms || 0, at:Date.now(), state:s.state});
       const meta = [];
       if (c.show_health && entry?.servers?.find(server => server.server_id === s.server_id)?.status === "down") meta.push(`<span class="chip warn">Serveur hors ligne</span>`);
       if (c.show_server) meta.push(`<span>${E(s.server_name || s.server_type || "")}</span>`);
@@ -432,7 +488,7 @@
           ${c.show_avatar ? `<div class="user">${avatar ? `<img class="avatar" src="${E(avatar)}" alt="">` : `<span class="avatar fallback-avatar">${E(name.slice(0,1).toUpperCase())}</span>`}<span>${E(name)}</span></div>` : `<div class="user">${E(name)}</div>`}
           <div class="title" title="${E(title)}">${E(title)}</div>
           ${subtitle ? `<div class="subtitle">${E(subtitle)}</div>` : ""}
-          ${c.show_progress ? `<div class="progress"><span class="fill" data-id="${E(s.id)}" style="width:${ratio.toFixed(2)}%"></span></div><div class="times"><span class="time-current" data-id="${E(s.id)}">${fmtTime(s.progress_ms)}</span>${paused ? `<span class="time-paused">En pause</span>` : c.show_remaining ? `<span class="time-remaining" data-id="${E(s.id)}">-${fmtTime(Math.max(0,(s.duration_ms||0)-(s.progress_ms||0)))}</span>` : ""}</div>` : ""}
+          ${c.show_progress ? `<div class="progress"><span class="fill" data-id="${E(s.id)}" style="width:${ratio.toFixed(2)}%"></span></div><div class="times"><span class="time-current" data-id="${E(s.id)}">${fmtTime(displayPosition)}</span>${paused ? `<span class="time-paused">En pause</span>` : c.show_remaining ? `<span class="time-remaining" data-id="${E(s.id)}">-${fmtTime(Math.max(0,clock.duration-displayPosition))}</span>` : ""}</div>` : ""}
           ${meta.length ? `<div class="meta">${meta.join("<span aria-hidden=\"true\">·</span>")}</div>` : ""}
         </div>
       </article>`;
@@ -442,12 +498,19 @@
       this.shadowRoot.querySelectorAll(".fill[data-id]").forEach(el => {
         const item = this._positions.get(el.dataset.id);
         if (!item || !item.duration) return;
-        const current = Math.min(item.duration, item.progress + (item.state === "playing" ? Math.max(0,Date.now()-item.at) : 0));
-        el.style.width = `${(100*current/item.duration).toFixed(2)}%`;
+        const current = Math.max(item.lastRendered, this._positionAt(item));
+        item.lastRendered = Math.min(item.duration, current);
+        el.style.width = `${(100*item.lastRendered/item.duration).toFixed(2)}%`;
         const currentNode = this.shadowRoot.querySelector(`.time-current[data-id="${CSS.escape(el.dataset.id)}"]`);
         const remainingNode = this.shadowRoot.querySelector(`.time-remaining[data-id="${CSS.escape(el.dataset.id)}"]`);
-        if (currentNode) currentNode.textContent = fmtTime(current);
-        if (remainingNode) remainingNode.textContent = `-${fmtTime(Math.max(0,item.duration-current))}`;
+        if (currentNode) {
+          const text = fmtTime(item.lastRendered);
+          if (currentNode.textContent !== text) currentNode.textContent = text;
+        }
+        if (remainingNode) {
+          const text = `-${fmtTime(Math.max(0,item.duration-item.lastRendered))}`;
+          if (remainingNode.textContent !== text) remainingNode.textContent = text;
+        }
       });
     }
     _stopCarouselAnimation() {
@@ -589,11 +652,11 @@
         avatars: entry?.avatars,
         connected: entry?.connected,
       });
+      // Refresh each stream's clock even if the rest of the card is unchanged.
+      // Crucially, do NOT reset its anchor on every incoming SSE progress event.
+      const now = this._now();
+      for (const stream of streams) this._syncPosition(stream, now);
       if (fingerprint === this._renderFingerprint && this.shadowRoot.querySelector("ha-card")) {
-        const now = Date.now();
-        for (const s of streams) this._positions.set(s.id, {
-          progress: s.progress_ms || 0, duration: s.duration_ms || 0, at: now, state: s.state,
-        });
         this._updateProgress();
         return;
       }

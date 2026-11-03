@@ -121,6 +121,7 @@ test('slide transition animates scroll at chosen speed', () => {
 });
 
 test('progress-only SSE updates preserve carousel DOM, index and scroll position', () => {
+  time = 0;
   const {card,carousel} = setup({count:2});
   const stream = {id:'s1', username:'Alice',server_id:'x',server_name:'Plex',server_type:'plex',media_type:'movie',
     media_title:'Test',state:'playing',started_at:'2026-11-03T10:00:00Z',progress_ms:1000,duration_ms:100000};
@@ -131,12 +132,13 @@ test('progress-only SSE updates preserve carousel DOM, index and scroll position
   const before = card.shadowRoot.renders;
   card._carouselIndex = 1;
   carousel.scrollLeft = 110;
-  stream.progress_ms = 5000;
+  time = 2000;
+  stream.progress_ms = 2800; // slightly stale compared to 3000ms local clock
   card.render();
   assert.equal(card.shadowRoot.renders,before);
   assert.equal(card._carouselIndex,1);
   assert.equal(carousel.scrollLeft,110);
-  assert.equal(card._positions.get('s1').progress,5000);
+  assert.ok(card._positions.get('s1').progress >= 2950, 'SSE does not reset playback to stale position');
 });
 
 test('stream left-edge colors match Plex, Jellyfin and Emby brand themes', () => {
@@ -370,4 +372,76 @@ test('arrows can be hidden but carousel keyboard controls and dragging remain su
   card._renderFingerprint=null;
   card.render();
   assert.doesNotMatch(card.shadowRoot.innerHTML,/data-step="-1"/);
+});
+
+
+test('irregular SSE samples keep elapsed and remaining times monotonic and nearly one second per second', () => {
+  time = 0;
+  const {card} = setup();
+  const stream = {id:'video', started_at:'2026-11-03T17:30:00Z', media_title:'Film',
+    state:'playing', progress_ms:2_928_000, duration_ms:6_880_000};
+  card._syncPosition(stream);
+  let last = 2_928_000;
+  // Reproduces samples arriving every 2s with irregular, sometimes stale source positions.
+  const jitter = [0,-800,600,-1700,900,-1100,1400,-650,800,-1900,1000];
+  for (let sec=1; sec<=20; sec++) {
+    time = sec*1000;
+    if (sec % 2 === 0) {
+      stream.progress_ms = 2_928_000 + sec*1000 + jitter[sec/2];
+      card._syncPosition(stream);
+    }
+    const clock = card._positions.get('video');
+    const shown = card._positionAt(clock);
+    const change = shown-last;
+    assert.ok(change >= 0, `not moving backwards at ${sec}s: ${change}`);
+    assert.ok(change > 700 && change < 1300, `steady seconds at ${sec}s: ${change}`);
+    assert.ok(6_880_000-shown <= 6_880_000-last, `remaining time does not increase at ${sec}s`);
+    clock.lastRendered = shown;
+    last = shown;
+  }
+});
+
+test('pause freezes countdown, resume continues smoothly, and a new session resets the clock', () => {
+  time = 0;
+  const {card} = setup();
+  const s = {id:'p', started_at:'start1', media_title:'A', state:'playing', progress_ms:60000,duration_ms:120000};
+  card._syncPosition(s);
+  time = 3000;
+  s.state = 'paused'; s.progress_ms=62100;
+  card._syncPosition(s);
+  const frozen=card._positionAt(card._positions.get('p'));
+  time=9000;
+  s.progress_ms=62500;
+  card._syncPosition(s);
+  assert.equal(card._positionAt(card._positions.get('p')),frozen);
+  s.state='playing';s.progress_ms=63100;
+  card._syncPosition(s);
+  time=10000;
+  assert.ok(card._positionAt(card._positions.get('p')) > frozen + 700);
+  s.started_at='start2';s.media_title='B';s.progress_ms=1500;
+  card._syncPosition(s);
+  assert.equal(card._positionAt(card._positions.get('p')),1500);
+});
+
+test('actual seek forward or backward causes intentional jumps, unlike jitter', () => {
+  time = 0;
+  const {card} = setup();
+  const stream={id:'s',started_at:'A',media_title:'Test',state:'playing',progress_ms:50000,duration_ms:240000};
+  card._syncPosition(stream);
+  time=2000;stream.progress_ms=51700;card._syncPosition(stream);
+  card._positions.get('s').lastRendered = card._positionAt(card._positions.get('s'));
+  time=4000;stream.progress_ms=20000;
+  card._syncPosition(stream);
+  assert.equal(card._positionAt(card._positions.get('s')),20000);
+  assert.equal(card._positions.get('s').lastRendered,20000);
+  time=5000;stream.progress_ms=90000;
+  card._syncPosition(stream);
+  assert.equal(card._positionAt(card._positions.get('s')),90000);
+});
+
+test('progress clock uses monotonic time and a 250ms UI tick', () => {
+  const {card} = setup();
+  card._setTimers();
+  assert.ok([...timers.values()].some(t => t.duration === 250));
+  card.disconnectedCallback();
 });
