@@ -1,5 +1,13 @@
 # Historique des versions
 
+## 0.1.5 — Alpha (2026-11-03)
+
+- Correction des temps déjà lu et restant qui avançaient ou reculaient par à-coups lors des mises à jour SSE.
+- Horloge monotone locale et actualisation visuelle à 250 ms ; correction douce des petites divergences.
+- Conservation de l'horloge lors des rafraîchissements de la carte, de la pause et de la reprise ; les véritables déplacements dans le film restent détectés.
+- Quatre nouveaux tests JavaScript couvrant les positions irrégulières, les pauses/reprises, les sauts et la cadence.
+
+
 ## 0.1.4 — Alpha (2026-11-03)
 
 - Restauration du cadre extérieur natif `ha-card` : fond, bordure, rayon et ombre pilotés par le thème Home Assistant. Les panneaux intérieurs conservent un fond légèrement contrasté, ou transparent au choix.
