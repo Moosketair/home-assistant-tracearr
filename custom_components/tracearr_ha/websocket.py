@@ -7,7 +7,7 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import callback
 
-from .const import CONF_ALIASES, CONF_AVATARS, DOMAIN
+from .const import CONF_ALIASES, CONF_AVATARS, CONF_NETWORK_LOCATIONS, DOMAIN
 
 
 def _payload(hass) -> dict[str, Any]:
@@ -22,6 +22,7 @@ def _payload(hass) -> dict[str, Any]:
             "name": entry.title,
             "aliases": entry.options.get(CONF_ALIASES, {}),
             "avatars": entry.options.get(CONF_AVATARS, {}),
+            "network_locations": entry.options.get(CONF_NETWORK_LOCATIONS, {}),
             **data,
         })
     return {"entries": entries}

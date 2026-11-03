@@ -21,10 +21,13 @@
   "options": {
     "step": {
       "init": {
-        "title": "Alias des utilisateurs",
+        "title": "Personnalisation de Tracearr HA",
         "menu_options": {
           "user_alias": "Modifier un compte",
-          "raw_maps": "Éditeur JSON avancé"
+          "raw_maps": "Éditeur JSON avancé",
+          "network_device": "Classer un appareil détecté",
+          "network_manual": "Ajouter un appareil manuellement",
+          "network_json": "Règles LAN/WAN (JSON)"
         }
       },
       "user_alias": {
@@ -48,10 +51,38 @@
           "aliases": "Alias (JSON)",
           "avatars": "Avatars (JSON)"
         }
+      },
+      "network_device": {
+        "title": "Choisir un appareil ou lecteur",
+        "data": {
+          "device": "Appareil détecté"
+        }
+      },
+      "network_manual": {
+        "title": "Saisie manuelle",
+        "description": "Pour un appareil actuellement inactif. Saisissez exactement le nom rapporté par Tracearr.",
+        "data": {
+          "match_type": "Type de correspondance",
+          "name": "Nom exact"
+        }
+      },
+      "network_location": {
+        "title": "Réseau de {device}",
+        "data": {
+          "location": "Localisation"
+        }
+      },
+      "network_json": {
+        "title": "Règles de localisation avancées",
+        "description": "Exemple : {\"device:Apple TV\":\"local\", \"player:Plex Web\":\"remote\"}",
+        "data": {
+          "network_locations": "Appareils locaux et distants (JSON)"
+        }
       }
     },
     "error": {
-      "invalid_json": "Saisissez un objet JSON valide"
+      "invalid_json": "Saisissez un objet JSON valide",
+      "invalid_device": "Nom d’appareil invalide"
     },
     "abort": {
       "no_users": "Aucun utilisateur trouvé. Utilisez l'éditeur JSON avancé."

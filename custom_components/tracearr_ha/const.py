@@ -6,6 +6,7 @@ CONF_URL = "url"
 CONF_TOKEN = "token"
 CONF_ALIASES = "aliases"
 CONF_AVATARS = "avatars"
+CONF_NETWORK_LOCATIONS = "network_locations"
 EVENT_SIGNAL = f"{DOMAIN}_update"
 DEFAULT_TIMEOUT = 15
 FRONTEND_URL = f"/tracearr_ha/tracearr-card.js"

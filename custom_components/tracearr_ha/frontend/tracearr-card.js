@@ -1,4 +1,4 @@
-/* Tracearr HA Lovelace cards 0.1.8 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.9 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;
@@ -17,7 +17,7 @@
     header_show_direct: false, header_show_paused: false,
     header_show_video: false, header_show_audio: false, header_show_both: false,
     header_show_transcodes_total: false, header_show_server_counts: false,
-    header_entity_badges: [],
+    header_entity_badges: [], header_badge_order: "streams,bandwidth,direct,paused,video,audio,both,transcodes_total,server_counts",
     header_positive_only: false, header_blink_positive: false,
     header_blink_seconds: 2, header_show_names: true,
     header_zero_color_mode: "normal", header_zero_custom_color: "#576574",
@@ -31,6 +31,7 @@
     series_show_year: true,
     series_episode_style: "short", series_field_order: "series,season,episode_number,episode,year",
     bitrate_scope: "both", network_locations: "",
+    footer_field_order: "health,server,device,quality,bitrate,codecs",
     // Header metric pills may have a separate palette from stream badges.
     header_badge_color_mode: "inherit", header_badge_custom_color: "#00BCD4",
     aliases: "", avatars: "",
@@ -73,6 +74,17 @@
   const MEDIA_LABELS = Object.freeze({
     title: "Titre du film", series: "Titre de la série", season: "Saison",
     episode_number: "Numéro d’épisode", episode: "Nom de l’épisode", year: "Année",
+  });
+  const FOOTER_FIELDS = Object.freeze(["health", "server", "device", "quality", "bitrate", "codecs"]);
+  const FOOTER_LABELS = Object.freeze({
+    health:"État du serveur",server:"Nom du serveur",device:"Appareil / lecteur",
+    quality:"Résolution",bitrate:"Débit du flux",codecs:"Codecs",
+  });
+  const HEADER_FIELDS = Object.freeze(["streams", "bandwidth", "direct", "paused", "video", "audio", "both", "transcodes_total", "server_counts"]);
+  const HEADER_LABELS = Object.freeze({
+    streams:"Nombre de flux",bandwidth:"Débit total",direct:"Lectures directes",
+    paused:"Lectures en pause",video:"Transcode vidéo seul",audio:"Transcode audio seul",
+    both:"Transcode vidéo + audio",transcodes_total:"Total des transcodages",server_counts:"Flux par serveur",
   });
   function normalizedOrder(order, allowed) {
     const values = String(order || "").split(",").map(v => v.trim());
@@ -239,6 +251,7 @@
     if (!("series_show_episode_number" in config) && "series_show_season_episode" in config)
       result.series_show_episode_number = !!config.series_show_season_episode;
     result.movie_field_order = normalizedOrder(result.movie_field_order, MOVIE_FIELDS).join(",");
+    result.footer_field_order = normalizedOrder(result.footer_field_order, FOOTER_FIELDS).join(",");
     // Place the newly separated episode number after season in old saved orders.
     const oldOrder = String(result.series_field_order || "").split(",").map(x => x.trim());
     if (!oldOrder.includes("episode_number")) {
@@ -252,7 +265,7 @@
     result.header_blink_seconds = clamp(result.header_blink_seconds, .5, 20, 2);
     result.header_entity_badges = Array.isArray(result.header_entity_badges) ? result.header_entity_badges.slice(0, 20)
       .filter(row => row && typeof row === "object" && typeof row.entity === "string")
-      .map(row => ({...row, entity:row.entity, label:String(row.label || ""),
+      .map((row,i) => ({...row, id: String(row.id || `legacy-${i}`), entity:row.entity, label:String(row.label || ""),
         show_name: typeof row.show_name === "boolean" ? row.show_name : undefined,
         show_icon: !!row.show_icon,
         only_positive: !!row.only_positive, blink_positive: !!row.blink_positive,
@@ -260,6 +273,8 @@
         zero_color_mode: row.zero_color_mode === "custom" ? "custom" : "inherit",
         zero_custom_color: validColor(row.zero_custom_color || "#576574"),
       })) : [];
+    result.header_badge_order = normalizedOrder(result.header_badge_order,
+      [...HEADER_FIELDS, ...result.header_entity_badges.map(row => `entity:${row.id}`)]).join(",");
     return result;
   }
 
@@ -501,12 +516,18 @@
     // Users can explicitly map stable server-account and client-device names.
     _networkScope(stream) {
       const direct = String(stream.network_type || stream.network || "").toLowerCase();
-      const mapping = asMapping(this._config.network_locations);
+      // Global device rules live in the integration options; individual cards
+      // can override them without changing the settings of other dashboards.
+      const mapping = {...asMapping(this._entryData()?.network_locations),
+        ...asMapping(this._config.network_locations)};
       const candidates = [
+        stream.device && `${stream.server_id}:device:${stream.device}`,
+        stream.device && `device:${stream.device}`,
+        stream.player && `${stream.server_id}:player:${stream.player}`,
+        stream.player && `player:${stream.player}`,
         `${stream.server_id}:${stream.username}`, `${stream.server_type}:${stream.username}`,
-        `${stream.server_name}:${stream.username}`, `device:${stream.device}`,
-        `player:${stream.player}`, stream.username,
-      ];
+        `${stream.server_name}:${stream.username}`, stream.username,
+      ].filter(Boolean);
       const location = candidates.map(key => mapping[key]).find(Boolean) || direct;
       const value = String(location).trim().toLowerCase();
       if (["local", "lan", "interne"].includes(value)) return "local";
@@ -537,10 +558,10 @@
       const c = this._config;
       if (!c.show_header) return "";
       const summary = this._streamSummary(streams);
-      const metrics = [];
+      const metrics = new Map();
       // Each numeric metric can be hidden at zero, blink while positive, and
       // use a distinct zero-state color. Custom HA badges may override each.
-      const add = (enabled, name, display, value, colorType=null, custom=null) => {
+      const add = (key, enabled, name, display, value, colorType=null, custom=null) => {
         if (!enabled) return;
         const count = Number(value);
         const positive = Number.isFinite(count) && count > 0;
@@ -556,21 +577,22 @@
         const iconMarkup = custom?.show_icon && /^(mdi|hass):[a-z0-9-]+$/.test(safeIcon) ?
           `<ha-icon icon="${E(safeIcon)}" aria-hidden="true"></ha-icon>` : "";
         const output = `${showName && name ? `${E(name)} : ` : ""}${E(display)}`;
-        metrics.push(`<span class="metric${blinking ? " blink-positive" : ""}" style="--pill-bg:${palette.bg};--pill-text:${palette.text};--badge-blink:${duration}s" title="${E(name || display)}">${iconMarkup}${output}</span>`);
+        const markup = `<span class="metric${blinking ? " blink-positive" : ""}" style="--pill-bg:${palette.bg};--pill-text:${palette.text};--badge-blink:${duration}s" title="${E(name || display)}">${iconMarkup}${output}</span>`;
+        metrics.set(key, [...(metrics.get(key) || []), markup]);
       };
       // Preserve the existing stream-count format "2 flux" when names are on.
-      add(c.header_show_streams, "", c.header_show_names ? `${summary.total} flux` : String(summary.total), summary.total);
+      add("streams", c.header_show_streams, "", c.header_show_names ? `${summary.total} flux` : String(summary.total), summary.total);
       const bandwidthTitle = c.bitrate_scope === "local" ? "Débit local" :
         c.bitrate_scope === "remote" ? "Débit distant" : "Débit";
-      add(c.header_show_bandwidth, bandwidthTitle, `${(summary.bandwidth/1000).toFixed(1)} Mb/s`, summary.bandwidth);
-      add(c.header_show_direct, "Direct", summary.direct, summary.direct);
-      add(c.header_show_paused, "Pause", summary.paused, summary.paused);
-      add(c.header_show_video, "Vidéo", summary.video, summary.video);
-      add(c.header_show_audio, "Audio", summary.audio, summary.audio);
-      add(c.header_show_both, "Vidéo + audio", summary.both, summary.both);
-      add(c.header_show_transcodes_total, "Transcodes", summary.transcodes, summary.transcodes);
+      add("bandwidth", c.header_show_bandwidth, bandwidthTitle, `${(summary.bandwidth/1000).toFixed(1)} Mb/s`, summary.bandwidth);
+      add("direct", c.header_show_direct, "Direct", summary.direct, summary.direct);
+      add("paused", c.header_show_paused, "Pause", summary.paused, summary.paused);
+      add("video", c.header_show_video, "Vidéo", summary.video, summary.video);
+      add("audio", c.header_show_audio, "Audio", summary.audio, summary.audio);
+      add("both", c.header_show_both, "Vidéo + audio", summary.both, summary.both);
+      add("transcodes_total", c.header_show_transcodes_total, "Transcodes", summary.transcodes, summary.transcodes);
       if (c.header_show_server_counts) {
-        for (const server of summary.byServer.values()) add(true,server.name,server.count,server.count,server.type);
+        for (const server of summary.byServer.values()) add("server_counts",true,server.name,server.count,server.count,server.type);
       }
       // Custom badges consume the entity's current state, unit and icon.
       for (const row of c.header_entity_badges || []) {
@@ -584,11 +606,14 @@
         const domain = id.split(".")[0];
         const fallback = ({counter:"mdi:counter", sensor:"mdi:gauge", binary_sensor:"mdi:check-circle-outline",
           input_number:"mdi:numeric", number:"mdi:numeric", light:"mdi:lightbulb", switch:"mdi:toggle-switch"})[domain] || "mdi:information-outline";
-        add(true, name, `${value}${units}`, value, null, {...row,icon:state?.attributes?.icon || fallback});
+        add(`entity:${row.id}`, true, name, `${value}${units}`, value, null, {...row,icon:state?.attributes?.icon || fallback});
       }
       const title = c.show_title ? `<h3>${E(c.title || "Lectures en cours")}</h3>` : "";
-      if (!title && !metrics.length) return "";
-      return `<header class="head">${title}${metrics.length ? `<div class="head-metrics">${metrics.join("")}</div>` : ""}</header>`;
+      const order = normalizedOrder(c.header_badge_order,
+        [...HEADER_FIELDS, ...(c.header_entity_badges || []).map(row => `entity:${row.id}`)]);
+      const orderedMetrics = order.flatMap(key => metrics.get(key) || []);
+      if (!title && !orderedMetrics.length) return "";
+      return `<header class="head">${title}${orderedMetrics.length ? `<div class="head-metrics">${orderedMetrics.join("")}</div>` : ""}</header>`;
     }
     // API samples may be slightly older than the local playback time. Keep a
     // monotonic client-side clock for ordinary SSE updates; only snap when the
@@ -658,15 +683,16 @@
       const endLabel = c.show_end_time && clock.state === "playing" && clock.duration > 0 ?
         `<span class="time-end" data-id="${E(s.id)}">Fin estimée : ${E(estimatedEnd(clock,displayPosition,Date.now()))}</span>` : "";
       const paused = s.state === "paused";
-      const meta = [];
-      if (c.show_health && entry?.servers?.find(server => server.server_id === s.server_id)?.status === "down") meta.push(`<span class="chip warn">Serveur hors ligne</span>`);
-      if (c.show_server) meta.push(`<span>${E(s.server_name || s.server_type || "")}</span>`);
-      if (c.show_device && (s.device || s.player)) meta.push(`<span>${E(s.device || s.player)}</span>`);
-      if (c.show_quality && s.resolution) meta.push(`<span class="chip">${E(s.resolution)}</span>`);
+      const metaByKey = {};
+      if (c.show_health && entry?.servers?.find(server => server.server_id === s.server_id)?.status === "down") metaByKey.health = (`<span class="chip warn">Serveur hors ligne</span>`);
+      if (c.show_server) metaByKey.server = `<span>${E(s.server_name || s.server_type || "")}</span>`;
+      if (c.show_device && (s.device || s.player)) metaByKey.device = `<span>${E(s.device || s.player)}</span>`;
+      if (c.show_quality && s.resolution) metaByKey.quality = `<span class="chip">${E(s.resolution)}</span>`;
       // The separate video/audio icons take the place of the old text badge.
       if (c.show_bitrate && this._includeBitrate(s) && s.bitrate != null)
-        meta.push(`<span class="chip">${E((s.bitrate/1000).toFixed(1))} Mb/s</span>`);
-      if (c.show_codecs && (s.stream_video_codec_display || s.stream_audio_codec_display)) meta.push(`<span>${E([s.stream_video_codec_display,s.stream_audio_codec_display].filter(Boolean).join(" / "))}</span>`);
+        metaByKey.bitrate = `<span class="chip">${E((s.bitrate/1000).toFixed(1))} Mb/s</span>`;
+      if (c.show_codecs && (s.stream_video_codec_display || s.stream_audio_codec_display)) metaByKey.codecs = `<span>${E([s.stream_video_codec_display,s.stream_audio_codec_display].filter(Boolean).join(" / "))}</span>`;
+      const meta = normalizedOrder(c.footer_field_order, FOOTER_FIELDS).map(k => metaByKey[k]).filter(Boolean);
       const accent = SERVER_ACCENTS[String(s.server_type || "").toLowerCase()] || "var(--tr-accent)";
       const palette = this._palette(s.server_type);
       const sharedStyle = `--shared-accent:${palette.bg};--pill-bg:${palette.bg};--pill-text:${palette.text}`;
@@ -1033,9 +1059,19 @@
     _number(name,label,min,max) {
       return `<label>${E(label)}<input type="number" min="${min}" max="${max}" step="${Number.isInteger(min) ? 1 : .5}" data-field="${E(name)}" value="${E(this._config[name])}"></label>`;
     }
-    _orderEditor(configKey, fields) {
+    _orderEditor(configKey, fields, labels=MEDIA_LABELS) {
       const order = normalizedOrder(this._config[configKey], fields);
-      return `<div class="order-list">${order.map((field,index) => `<div class="order-row"><span>${E(MEDIA_LABELS[field])}</span><div class="move-controls"><button type="button" data-order="${E(configKey)}" data-index="${index}" data-direction="-1" ${index===0?"disabled":""} aria-label="Monter ${E(MEDIA_LABELS[field])}">↑</button><button type="button" data-order="${E(configKey)}" data-index="${index}" data-direction="1" ${index===order.length-1?"disabled":""} aria-label="Descendre ${E(MEDIA_LABELS[field])}">↓</button></div></div>`).join("")}</div>`;
+      return `<div class="order-list">${order.map((field,index) => {
+        const label = labels[field] || field;
+        return `<div class="order-row"><span>${E(label)}</span><div class="move-controls"><button type="button" data-order="${E(configKey)}" data-index="${index}" data-direction="-1" ${index===0?"disabled":""} aria-label="Monter ${E(label)}">↑</button><button type="button" data-order="${E(configKey)}" data-index="${index}" data-direction="1" ${index===order.length-1?"disabled":""} aria-label="Descendre ${E(label)}">↓</button></div></div>`;
+      }).join("")}</div>`;
+    }
+    _headerOrderEditor() {
+      const custom = this._config.header_entity_badges || [];
+      const options = [...HEADER_FIELDS, ...custom.map(row => `entity:${row.id}`)];
+      const labels = {...HEADER_LABELS};
+      custom.forEach(row => { labels[`entity:${row.id}`] = `Entité : ${row.label || row.entity || "Sans nom"}`; });
+      return this._orderEditor("header_badge_order", options, labels);
     }
     _emit() {
       this.dispatchEvent(new CustomEvent("config-changed",{detail:{config:this._config},bubbles:true,composed:true}));
@@ -1099,7 +1135,9 @@
         ])+
         `<label>Couleur à zéro<input type="color" data-field="header_zero_custom_color" value="${E(validColor(c.header_zero_custom_color))}"></label>`+
         `<small>Pour les entités, vous pouvez aussi choisir ces comportements individuellement. Les animations sont désactivées si le navigateur demande de réduire les mouvements.</small>`+
-        this._entityBadgeEditor();
+        this._entityBadgeEditor()+
+        `<div class="group-label">Ordre des badges (statistiques et entités)</div>`+
+        this._headerOrderEditor();
       const layout=(isIndividual ? this._select("selection","Choix de la lecture",[["recent","Lecture la plus récente"],["stream","Session précise"]])+
         `<label>ID de session<input type="text" data-field="stream_id" value="${E(c.stream_id||"")}"></label>` :
         this._select("mode","Disposition",[["list","Liste verticale"],["grid","Grille adaptative"],["carousel","Carrousel"]])+
@@ -1138,11 +1176,13 @@
         ["show_server","Nom du serveur"],["show_device","Appareil / lecteur"],
         ["show_quality","Résolution"],["show_bitrate","Débit du flux"],
         ["show_codecs","Codecs"],["show_health","État du serveur"],
-      ])+`<small>Les badges de résolution et de débit adoptent la palette globale avec une écriture blanche ou noire automatique.</small>`;
+      ])+`<small>Ordre des informations du bandeau (champs masqués inclus) :</small>`+
+        this._orderEditor("footer_field_order", FOOTER_FIELDS, FOOTER_LABELS)+
+        `<small>Les badges de résolution et de débit adoptent la palette globale avec une écriture blanche ou noire automatique.</small>`;
       const network=this._select("bitrate_scope","Débits à afficher (sur les flux et dans l'en-tête)",[
           ["both","Tous les débits"],["local","Flux locaux uniquement"],["remote","Flux distants uniquement"]])+
-        `<label>Correspondances LAN/WAN (une règle par ligne)<textarea data-field="network_locations" placeholder="plex:alice=remote&#10;device:Apple TV=local">${E(c.network_locations||"")}</textarea></label>`+
-        `<small>L’API publique Tracearr v2 ne transmet ni IP ni indicateur LAN/WAN. Pour filtrer, renseignez des correspondances manuelles : serveur:utilisateur=local/remote, device:Nom=local/remote, player:Nom=local/remote ou utilisateur=local/remote. Les flux sans correspondance restent inconnus et ne sont pas comptés en mode local/distant.</small>`;
+        `<label>Exceptions pour cette carte (facultatif, priorité sur les réglages de l’intégration)<textarea data-field="network_locations" placeholder="plex:alice=remote&#10;device:Apple TV=local">${E(c.network_locations||"")}</textarea></label>`+
+        `<small>Les affectations globales se configurent dans Paramètres → Appareils et services → Tracearr HA → Configurer → Localisation des appareils. Ici, vous pouvez ajouter des exceptions : serveur:utilisateur=local/remote, device:Nom=local/remote, player:Nom=local/remote ou utilisateur=local/remote. Les flux sans correspondance restent inconnus et ne sont pas comptés en mode local/distant.</small>`;
       const empty=this._select("empty_mode","Quand aucun flux n'est actif",[
           ["message","Afficher un message"],["header_only","Afficher uniquement l'en-tête"],["hide","Masquer complètement la carte"]])+
         `<label>Message personnalisé<input type="text" data-field="empty_message" value="${E(c.empty_message??"Aucune lecture en cours")}"></label>`+
@@ -1221,7 +1261,10 @@
         const rows=[...(this._config.header_entity_badges || [])];
         if (rows.length>=20) return;
         this._captureOpenSections();
-        this._config={...this._config,header_entity_badges:[...rows,{entity:"",label:""}]};
+        const id = `badge-${Date.now()}-${rows.length}`;
+        this._config={...this._config,
+          header_entity_badges:[...rows,{id,entity:"",label:""}],
+          header_badge_order: `${this._config.header_badge_order || HEADER_FIELDS.join(",")},entity:${id}`};
         this.render(); this._emit();
       });
       this.shadowRoot.querySelectorAll("button[data-badge-remove]").forEach(btn => {
@@ -1234,7 +1277,10 @@
       });
       this.shadowRoot.querySelectorAll("button[data-order]").forEach(btn => btn.addEventListener("click", () => {
         const key=btn.dataset.order;
-        const allowed=key==="movie_field_order" ? MOVIE_FIELDS : SERIES_FIELDS;
+        const allowed= key==="movie_field_order" ? MOVIE_FIELDS :
+          key==="series_field_order" ? SERIES_FIELDS :
+          key==="footer_field_order" ? FOOTER_FIELDS :
+          [...HEADER_FIELDS, ...(this._config.header_entity_badges || []).map(row => `entity:${row.id}`)];
         const order=normalizedOrder(this._config[key],allowed);
         const index=Number(btn.dataset.index), next=index+Number(btn.dataset.direction);
         if (index<0 || index>=order.length || next<0 || next>=order.length) return;

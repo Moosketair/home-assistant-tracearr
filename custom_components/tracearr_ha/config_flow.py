@@ -9,7 +9,7 @@ from homeassistant import config_entries
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import TracearrAuthError, TracearrClient, TracearrError
-from .const import CONF_ALIASES, CONF_AVATARS, CONF_TOKEN, CONF_URL, DOMAIN
+from .const import CONF_ALIASES, CONF_AVATARS, CONF_NETWORK_LOCATIONS, CONF_TOKEN, CONF_URL, DOMAIN
 
 
 def clean_url(value: str) -> str:
@@ -54,9 +54,10 @@ class TracearrOptionsFlow(config_entries.OptionsFlow):
     def __init__(self):
         self._accounts = None
         self._chosen_account = None
+        self._chosen_device = None
 
     async def async_step_init(self, user_input=None):
-        return self.async_show_menu(step_id="init", menu_options=["user_alias", "raw_maps"])
+        return self.async_show_menu(step_id="init", menu_options=["user_alias", "network_device", "network_manual", "network_json", "raw_maps"])
 
     async def _load_accounts(self) -> dict[str, str]:
         if self._accounts is not None:
@@ -106,11 +107,106 @@ class TracearrOptionsFlow(config_entries.OptionsFlow):
                 avatars[key] = user_input["avatar"].strip()
             else:
                 avatars.pop(key, None)
-            return self.async_create_entry(title="", data={CONF_ALIASES: aliases, CONF_AVATARS: avatars})
+            return self.async_create_entry(title="", data={**self.config_entry.options, CONF_ALIASES: aliases, CONF_AVATARS: avatars})
         return self.async_show_form(step_id="edit_alias", data_schema=vol.Schema({
             vol.Optional("alias", default=aliases.get(key, "")): str,
             vol.Optional("avatar", default=avatars.get(key, "")): str,
         }), description_placeholders={"account": key})
+
+    async def _load_devices(self) -> dict[str, str]:
+        """Use the observed active devices and previously saved classifications."""
+        devices = {}
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        if coordinator:
+            for stream in coordinator.streams.values():
+                server = stream.get("server_name") or stream.get("server_type") or "Serveur"
+                server_id = stream.get("server_id")
+                device = str(stream.get("device") or "").strip()
+                player = str(stream.get("player") or "").strip()
+                if device:
+                    key = f"{server_id}:device:{device}" if server_id else f"device:{device}"
+                    devices[key] = f"{server} · {device} (appareil)"
+                if player:
+                    key = f"{server_id}:player:{player}" if server_id else f"player:{player}"
+                    devices[key] = f"{server} · {player} (lecteur)"
+        for key in self.config_entry.options.get(CONF_NETWORK_LOCATIONS, {}):
+            devices.setdefault(key, f"{key} (enregistré)")
+        return dict(sorted(devices.items(), key=lambda item:item[1].casefold()))
+
+    async def async_step_network_device(self, user_input=None):
+        """Select a known client using a menu similar to the alias picker."""
+        devices = await self._load_devices()
+        if not devices:
+            return await self.async_step_network_manual()
+        if user_input is not None:
+            self._chosen_device = user_input["device"]
+            return await self.async_step_network_location()
+        return self.async_show_form(step_id="network_device", data_schema=vol.Schema({
+            vol.Required("device"): vol.In(devices),
+        }))
+
+    async def async_step_network_manual(self, user_input=None):
+        """Allow classification even when the media client is not playing."""
+        errors = {}
+        if user_input is not None:
+            name = str(user_input["name"]).strip()
+            if not name or len(name) > 120:
+                errors["base"] = "invalid_device"
+            else:
+                self._chosen_device = f"{user_input['match_type']}:{name}"
+                return await self.async_step_network_location()
+        return self.async_show_form(step_id="network_manual", data_schema=vol.Schema({
+            vol.Required("match_type", default="device"): vol.In({
+                "device": "Nom de l’appareil (device)", "player": "Nom du lecteur (player)",
+            }),
+            vol.Required("name"): str,
+        }), errors=errors)
+
+    async def async_step_network_location(self, user_input=None):
+        """Set the selected player as LAN, WAN, or unknown (remove override)."""
+        key = self._chosen_device
+        if not key:
+            return await self.async_step_network_device()
+        mapping = dict(self.config_entry.options.get(CONF_NETWORK_LOCATIONS, {}))
+        if user_input is not None:
+            location = user_input["location"]
+            if location == "unknown":
+                mapping.pop(key, None)
+            else:
+                mapping[key] = location
+            return self.async_create_entry(title="", data={
+                **self.config_entry.options, CONF_NETWORK_LOCATIONS:mapping,
+            })
+        return self.async_show_form(step_id="network_location", data_schema=vol.Schema({
+            vol.Required("location", default=mapping.get(key, "unknown")): vol.In({
+                "unknown": "Non classé / supprimer la règle",
+                "local": "Local (LAN)", "remote": "Distant (WAN)",
+            }),
+        }), description_placeholders={"device":key})
+
+    async def async_step_network_json(self, user_input=None):
+        """Expert bulk editor for inactive devices; refuse unexpected values."""
+        errors = {}
+        if user_input is not None:
+            try:
+                data = json.loads(user_input[CONF_NETWORK_LOCATIONS])
+                if not isinstance(data,dict) or any(
+                    not isinstance(key,str) or not isinstance(value,str) or
+                    value not in ("local", "remote") or not key.strip()
+                    for key,value in data.items()
+                ):
+                    raise ValueError("Invalid network mapping")
+            except (ValueError, TypeError):
+                errors["base"] = "invalid_json"
+            else:
+                return self.async_create_entry(title="", data={
+                    **self.config_entry.options, CONF_NETWORK_LOCATIONS:data,
+                })
+        return self.async_show_form(step_id="network_json", data_schema=vol.Schema({
+            vol.Required(CONF_NETWORK_LOCATIONS, default=json.dumps(
+                self.config_entry.options.get(CONF_NETWORK_LOCATIONS, {}), ensure_ascii=False,
+            )): str,
+        }), errors=errors)
 
     async def async_step_raw_maps(self, user_input=None):
         errors = {}
@@ -125,7 +221,7 @@ class TracearrOptionsFlow(config_entries.OptionsFlow):
             except (ValueError, TypeError):
                 errors["base"] = "invalid_json"
             else:
-                return self.async_create_entry(title="", data={CONF_ALIASES: aliases, CONF_AVATARS: avatars})
+                return self.async_create_entry(title="", data={**self.config_entry.options, CONF_ALIASES: aliases, CONF_AVATARS: avatars})
         return self.async_show_form(step_id="raw_maps", data_schema=vol.Schema({
             vol.Required(CONF_ALIASES, default=json.dumps(self.config_entry.options.get(CONF_ALIASES, {}), ensure_ascii=False)): str,
             vol.Required(CONF_AVATARS, default=json.dumps(self.config_entry.options.get(CONF_AVATARS, {}), ensure_ascii=False)): str,

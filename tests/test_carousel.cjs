@@ -807,3 +807,65 @@ test('card editor exposes end time and advanced entity badge options', () => {
     'blink_seconds','zero_color_mode','zero_custom_color'])
     assert.match(html,new RegExp(`data-badge-setting="${key}"`));
 });
+
+// 0.1.9: global LAN/WAN device mapping and reorderable header/footer fields.
+test('device location defaults to integration settings with card-level overrides', () => {
+  const {card}=setup();
+  card._payload={entries:[{id:'integration-1',network_locations:{'server-1:device:Shield':'remote','device:Apple TV':'local','player:Plex Web':'remote'},streams:[]}]};
+  const shield={server_id:'server-1', server_type:'plex',username:'alice',device:'Shield',bitrate:12000};
+  const apple={server_id:'server-1', server_type:'plex',username:'alice',device:'Apple TV',bitrate:4000};
+  assert.equal(card._networkScope(shield),'remote');
+  assert.equal(card._networkScope(apple),'local');
+  card._config.bitrate_scope='remote';
+  assert.equal(card._includeBitrate(shield),true);
+  assert.equal(card._includeBitrate(apple),false);
+  card._config.network_locations='server-1:device:Shield=local';
+  assert.equal(card._networkScope(shield),'local');
+  // A card override does not mutate the global integration settings.
+  assert.equal(card._payload.entries[0].network_locations['server-1:device:Shield'],'remote');
+  card._config.network_locations='';
+  assert.equal(card._networkScope(shield),'remote');
+});
+
+test('header order applies to metrics, HA badges, and maintains server counts as a group',()=>{
+  const {card}=setup();
+  card.setConfig({header_show_streams:true,header_show_bandwidth:true,header_show_video:true,header_show_server_counts:true,
+    header_entity_badges:[{entity:'counter.seerr',label:'Demandes'}],
+    header_badge_order:'entity:legacy-0,server_counts,video,streams,bandwidth'});
+  card._hass={states:{'counter.seerr':{state:'5',attributes:{friendly_name:'Demandes'}}}};
+  const streams=[
+    {server_id:'p',server_name:'Plex',server_type:'plex',state:'playing',bitrate:2000,video_decision:'transcode',audio_decision:'copy'},
+    {server_id:'j',server_name:'Jellyfin',server_type:'jellyfin',state:'playing',bitrate:1500,video_decision:'directplay',audio_decision:'directplay'},
+  ];
+  const html=card._header(streams);
+  const pos=fragment=>html.indexOf(fragment);
+  assert.ok(pos('Demandes : 5')<pos('Plex : 1'));
+  assert.ok(pos('Plex : 1')<pos('Jellyfin : 1'));
+  assert.ok(pos('Jellyfin : 1')<pos('Vidéo : 1'));
+  assert.ok(pos('Vidéo : 1')<pos('2 flux'));
+  assert.ok(pos('2 flux')<pos('Débit : 3.5 Mb/s'));
+});
+
+test('footer order controls visible server, device and quality fields',()=>{
+  const {card}=setup();
+  card._config={...card._config,show_poster:false,show_avatar:false,show_quality:true,
+    show_server:true,show_device:true,show_bitrate:true,footer_field_order:'quality,bitrate,device,server,codecs,health'};
+  const item={id:'a',media_title:'Film',media_type:'movie',username:'x',server_id:'p',server_name:'Plex',server_type:'plex',
+    device:'Apple TV',resolution:'4K',bitrate:5000,state:'playing',progress_ms:0,duration_ms:100000};
+  const html=card._streamCard(null,item);
+  assert.ok(html.indexOf('>4K</span>')<html.indexOf('5.0 Mb/s'));
+  assert.ok(html.indexOf('5.0 Mb/s')<html.indexOf('Apple TV'));
+  // The server appears both as CSS token and visually: compare footer markup only.
+  assert.ok(html.indexOf('Apple TV')<html.indexOf('>Plex</span>'));
+});
+
+test('editor exposes unified move buttons for header metrics, HA badges and footer fields',()=>{
+  const Editor=classes.get('tracearr-card-editor');
+  const editor=new Editor();
+  editor.setConfig({type:'custom:tracearr-streams-card',header_entity_badges:[{entity:'counter.seerr',label:'Demandes'}]});
+  const html=editor.shadowRoot.innerHTML;
+  assert.match(html,/data-order="header_badge_order"/);
+  assert.match(html,/data-order="footer_field_order"/);
+  assert.match(html,/Entité : Demandes/);
+  assert.match(html,/Débit du flux/);
+});

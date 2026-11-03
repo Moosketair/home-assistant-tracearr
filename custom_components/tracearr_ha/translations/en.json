@@ -21,10 +21,13 @@
   "options": {
     "step": {
       "init": {
-        "title": "User aliases",
+        "title": "Tracearr HA settings",
         "menu_options": {
           "user_alias": "Edit an account",
-          "raw_maps": "Advanced JSON editor"
+          "raw_maps": "Advanced JSON editor",
+          "network_device": "Classify detected device",
+          "network_manual": "Add device manually",
+          "network_json": "LAN/WAN rules (JSON)"
         }
       },
       "user_alias": {
@@ -48,10 +51,38 @@
           "aliases": "Aliases (JSON)",
           "avatars": "Custom avatars (JSON)"
         }
+      },
+      "network_device": {
+        "title": "Select device or player",
+        "data": {
+          "device": "Detected device"
+        }
+      },
+      "network_manual": {
+        "title": "Manual device",
+        "description": "For inactive clients. Enter the exact device or player name reported by Tracearr.",
+        "data": {
+          "match_type": "Match type",
+          "name": "Exact name"
+        }
+      },
+      "network_location": {
+        "title": "Network for {device}",
+        "data": {
+          "location": "Location"
+        }
+      },
+      "network_json": {
+        "title": "Advanced network rules",
+        "description": "Example: {\"device:Apple TV\":\"local\", \"player:Plex Web\":\"remote\"}",
+        "data": {
+          "network_locations": "Device locations (JSON)"
+        }
       }
     },
     "error": {
-      "invalid_json": "Enter a valid JSON object"
+      "invalid_json": "Enter a valid JSON object",
+      "invalid_device": "Invalid device name"
     },
     "abort": {
       "no_users": "No user accounts were found. Use the advanced JSON editor."
