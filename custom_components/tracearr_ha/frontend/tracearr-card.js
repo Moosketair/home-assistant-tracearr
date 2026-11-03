@@ -913,6 +913,10 @@
       border:1px solid var(--divider-color,#7775); border-radius:6px; color:var(--primary-text-color);
       cursor:pointer; padding:5px 8px; font:inherit; }
     .move-controls button:disabled { opacity:.3; cursor:default; }
+    .badge-row { display:grid; gap:8px; border:1px solid var(--divider-color,#7775); padding:9px; border-radius:8px; margin:6px 0; }
+    .badge-row ha-entity-picker { display:block; width:100%; }
+    .badge-row button,.add-badge { border:1px solid var(--divider-color,#7775); border-radius:7px; padding:8px; color:var(--primary-text-color);
+      background:var(--secondary-background-color,transparent); cursor:pointer; text-align:left; }
   `;
   class TracearrCardEditor extends HTMLElement {
     constructor() {
@@ -927,6 +931,7 @@
     }
     set hass(hass) {
       this._hass=hass;
+      this.shadowRoot?.querySelectorAll("ha-entity-picker[data-badge-index]").forEach(p => {p.hass=hass;});
       if (hass?.connection && this._connection !== hass.connection) {
         this._connection=hass.connection;
         hass.connection.sendMessagePromise({type:"tracearr_ha/get"}).then(r=>{
@@ -956,6 +961,21 @@
       const order = normalizedOrder(this._config[configKey], fields);
       return `<div class="order-list">${order.map((field,index) => `<div class="order-row"><span>${E(MEDIA_LABELS[field])}</span><div class="move-controls"><button type="button" data-order="${E(configKey)}" data-index="${index}" data-direction="-1" ${index===0?"disabled":""} aria-label="Monter ${E(MEDIA_LABELS[field])}">↑</button><button type="button" data-order="${E(configKey)}" data-index="${index}" data-direction="1" ${index===order.length-1?"disabled":""} aria-label="Descendre ${E(MEDIA_LABELS[field])}">↓</button></div></div>`).join("")}</div>`;
     }
+    _emit() {
+      this.dispatchEvent(new CustomEvent("config-changed", {detail:{config:this._config}, bubbles:true, composed:true}));
+    }
+    _entityBadgeEditor() {
+      const rows=this._config.header_entity_badges || [];
+      return '<div class="group-label">Badges d’entités Home Assistant</div>' +
+        '<small>Ajoutez un compteur, un capteur ou toute autre entité. Les valeurs se mettent à jour automatiquement.</small>' +
+        rows.map((row,i) => '<div class="badge-row">' +
+          '<label>Entité<ha-entity-picker data-badge-index="' + i + '"></ha-entity-picker></label>' +
+          '<label>Nom facultatif<input type="text" data-badge-label="' + i +
+            '" placeholder="Nom de l’entité" value="' + E(row.label || "") + '"></label>' +
+          '<button type="button" data-badge-remove="' + i + '">Supprimer</button></div>').join("") +
+        '<button type="button" class="add-badge" data-badge-add ' +
+          (rows.length >= 20 ? "disabled" : "") + '>+ Ajouter un badge</button>';
+    }
     render() {
       const c=this._config;
       const entries=this._payload.entries||[];
@@ -982,12 +1002,13 @@
         `<div class="group-label">Couleur des badges d'en-tête</div>`+
         this._select("header_badge_color_mode","Palette des statistiques",[["inherit","Utiliser la palette globale"],["theme","Thème Home Assistant"],["server","Couleur du serveur (comptages par serveur)"],["custom","Couleur personnalisée"]])+
         `<label>Couleur personnalisée de l'en-tête<input type="color" data-field="header_badge_custom_color" value="${E(validColor(c.header_badge_custom_color))}"></label>`+
-        `<small>En mode serveur, les statistiques globales utilisent la couleur du thème ; chaque compteur Plex/Jellyfin/Emby conserve sa couleur propre.</small>`;
+        `<small>En mode serveur, les statistiques globales utilisent la couleur du thème ; chaque compteur Plex/Jellyfin/Emby conserve sa couleur propre.</small>`+
+        this._entityBadgeEditor();
       const layout=(isIndividual ? this._select("selection","Choix de la lecture",[["recent","Lecture la plus récente"],["stream","Session précise"]])+
         `<label>ID de session<input type="text" data-field="stream_id" value="${E(c.stream_id||"")}"></label>` :
         this._select("mode","Disposition",[["list","Liste verticale"],["grid","Grille adaptative"],["carousel","Carrousel"]])+
         this._select("columns","Colonnes en mode grille",[["auto","Automatique"],["1","1"],["2","2"],["3","3"],["4","4"]]))+
-        this._checks([["compact","Mode compact"],["hide_empty","Masquer si vide"],["show_paused","Inclure les lectures en pause"]])+
+        this._checks([["compact","Mode compact"],["show_paused","Inclure les lectures en pause"]])+
         `<div class="columns">${this._number("grid_columns","Largeur Sections (3–12)",3,12)}${this._number("grid_rows","Hauteur initiale Sections (0=4)",0,30)}</div>`+
         this._number("height","Hauteur CSS hors Sections (0=auto)",0,2000)+
         `<small>Dans un dashboard Sections, la poignée native permet de redimensionner la carte en hauteur et en largeur.</small>`;
@@ -1010,7 +1031,7 @@
         this._orderEditor("movie_field_order",MOVIE_FIELDS)+
         `<div class="group-label">Séries et épisodes</div>`+
         this._checks([["series_show_title","Titre de la série"],["series_show_episode_title","Nom de l'épisode"],
-          ["series_show_season_episode","Saison / numéro d'épisode"],["series_show_year","Année de la série"]])+
+          ["series_show_season","Afficher la saison"],["series_show_episode_number","Afficher le numéro d'épisode"],["series_show_year","Année de la série"]])+
         this._select("series_episode_style","Format de saison et épisode",[["short","S01E02"],["long","Saison 1 · Épisode 2"]])+
         `<small>Ordre d'affichage de toutes les informations :</small>`+
         this._orderEditor("series_field_order",SERIES_FIELDS)+
@@ -1020,6 +1041,14 @@
         ["show_quality","Résolution"],["show_bitrate","Débit du flux"],
         ["show_codecs","Codecs"],["show_health","État du serveur"],
       ])+`<small>Les badges de résolution et de débit adoptent la palette globale avec une écriture blanche ou noire automatique.</small>`;
+      const network=this._select("bitrate_scope","Débits à afficher (sur les flux et dans l'en-tête)",[
+          ["both","Tous les débits"],["local","Flux locaux uniquement"],["remote","Flux distants uniquement"]])+
+        '<label>Correspondances LAN/WAN (une règle par ligne)<textarea data-field="network_locations" placeholder="plex:alice=remote&#10;device:Apple TV=local">' + E(c.network_locations || "") + '</textarea></label>' +
+        '<small>L’API Tracearr v2 ne fournit ni IP ni indication LAN/WAN. Saisissez une règle serveur:utilisateur=local/remote, device:Nom=local/remote, player:Nom=local/remote ou utilisateur=local/remote. Les flux non classés sont exclus du débit en mode local/distant.</small>';
+      const empty=this._select("empty_mode","Quand aucun flux n'est actif",[
+          ["message","Afficher un message"],["header_only","Afficher uniquement l'en-tête"],["hide","Masquer complètement la carte"]])+
+        '<label>Message personnalisé<input type="text" data-field="empty_message" value="' + E(c.empty_message ?? "Aucune lecture en cours") + '"></label>' +
+        '<small>En cas de déconnexion, « Tracearr indisponible » est prioritaire.</small>';
       const colors=this._select("accent_color_mode","Palette commune (progression, badges, statistiques)",[
           ["theme","Couleur du thème Home Assistant"],["server","Selon Plex / Jellyfin / Emby"],["custom","Couleur personnalisée"],
         ])+
@@ -1037,6 +1066,8 @@
         this._group("content","Contenu de la lecture",content),
         this._group("media","Titres, saisons et années",media),
         this._group("footer","Bandeau d'informations du flux",footer),
+        this._group("network","Débit et localisation des flux",network),
+        this._group("empty","Comportement sans lecture",empty),
         this._group("colors","Apparence, couleurs et typographie",colors),
         this._group("source","Filtres et tri",source),
         this._group("users","Noms et avatars personnalisés",usersSection),
@@ -1050,6 +1081,44 @@
           this.dispatchEvent(new CustomEvent("config-changed",{detail:{config:this._config},bubbles:true,composed:true}));
         };
         el.addEventListener("change",fn);
+      });
+      this.shadowRoot.querySelectorAll("ha-entity-picker[data-badge-index]").forEach(picker => {
+        const index=Number(picker.dataset.badgeIndex);
+        picker.hass=this._hass;
+        picker.value=c.header_entity_badges?.[index]?.entity || "";
+        picker.addEventListener("value-changed", event => {
+          event.stopPropagation();
+          const rows=[...(this._config.header_entity_badges || [])];
+          if (!rows[index]) return;
+          rows[index]={...rows[index],entity:String(event.detail?.value || "")};
+          this._config={...this._config,header_entity_badges:rows};
+          this._emit();
+        });
+      });
+      this.shadowRoot.querySelectorAll("input[data-badge-label]").forEach(input => {
+        input.addEventListener("change", () => {
+          const rows=[...(this._config.header_entity_badges || [])];
+          const index=Number(input.dataset.badgeLabel);
+          if (!rows[index]) return;
+          rows[index]={...rows[index],label:input.value};
+          this._config={...this._config,header_entity_badges:rows};
+          this._emit();
+        });
+      });
+      this.shadowRoot.querySelector("button[data-badge-add]")?.addEventListener("click", () => {
+        const rows=[...(this._config.header_entity_badges || [])];
+        if (rows.length>=20) return;
+        this._captureOpenSections();
+        this._config={...this._config,header_entity_badges:[...rows,{entity:"",label:""}]};
+        this.render();this._emit();
+      });
+      this.shadowRoot.querySelectorAll("button[data-badge-remove]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const index=Number(btn.dataset.badgeRemove);
+          this._captureOpenSections();
+          this._config={...this._config,header_entity_badges:this._config.header_entity_badges.filter((_,i)=>i!==index)};
+          this.render();this._emit();
+        });
       });
       this.shadowRoot.querySelectorAll("button[data-order]").forEach(btn => btn.addEventListener("click", () => {
         const key=btn.dataset.order;
