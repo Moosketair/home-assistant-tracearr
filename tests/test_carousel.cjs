@@ -908,6 +908,10 @@ test('individual card offers active session selection and durable account/server
   assert.equal(individual._streams(entry)[0].id,'session-b');
   individual.setConfig({type:'custom:tracearr-stream-card', selection:'stream',stream_id:'session-a'});
   assert.equal(individual._streams(entry)[0].id,'session-a');
+  individual.setConfig({type:'custom:tracearr-stream-card', selection:'account',selected_account:''});
+  assert.equal(individual._streams(entry).length,0,'an unset target must not display unrelated streams');
+  individual.setConfig({type:'custom:tracearr-stream-card', selection:'stream',stream_id:'session-b',filter_user:'alice'});
+  assert.equal(individual._streams(entry)[0].id,'session-b','explicit target ignores stale user filter');
   const Editor=classes.get('tracearr-card-editor');
   const editor=new Editor();
   editor._payload={entries:[entry]};

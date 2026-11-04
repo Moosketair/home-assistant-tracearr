@@ -397,8 +397,11 @@
     _streams(entry) {
       let streams = [...(entry?.streams || [])];
       if (!this._config.show_paused) streams = streams.filter(s => s.state === "playing");
-      if (this._config.filter_server) streams = streams.filter(s => s.server_id === this._config.filter_server || s.server_name === this._config.filter_server);
-      if (this._config.filter_user) {
+      // An explicit individual-card target takes priority over stale generic
+      // filters saved by an older dashboard configuration.
+      const targeted = this._individual && ["stream", "account", "server"].includes(this._config.selection);
+      if (!targeted && this._config.filter_server) streams = streams.filter(s => s.server_id === this._config.filter_server || s.server_name === this._config.filter_server);
+      if (!targeted && this._config.filter_user) {
         const desired = String(this._config.filter_user).toLocaleLowerCase();
         streams = streams.filter(s => [s.username, this._name(entry,s)].some(n => String(n||"").toLocaleLowerCase() === desired));
       }
@@ -409,12 +412,12 @@
       else streams.sort((a,b) => String(b.started_at).localeCompare(String(a.started_at)));
       if (this._individual) {
         const selection=this._config.selection;
-        if (selection === "stream" && this._config.stream_id)
-          streams = streams.filter(s => String(s.id) === String(this._config.stream_id));
-        else if (selection === "account" && this._config.selected_account)
-          streams = streams.filter(s => `${s.server_id}:${s.username}` === this._config.selected_account);
-        else if (selection === "server" && this._config.selected_server)
-          streams = streams.filter(s => s.server_id === this._config.selected_server);
+        if (selection === "stream")
+          streams = streams.filter(s => !!this._config.stream_id && String(s.id) === String(this._config.stream_id));
+        else if (selection === "account")
+          streams = streams.filter(s => !!this._config.selected_account && `${s.server_id}:${s.username}` === this._config.selected_account);
+        else if (selection === "server")
+          streams = streams.filter(s => !!this._config.selected_server && s.server_id === this._config.selected_server);
         return streams.slice(0, 1);
       }
       return streams;
