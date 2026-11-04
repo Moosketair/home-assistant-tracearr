@@ -1,4 +1,4 @@
-/* Tracearr HA Lovelace cards 0.1.9 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.10 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;
@@ -205,8 +205,11 @@
       border-radius:7px; transition:width .3s linear; }
     .times { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:5px 8px;
       font-size:calc(var(--tr-font-size)*.82); font-variant-numeric:tabular-nums; }
-    .time-right { display:flex; justify-content:flex-end; flex-wrap:wrap; align-items:center; gap:4px 12px; }
-    .time-end { white-space:nowrap; opacity:.9; }
+    /* Read elapsed / remaining as one unit; predicted end stays at the right. */
+    .time-left { display:inline-flex; align-items:baseline; gap:4px; white-space:nowrap; }
+    .time-separator { opacity:.8; }
+    .time-end { margin-left:auto; white-space:nowrap; opacity:.9; text-align:right; }
+    @container (max-width:360px) { .time-left { white-space:normal; } }
     .time-paused { color:#ff9900; font-weight:700; }
     /* Footer information wraps freely; the poster remains vertically centered beside it. */
     .meta { display:flex; align-items:center; flex-wrap:wrap; gap:5px;
@@ -684,7 +687,7 @@
       const ratio = clock.duration > 0 ? 100 * Math.min(1, displayPosition / clock.duration) : 0;
       const timePair = playbackSeconds(displayPosition, clock.duration);
       const endLabel = c.show_end_time && clock.state === "playing" && clock.duration > 0 ?
-        `<span class="time-end" data-id="${E(s.id)}">Fin estimée : ${E(estimatedEnd(clock,displayPosition,Date.now()))}</span>` : "";
+        `<span class="time-end" data-id="${E(s.id)}">Fin à ${E(estimatedEnd(clock,displayPosition,Date.now()))}</span>` : "";
       const paused = s.state === "paused";
       const metaByKey = {};
       if (c.show_health && entry?.servers?.find(server => server.server_id === s.server_id)?.status === "down") metaByKey.health = (`<span class="chip warn">Serveur hors ligne</span>`);
@@ -713,7 +716,7 @@
           ${c.show_avatar ? `<div class="user">${avatar ? `<img class="avatar" src="${E(avatar)}" alt="">` : `<span class="avatar fallback-avatar">${E(name.slice(0,1).toUpperCase())}</span>`}<span>${E(name)}</span></div>` : `<div class="user">${E(name)}</div>`}
           ${mediaMarkup}
           ${c.show_progress ? `<div class="progress"><span class="fill" data-id="${E(s.id)}" style="width:${ratio.toFixed(2)}%"></span></div>` : ""}
-          ${c.show_progress || c.show_end_time ? `<div class="times"><span class="time-current" data-id="${E(s.id)}">${formattedSeconds(timePair.elapsed)}</span><div class="time-right">${paused ? `<span class="time-paused">En pause</span>` : c.show_remaining && c.show_progress ? `<span class="time-remaining" data-id="${E(s.id)}">-${formattedSeconds(timePair.remaining)}</span>` : ""}${endLabel}</div></div>` : ""}
+          ${c.show_progress || c.show_end_time ? `<div class="times"><span class="time-left"><span class="time-current" data-id="${E(s.id)}">${formattedSeconds(timePair.elapsed)}</span>${paused ? `<span class="time-separator">/</span><span class="time-paused">En pause</span>` : c.show_remaining && c.show_progress ? `<span class="time-separator">/</span><span class="time-remaining" data-id="${E(s.id)}">-${formattedSeconds(timePair.remaining)}</span>` : ""}</span>${endLabel}</div>` : ""}
           ${meta.length ? `<div class="meta">${meta.join("<span aria-hidden=\"true\">·</span>")}</div>` : ""}
         </div>
       </article>`;
@@ -744,7 +747,7 @@
         const endNode = this.shadowRoot.querySelector(`.time-end[data-id="${selectorId}"]`);
         if (endNode) {
           const end = estimatedEnd(item,item.lastRendered,wallNow);
-          const label = end ? `Fin estimée : ${end}` : "";
+          const label = end ? `Fin à ${end}` : "";
           if (endNode.textContent !== label) endNode.textContent = label;
         }
       });
