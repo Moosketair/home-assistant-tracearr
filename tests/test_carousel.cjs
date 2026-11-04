@@ -313,16 +313,20 @@ test('native ha-card surface, nested stream panel and centered poster survive wr
   assert.match(card.shadowRoot.innerHTML,/flat-streams/);
 });
 
-test('editor keeps global display settings together and uses collapsible header items', () => {
+test('editor keeps layout in general display and renders header counters as simple checkboxes', () => {
   const Editor=classes.get('tracearr-card-editor');
   const editor=new Editor();
   editor.setConfig({type:'custom:tracearr-streams-card'});
   const html=editor.shadowRoot.innerHTML;
-  for (const title of ['Affichage général','Choix des lectures et filtres','Disposition (taille dans Mise en page)',
-    'Navigation et carrousel','En-tête et badges','Titres, saisons et années',
+  for (const title of ['Affichage général','Choix des lectures et filtres','Navigation et carrousel','En-tête et badges','Titres, saisons et années',
     "Bandeau d'informations du flux",'Débit local / distant','Réglages avancés par carte'])
     assert.ok(html.includes(title.replaceAll("'",'&#39;')),title);
-  assert.match(html,/data-subdetail="metric-server_counts"/);
+  assert.doesNotMatch(html,/data-section="layout"|data-subdetail="metric-/);
+  assert.match(html,/data-section="global"[\s\S]*data-field="mode"[\s\S]*data-section="source"/);
+  for (const field of ['streams','bandwidth','direct','paused','video','audio','both','transcodes_total','server_counts']) {
+    assert.match(html,new RegExp(`<input type="checkbox" data-field="header_show_${field}"`));
+  }
+  assert.match(html,/data-subdetail="metrics"/);
   assert.match(html,/data-subdetail="shared-badges"/);
   assert.match(html,/data-field="header_show_server_counts"/);
   assert.match(html,/data-field="accent_color_mode"/);
@@ -934,4 +938,31 @@ test('entity badge options are collapsed by default with nested detail sections'
   assert.match(html,/Seerr/);
   assert.match(html,/data-badge-setting="blink_positive"/);
   assert.match(html,/data-badge-setting="zero_custom_color"/);
+});
+
+
+test('server-wide LAN/WAN default applies to future clients and respects explicit exceptions', () => {
+  const {card}=setup();
+  card._payload={entries:[{id:'entry',network_locations:{
+    'server:plex-id':'remote',
+    'plex-id:device:Shield':'local',
+    'device:Unscoped':'local',
+  },streams:[]}]};
+  card._config={...card._config,entry_id:'entry'};
+  const stream=(device)=>({server_id:'plex-id',server_name:'Plex Maison',server_type:'plex',username:'Alice',device});
+  assert.equal(card._networkScope(stream('Shield')),'local', 'server-scoped device overrides server default');
+  assert.equal(card._networkScope(stream('New player')),'remote', 'new device inherits server rule');
+  assert.equal(card._networkScope(stream('Unscoped')),'remote', 'explicit server rule beats old generic rule');
+  card._config.network_locations='device:Unscoped=local';
+  assert.equal(card._networkScope(stream('Unscoped')),'local', 'card override wins');
+});
+
+test('server-wide rule supports explicit unclassified device exception', () => {
+  const {card}=setup();
+  card._payload={entries:[{id:'entry',network_locations:{
+    'server:plex-id':'local', 'plex-id:device:Guest TV':'unknown',
+  },streams:[]}]};
+  card._config={...card._config,entry_id:'entry'};
+  assert.equal(card._networkScope({server_id:'plex-id',device:'Guest TV',username:'guest',server_type:'plex'}),'unknown');
+  assert.equal(card._networkScope({server_id:'plex-id',device:'Living TV',username:'guest',server_type:'plex'}),'local');
 });

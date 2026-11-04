@@ -83,8 +83,13 @@
         }
       },
       "devices_table": {
-        "title": "Appareils locaux et distants",
-        "description": "Choisissez Local, Distant ou Non classé pour chaque appareil connu. Les valeurs enregistrées sont préremplies. Les appareils sont regroupés par nom de serveur."
+        "title": "Appareils par serveur",
+        "menu_options": {
+          "devices_plex": "Plex",
+          "devices_jellyfin": "Jellyfin",
+          "devices_emby": "Emby",
+          "devices_other": "Autres / sans serveur"
+        }
       },
       "aliases_table": {
         "title": "Noms affichés des utilisateurs",
@@ -98,6 +103,22 @@
           "network_json": "Règles LAN/WAN (JSON)",
           "raw_maps": "Alias et avatars (JSON)"
         }
+      },
+      "devices_plex": {
+        "title": "Plex — Local ou Distant",
+        "description": "Choisissez un seul état par appareil. Le choix « Tous les appareils » applique la règle à tout ce serveur, y compris aux futurs appareils, et réinitialise ses exceptions individuelles. Rouvrez ensuite la page pour personnaliser certains appareils."
+      },
+      "devices_jellyfin": {
+        "title": "Jellyfin — Local ou Distant",
+        "description": "Choisissez un seul état par appareil. Le choix « Tous les appareils » applique la règle à tout ce serveur, y compris aux futurs appareils, et réinitialise ses exceptions individuelles. Rouvrez ensuite la page pour personnaliser certains appareils."
+      },
+      "devices_emby": {
+        "title": "Emby — Local ou Distant",
+        "description": "Choisissez un seul état par appareil. Le choix « Tous les appareils » applique la règle à tout ce serveur, y compris aux futurs appareils, et réinitialise ses exceptions individuelles. Rouvrez ensuite la page pour personnaliser certains appareils."
+      },
+      "devices_other": {
+        "title": "Autres appareils — Local ou Distant",
+        "description": "Choisissez un seul état par appareil. Le choix « Tous les appareils » applique la règle à tout ce serveur, y compris aux futurs appareils, et réinitialise ses exceptions individuelles. Rouvrez ensuite la page pour personnaliser certains appareils."
       }
     },
     "error": {

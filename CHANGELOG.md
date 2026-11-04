@@ -1,3 +1,9 @@
+## 0.1.13 Alpha (2026-11-04)
+
+- Déplacement du choix Liste/Carrousel dans « Affichage général » pour la carte groupée ; suppression de la catégorie autonome « Disposition ».
+- Dans « En-tête et badges → Statistiques Tracearr », retour à de simples cases à cocher pour chaque compteur, sans sous-panneau individuel.
+- Aucune modification des valeurs sauvegardées, des autres sections, des capteurs ou de l’icône existante.
+
 ## 0.1.12 Alpha (2026-11-04)
 
 - Sélection visuelle du flux de la carte individuelle : session active, utilisateur, serveur, ou lecture la plus récente. La sélection utilisateur reste valable pour les prochaines lectures.

@@ -83,8 +83,13 @@
         }
       },
       "devices_table": {
-        "title": "Local and remote devices",
-        "description": "Set local, remote or unclassified for each detected device. Saved values are filled in."
+        "title": "Devices by media server",
+        "menu_options": {
+          "devices_plex": "Plex",
+          "devices_jellyfin": "Jellyfin",
+          "devices_emby": "Emby",
+          "devices_other": "Other / unassigned"
+        }
       },
       "aliases_table": {
         "title": "User display names",
@@ -98,6 +103,22 @@
           "network_json": "LAN/WAN JSON rules",
           "raw_maps": "Aliases and avatars JSON"
         }
+      },
+      "devices_plex": {
+        "title": "Plex — Local or Remote",
+        "description": "Choose one state per device. A server-wide choice also applies to future devices and clears individual overrides for this server. Reopen to customize exceptions."
+      },
+      "devices_jellyfin": {
+        "title": "Jellyfin — Local or Remote",
+        "description": "Choose one state per device. A server-wide choice also applies to future devices and clears individual overrides for this server. Reopen to customize exceptions."
+      },
+      "devices_emby": {
+        "title": "Emby — Local or Remote",
+        "description": "Choose one state per device. A server-wide choice also applies to future devices and clears individual overrides for this server. Reopen to customize exceptions."
+      },
+      "devices_other": {
+        "title": "Other devices — Local or Remote",
+        "description": "Choose one state per device. A server-wide choice also applies to future devices and clears individual overrides for this server. Reopen to customize exceptions."
       }
     },
     "error": {

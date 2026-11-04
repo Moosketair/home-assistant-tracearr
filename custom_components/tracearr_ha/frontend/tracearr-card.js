@@ -1,4 +1,4 @@
-/* Tracearr HA Lovelace cards 0.1.12 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.13 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;
@@ -530,12 +530,17 @@
       const globalMapping = asMapping(this._entryData()?.network_locations);
       const cardMapping = asMapping(this._config.network_locations);
       const candidates = [
-        stream.device && `${stream.server_id}:device:${stream.device}`,
+        stream.device && stream.server_id && `${stream.server_id}:device:${stream.device}`,
+        stream.player && stream.server_id && `${stream.server_id}:player:${stream.player}`,
+        stream.server_id && stream.username && `${stream.server_id}:${stream.username}`,
+        // Server-wide defaults beat generic device rules, but never override
+        // an explicitly server-scoped device or user exception.
+        stream.server_id && `server:${stream.server_id}`,
         stream.device && `device:${stream.device}`,
-        stream.player && `${stream.server_id}:player:${stream.player}`,
         stream.player && `player:${stream.player}`,
-        `${stream.server_id}:${stream.username}`, `${stream.server_type}:${stream.username}`,
-        `${stream.server_name}:${stream.username}`, stream.username,
+        stream.username && `${stream.server_type}:${stream.username}`,
+        stream.username && `${stream.server_name}:${stream.username}`,
+        stream.username,
       ].filter(Boolean);
       // A card exception takes precedence even if the global rule uses a more
       // specific server-scoped key than the card's unscoped device name.
@@ -1145,9 +1150,9 @@
         this._select("filter_user","Filtrer par utilisateur",[["","Tous les utilisateurs"],...users.map(u=>[u,u])])+
         this._select("filter_transcode","Mode de lecture",[["all","Tous"],["direct","Direct"],["video","Vidéo seule"],["audio","Audio seul"],["both","Vidéo et audio"],["unknown","Inconnu"]])+
         this._select("sort","Ordre des flux",[["recent","Plus récent d'abord"],["user","Utilisateur"],["server","Serveur"]]);
-      const headerMetrics=HEADER_FIELDS.map(field=>this._subgroup(`metric-${field}`,
-        `${HEADER_LABELS[field]} · ${c[`header_show_${field}`] ? "Visible" : "Masqué"}`,
-        this._toggle(`header_show_${field}`,`Afficher « ${HEADER_LABELS[field]} »`))).join("");
+      // Keep Tracearr statistics compact: one checkbox per counter, not a nested panel each.
+      const headerMetrics=this._checks(HEADER_FIELDS.map(field=>
+        [`header_show_${field}`, HEADER_LABELS[field]]));
       const headerCommon=this._checks([
         ["header_show_names","Afficher les noms des statistiques"],
         ["header_positive_only","Masquer les badges à zéro"],
@@ -1165,7 +1170,7 @@
         this._subgroup("entities","Badges d'entités Home Assistant",this._entityBadgeEditor())+
         this._subgroup("shared-badges","Style et comportement communs aux badges",headerCommon)+
         this._subgroup("badge-order","Ordre des badges",this._headerOrderEditor());
-      const layout=isIndividual ? "" : this._select("mode","Disposition",[["list","Liste verticale"],["carousel","Carrousel"]]);
+
       const carousel=this._checks([
           ["carousel_autoplay","Défilement automatique"],["carousel_show_arrows","Flèches de navigation"],
           ["carousel_mouse_drag","Glissement à la souris"],["carousel_pause_on_hover","Pause au survol"],
@@ -1197,7 +1202,9 @@
           ["both","Tous les débits"],["local","Flux locaux uniquement"],["remote","Flux distants uniquement"]])+
         `<label>Exceptions pour cette carte (facultatif, priorité sur les réglages de l’intégration)<textarea data-field="network_locations" placeholder="plex:alice=remote&#10;device:Apple TV=local">${E(c.network_locations||"")}</textarea></label>`+
         `<small>Les affectations globales se configurent dans Paramètres → Appareils et services → Tracearr HA → Configurer → Localisation des appareils. Ici, vous pouvez ajouter des exceptions : serveur:utilisateur=local/remote, device:Nom=local/remote, player:Nom=local/remote ou utilisateur=local/remote. Les flux sans correspondance restent inconnus et ne sont pas comptés en mode local/distant.</small>`;
-      const globalDisplay=this._checks([
+      const globalDisplay=(isIndividual ? "" :
+        this._select("mode","Disposition",[["list","Liste verticale"],["carousel","Carrousel"]]))+
+        this._checks([
         ["compact","Mode compact"],["show_paused","Inclure les lectures en pause"],
         ["show_poster","Affiche"],["show_avatar","Avatar"],
         ["show_progress","Progression"],["show_remaining","Temps restant et pause"],
@@ -1216,7 +1223,6 @@
       this.shadowRoot.innerHTML=`<style>${editorStyle}</style><div class="editor">${[
         this._group("global","Affichage général",globalDisplay),
         this._group("source","Choix des lectures et filtres",source),
-        ...(!isIndividual ? [this._group("layout","Disposition (taille dans Mise en page)",layout)] : []),
         ...(!isIndividual ? [this._group("carousel","Navigation et carrousel",carousel)] : []),
         this._group("header","En-tête et badges",header),
         this._group("media","Titres, saisons et années",media),

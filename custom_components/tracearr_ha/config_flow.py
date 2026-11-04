@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers import selector
 
 from .api import TracearrAuthError, TracearrClient, TracearrError
 from .const import CONF_ALIASES, CONF_AVATARS, CONF_NETWORK_LOCATIONS, CONF_TOKEN, CONF_URL, DOMAIN
@@ -57,6 +58,7 @@ class TracearrOptionsFlow(config_entries.OptionsFlow):
         self._chosen_device = None
         self._device_bulk_fields = {}
         self._alias_bulk_fields = {}
+        self._device_groups = None
 
     async def async_step_init(self, user_input=None):
         return self.async_show_menu(step_id="init", menu_options=[
@@ -108,32 +110,179 @@ class TracearrOptionsFlow(config_entries.OptionsFlow):
         })
         return self.async_show_form(step_id="aliases_table", data_schema=schema)
 
-    async def async_step_devices_table(self, user_input=None):
-        """Bulk LAN/WAN choices, grouped by the server labels in each field."""
+    async def _group_detected_devices(self):
+        """Group client rules by their real Tracearr server and media type.
+
+        A saved device stays visible even when inactive. For devices with no
+        server ID, keep an "Autres" category rather than guessing a server.
+        """
+        if self._device_groups is not None:
+            return self._device_groups
         devices = await self._load_devices()
-        locations = dict(self.config_entry.options.get(CONF_NETWORK_LOCATIONS, {}))
-        for key in locations:
-            devices.setdefault(key, f"{key} (enregistré)")
-        if not devices:
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        servers = coordinator.servers if coordinator else {}
+        groups = {}
+        for server_id, server in servers.items():
+            kind = str(server.get("server_type") or "other").lower()
+            kind = kind if kind in ("plex", "jellyfin", "emby") else "other"
+            groups[server_id] = {
+                "server_id": server_id,
+                "name": str(server.get("server_name") or kind.upper()),
+                "type": kind,
+                "devices": {},
+            }
+        for key, label in devices.items():
+            server_id = key.split(":", 1)[0]
+            if server_id in groups and (":device:" in key or ":player:" in key):
+                groups[server_id]["devices"][key] = label
+                continue
+            # Some devices only exist in recent history, so derive their server
+            # type from the recorded label if there is no live server entry.
+            detected_type = str(label).split(" · ", 1)[0].lower()
+            kind = detected_type if detected_type in ("plex", "jellyfin", "emby") else "other"
+            if ":device:" in key or ":player:" in key:
+                if server_id not in ("device", "player"):
+                    group_id = server_id
+                    if group_id not in groups:
+                        description = str(label).split(" · ")
+                        server_name = description[1] if len(description) > 2 else server_id
+                        groups[group_id] = {
+                            "server_id": group_id, "name": server_name,
+                            "type": kind, "devices": {},
+                        }
+                    groups[group_id]["devices"][key] = label
+                    continue
+            groups.setdefault("_other", {"server_id": None, "name": "Sans serveur identifié", "type": "other", "devices": {}})["devices"][key] = label
+        # Persisted server-wide rules must remain configurable even if the
+        # media server is temporarily offline or no sessions are cached.
+        for key in self.config_entry.options.get(CONF_NETWORK_LOCATIONS, {}):
+            if key.startswith("server:"):
+                server_id = key.removeprefix("server:")
+                groups.setdefault(server_id, {
+                    "server_id": server_id, "name": server_id,
+                    "type": "other", "devices": {},
+                })
+        self._device_groups = groups
+        return groups
+
+    async def async_step_devices_table(self, user_input=None):
+        """Choose a separate native Home Assistant form for each server type."""
+        groups = await self._group_detected_devices()
+        menu_options = [
+            f"devices_{kind}" for kind in ("plex", "jellyfin", "emby", "other")
+            if any(group["type"] == kind for group in groups.values())
+        ]
+        if not menu_options:
             return await self.async_step_network_manual()
-        fields = self._unique_fields(devices)
-        choices = {"unknown": "Non classé", "local": "Local (LAN)", "remote": "Distant (WAN)"}
+        return self.async_show_menu(step_id="devices_table", menu_options=menu_options)
+
+    async def _edit_devices_type(self, server_type, step_id, user_input=None):
+        """One mutually-exclusive LAN/WAN choice per device, with bulk rules.
+
+        The normal configuration-flow UI stacks fields vertically; it does not
+        support a custom HTML grid. A radio selector makes the three choices
+        visible and prevents conflicting Local + Distant selections.
+        """
+        all_groups = await self._group_detected_devices()
+        groups = sorted(
+            (group for group in all_groups.values() if group["type"] == server_type),
+            key=lambda group: group["name"].casefold(),
+        )
+        if not groups:
+            return await self.async_step_devices_table()
+        locations = dict(self.config_entry.options.get(CONF_NETWORK_LOCATIONS, {}))
+        # Keep these identifiers and their previously saved values stable on
+        # subsequent visits, irrespective of the order of recent sessions.
+        fields = {}
+        for group in groups:
+            server_id = group["server_id"]
+            default_key = f"server:{server_id}" if server_id else None
+            default_location = locations.get(default_key, "unknown") if default_key else "unknown"
+            title = group["name"]
+            if default_key:
+                bulk_label = f"{title} · Tous les appareils (actuel : { {'unknown': 'Non classé', 'local': 'Local', 'remote': 'Distant'}.get(default_location, 'Non classé') })"
+                fields[bulk_label] = ("bulk", group, None, "keep")
+            for key, label in sorted(group["devices"].items(), key=lambda entry: entry[1].casefold()):
+                # Avoid showing the server name twice inside that server's list.
+                concise = str(label)
+                prefix = f"{server_type.upper()} · {title} · "
+                if concise.startswith(prefix):
+                    concise = concise[len(prefix):]
+                fields[f"{title} · {concise}"] = ("device", group, key, locations.get(key, default_location))
         if user_input is not None:
             updated = dict(locations)
-            for label, key in fields.items():
-                value = user_input.get(label, locations.get(key, "unknown"))
-                if value == "unknown":
+            for label, (field_type, group, key, original) in fields.items():
+                if field_type != "bulk":
+                    continue
+                action = user_input.get(label, "keep")
+                if action == "keep":
+                    continue
+                server_id = group["server_id"]
+                if not server_id:
+                    continue
+                server_key = f"server:{server_id}"
+                if action in ("local", "remote"):
+                    updated[server_key] = action
+                elif action == "unknown":
+                    updated.pop(server_key, None)
+                # A bulk action explicitly resets the existing individual
+                # choices for all the server's detected devices. Future clients
+                # inherit the server-wide rule when it is set.
+                for device_key in group["devices"]:
+                    updated.pop(device_key, None)
+            for label, (field_type, group, key, original) in fields.items():
+                if field_type != "device":
+                    continue
+                server_id = group["server_id"]
+                bulk_label = next((name for name, detail in fields.items()
+                    if detail[0] == "bulk" and detail[1] is group), None)
+                if bulk_label and user_input.get(bulk_label, "keep") != "keep":
+                    continue  # Explicit bulk action wins on this save.
+                value = user_input.get(label, original)
+                fallback = updated.get(f"server:{server_id}", "unknown") if server_id else "unknown"
+                if value not in ("local", "remote", "unknown"):
+                    continue
+                if value == fallback:
                     updated.pop(key, None)
-                elif value in ("local", "remote"):
+                else:
+                    # Store "unknown" explicitly to override an existing
+                    # Local/WAN server-wide default on a particular device.
                     updated[key] = value
             return self.async_create_entry(title="", data={
                 **self.config_entry.options, CONF_NETWORK_LOCATIONS: updated,
             })
+        radio = selector.SelectSelector(selector.SelectSelectorConfig(
+            options=[
+                {"value": "unknown", "label": "Non classé"},
+                {"value": "local", "label": "Local (LAN)"},
+                {"value": "remote", "label": "Distant (WAN)"},
+            ], mode="list",
+        ))
+        bulk = selector.SelectSelector(selector.SelectSelectorConfig(
+            options=[
+                {"value": "keep", "label": "Ne pas modifier"},
+                {"value": "local", "label": "Tout classer Local"},
+                {"value": "remote", "label": "Tout classer Distant"},
+                {"value": "unknown", "label": "Tout remettre Non classé"},
+            ], mode="list",
+        ))
         schema = vol.Schema({
-            vol.Optional(label, default=locations.get(key, "unknown")): vol.In(choices)
-            for label, key in fields.items()
+            vol.Optional(label, default=current): bulk if field_type == "bulk" else radio
+            for label, (field_type, group, key, current) in fields.items()
         })
-        return self.async_show_form(step_id="devices_table", data_schema=schema)
+        return self.async_show_form(step_id=step_id, data_schema=schema)
+
+    async def async_step_devices_plex(self, user_input=None):
+        return await self._edit_devices_type("plex", "devices_plex", user_input)
+
+    async def async_step_devices_jellyfin(self, user_input=None):
+        return await self._edit_devices_type("jellyfin", "devices_jellyfin", user_input)
+
+    async def async_step_devices_emby(self, user_input=None):
+        return await self._edit_devices_type("emby", "devices_emby", user_input)
+
+    async def async_step_devices_other(self, user_input=None):
+        return await self._edit_devices_type("other", "devices_other", user_input)
 
     async def _load_accounts(self) -> dict[str, str]:
         if self._accounts is not None:
