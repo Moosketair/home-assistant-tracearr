@@ -11,7 +11,7 @@ TRANSLATION_FILES = (
     "translations/fr.json",
 )
 DOMAIN_DIR = Path(__file__).resolve().parents[1] / "custom_components" / "tracearr_ha"
-PLACEHOLDER = re.compile(r"\\{[a-zA-Z_][a-zA-Z0-9_]*\\}")
+PLACEHOLDER = re.compile(r"\{[a-zA-Z_][a-zA-Z0-9_]*\}")
 
 
 def _strings(data):
