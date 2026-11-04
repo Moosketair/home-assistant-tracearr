@@ -713,7 +713,7 @@ test('elapsed and remaining switch simultaneously and add up to displayed durati
   card._updateProgress();
   assert.equal(elapsed.textContent,'1:01');
   assert.equal(remaining.textContent,'-1:00');
-  assert.match(end.textContent,/Fin estimée : \d{2}:\d{2}/);
+  assert.match(end.textContent,/Fin à \d{2}:\d{2}/);
   const firstPair=[elapsed.textContent,remaining.textContent];
   time=400;card._updateProgress();
   assert.deepEqual([elapsed.textContent,remaining.textContent],firstPair);
@@ -732,7 +732,7 @@ test('finish time independently appears in playing streams but not paused ones',
   const stream={id:'x',username:'Test',server_type:'plex',media_title:'Film',media_type:'movie',
     state:'playing',progress_ms:120000,duration_ms:3600000,started_at:'2026-11-03T18:00:00'};
   let html=card._streamCard(null,stream);
-  assert.match(html,/Fin estimée : \d{2}:\d{2}/);
+  assert.match(html,/Fin à \d{2}:\d{2}/);
   assert.doesNotMatch(html,/class="progress"/);
   html=card._streamCard(null,{...stream,state:'paused'});
   assert.doesNotMatch(html,/Fin estimée/);
@@ -870,4 +870,26 @@ test('editor exposes unified move buttons for header metrics, HA badges and foot
   assert.match(html,/data-order="footer_field_order"/);
   assert.match(html,/Entité : Demandes/);
   assert.match(html,/Débit du flux/);
+});
+
+
+test('elapsed and remaining are adjacent at left, estimated ending is separately aligned right', () => {
+  const {card} = setup();
+  card._config = {...card._config, show_poster:false, show_avatar:false,
+    show_end_time:true, show_remaining:true, show_progress:true};
+  const html = card._streamCard(null, {id:'clock1',username:'Alice', server_type:'plex',
+    media_title:'Test', media_type:'movie',state:'playing',progress_ms:60000,
+    duration_ms:180000});
+  assert.match(html, /class="time-left">[\s\S]*class="time-current"[\s\S]*class="time-separator">\/[\s\S]*class="time-remaining"/);
+  assert.match(html, /<\/span><span class="time-end" data-id="clock1">Fin à \d{2}:\d{2}<\/span><\/div>/);
+  assert.doesNotMatch(html, /time-right|Fin estimée/);
+});
+
+test('paused stream displays En pause beside elapsed and no predicted end', () => {
+  const {card} = setup();
+  card._config = {...card._config, show_poster:false, show_avatar:false,show_end_time:true};
+  const html = card._streamCard(null, {id:'pause1',username:'Alice',server_type:'plex',
+    media_title:'Film',media_type:'movie',state:'paused',progress_ms:60000,duration_ms:180000});
+  assert.match(html, /class="time-left">[\s\S]*class="time-current"[\s\S]*class="time-paused">En pause/);
+  assert.doesNotMatch(html, /class="time-end"/);
 });
