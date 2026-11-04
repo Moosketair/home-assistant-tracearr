@@ -1,6 +1,9 @@
 {
   "domain": "tracearr_ha",
   "name": "Tracearr HA",
+  "categories": [
+    "media_entertainment.tv_streaming"
+  ],
   "codeowners": [
     "@Moosketair"
   ],
