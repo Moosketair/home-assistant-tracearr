@@ -4,7 +4,7 @@
 
 **Suivez en temps réel les lectures Plex, Jellyfin et Emby directement dans votre tableau de bord Home Assistant.** Une intégration HACS, des capteurs et deux cartes Lovelace entièrement personnalisables : liste verticale, grille adaptative ou carrousel.
 
-**Version 0.1.8 Alpha.** Ce projet est en cours de test sur de vraies installations Home Assistant. N'utilisez pas encore ses capteurs pour des automatismes critiques.
+**Version 0.1.10 Alpha.** Ce projet est en cours de test sur de vraies installations Home Assistant. N'utilisez pas encore ses capteurs pour des automatismes critiques.
 
 ## Fonctionnalités
 
@@ -309,3 +309,21 @@ Les temps « déjà lu » et « restant » sont calculés localement à partir d
 - **Badges d’entités** : chaque ligne de `header_entity_badges` peut définir `show_name`, `show_icon`, `only_positive`, `blink_positive`, `blink_seconds`, `zero_color_mode` et `zero_custom_color`. Les icônes utilisent d’abord l’attribut `icon` de l’entité Home Assistant ; un pictogramme MDI adapté sert de secours.
 - Les réglages existants des dashboards sont conservés par défaut ; sans activer les nouvelles options, les couleurs et affichages restent inchangés. Le clignotement s’efface si les préférences du système réduisent les animations.
 - Les deux pictogrammes de transcodage vidéo/audio sont des tracés SVG originaux inspirés d’icônes multimédias courantes, sans intégrer d’assets Flaticon nécessitant une attribution.
+
+
+## Publication au catalogue HACS (pour les mainteneurs)
+
+L'intégration est **non officielle** : elle utilise l'API publique de Tracearr et n'est ni approuvée ni maintenue par Tracearr ou Home Assistant.
+
+1. Vérifier le fonctionnement sur des installations Home Assistant réelles et éliminer les problèmes connus.
+2. Faire passer sans erreur les workflows HACS et hassfest dans **GitHub Actions**.
+3. Publier une **GitHub Release** complète depuis une version stable (pas seulement un tag).
+4. Proposer le dépôt `Moosketair/home-assistant-tracearr` au catalogue via une pull request sur [`hacs/default`](https://github.com/hacs/default), en respectant son modèle de PR et les conditions en vigueur. L'examen peut prendre plusieurs mois.
+
+### Droit des marques et logo
+
+Le dépôt Tracearr annonce une licence AGPL-3.0 pour son logiciel ; cette mention ne permet pas, à elle seule, de conclure que son logo et l'usage de sa marque comme emblème tiers sont librement autorisés. Tant qu'une autorisation de réutilisation du logo n'est pas établie, cette intégration conserve sa propre icône. Éviter toute présentation laissant croire à une affiliation ou approbation officielle.
+
+### Présentation des temps
+
+Dans chaque lecture, l'affichage regroupe **temps écoulé / temps restant** à gauche et, si activé, **« Fin à HH:mm »** à droite. En pause, l'heure de fin est retirée et « En pause » reste visible.
