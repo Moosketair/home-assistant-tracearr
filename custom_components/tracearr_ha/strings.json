@@ -49,7 +49,7 @@
       },
       "raw_maps": {
         "title": "Advanced customization",
-        "description": "JSON maps: {\"plex:alice\":\"Alice\"}. For avatar values, use HTTPS URLs.",
+        "description": "JSON maps: account names such as plex:alice mapped to Alice. Avatar values must use HTTPS URLs.",
         "data": {
           "aliases": "Aliases (JSON)",
           "avatars": "Custom avatars (JSON)"
@@ -77,7 +77,7 @@
       },
       "network_json": {
         "title": "Advanced network rules",
-        "description": "Example: {\"device:Apple TV\":\"local\", \"player:Plex Web\":\"remote\"}",
+        "description": "Example rules: device:Apple TV = local; player:Plex Web = remote.",
         "data": {
           "network_locations": "Device locations (JSON)"
         }

@@ -4,6 +4,7 @@ from __future__ import annotations
 from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import TracearrClient
@@ -11,6 +12,8 @@ from .const import CONF_TOKEN, CONF_URL, DOMAIN
 from .coordinator import TracearrCoordinator
 from .frontend import async_register_frontend
 from .websocket import async_register_ws
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PLATFORMS = ["sensor", "binary_sensor"]
 
