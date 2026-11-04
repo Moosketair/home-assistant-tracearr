@@ -1,10 +1,10 @@
-/* Tracearr HA Lovelace cards 0.1.10 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.12 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;
 
   const DEFAULTS = {
-    mode: "grid", columns: "auto", carousel_visible: 1, carousel_autoplay: false,
+    mode: "list", carousel_visible: 1, carousel_autoplay: false,
     carousel_interval: 7, carousel_transition: "slide", carousel_transition_speed: 600,
     carousel_hide_scrollbar: true, carousel_show_arrows: true, carousel_mouse_drag: true,
     carousel_pause_on_hover: false, compact: false, show_title: true, show_counter: true,
@@ -22,7 +22,7 @@
     header_blink_seconds: 2, header_show_names: true,
     header_zero_color_mode: "normal", header_zero_custom_color: "#576574",
     stream_surface: "soft",
-    selection: "recent", grid_columns: 12, grid_rows: 0, height: 0,
+    selection: "recent",
     font_size: 14, accent_color_mode: "theme", accent_custom_color: "#00BCD4",
     // Independent movie / TV fields, with a rearrangeable visual order.
     movie_show_title: true, movie_show_year: true, movie_field_order: "title,year",
@@ -159,7 +159,6 @@
     .metric.blink-positive { animation:tracearr-badge-pulse var(--badge-blink,2s) ease-in-out infinite; }
     @keyframes tracearr-badge-pulse { 0%,100% { opacity:1; } 50% { opacity:.22; } }
     .streams { display:flex; flex-direction:column; gap:10px; }
-    .streams.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--min-column,290px)),1fr)); }
     .streams.carousel { overflow-x:auto; flex-direction:row; scroll-snap-type:x mandatory;
       scrollbar-width:none; -ms-overflow-style:none; scroll-behavior:auto; padding-bottom:0;
       overscroll-behavior-x:contain; cursor:grab; touch-action:pan-x pan-y; }
@@ -231,13 +230,16 @@
     .compact .user { font-size:calc(var(--tr-font-size)*.83); }
     .compact .info { gap:3px; }
     .compact .media-flags { top:8px; right:8px; }
-    @container (max-width:520px) { .streams.grid { grid-template-columns:1fr!important; }
-      .carousel .stream { flex-basis:100%!important; } }
+    @container (max-width:520px) { .carousel .stream { flex-basis:100%!important; } }
     @media (prefers-reduced-motion:reduce) { .fill { transition:none; } .metric.blink-positive { animation:none; } }
   `;
 
   function normalizeConfig(config) {
     const result = {...DEFAULTS, ...config};
+    // The old grid layout is replaced by the full-width list. Native Sections
+    // owns sizing; retired internal sizing controls are never persisted again.
+    if (!['list', 'carousel'].includes(result.mode)) result.mode = 'list';
+    for (const key of ['columns','grid_columns','grid_rows','height']) delete result[key];
     // Pre-0.1.4 dashboards continue to behave the same until users change them.
     if (!("header_show_streams" in config)) result.header_show_streams = config.show_counter ?? true;
     if (config.show_transcodes && !["header_show_video","header_show_audio","header_show_both","header_show_transcodes_total"].some(k => k in config)) {
@@ -355,15 +357,10 @@
     }
     getCardSize() { return this._config.mode === "list" ? 5 : 4; }
     getGridOptions() {
-      // "auto" rows cannot be resized vertically in HA Sections. Always return
-      // a numeric default and sensible min/max so the native resize handle works.
-      const cfg = this._config;
-      const rows = clamp(cfg.grid_rows, 2, 30, 4);
-      return {
-        columns: clamp(cfg.grid_columns, 3, 12, 12), min_columns: 3, max_columns: 12,
-        rows: Number(cfg.grid_rows) > 0 ? rows : 4,
-        min_rows: 2, max_rows: 30,
-      };
+      // HA Sections controls the persisted grid_options via its Layout tab.
+      // Only advertise compatible default/min/max dimensions here.
+      return {columns:12, min_columns:3, max_columns:12,
+        rows:4, min_rows:2, max_rows:30};
     }
     _setTimers() {
       clearInterval(this._tick);
@@ -411,7 +408,13 @@
       else if (sort === "server") streams.sort((a,b) => a.server_name.localeCompare(b.server_name));
       else streams.sort((a,b) => String(b.started_at).localeCompare(String(a.started_at)));
       if (this._individual) {
-        if (this._config.selection === "stream" && this._config.stream_id) streams = streams.filter(s => s.id === this._config.stream_id);
+        const selection=this._config.selection;
+        if (selection === "stream" && this._config.stream_id)
+          streams = streams.filter(s => String(s.id) === String(this._config.stream_id));
+        else if (selection === "account" && this._config.selected_account)
+          streams = streams.filter(s => `${s.server_id}:${s.username}` === this._config.selected_account);
+        else if (selection === "server" && this._config.selected_server)
+          streams = streams.filter(s => s.server_id === this._config.selected_server);
         return streams.slice(0, 1);
       }
       return streams;
@@ -954,7 +957,6 @@
       const head = this._header(streams);
       this._headerMarkup = head;
       this._liveFingerprints = new Map(streams.map(s => [s.id, this._liveSnapshot(s,entry)]));
-      const cols = c.columns === "auto" ? "repeat(auto-fit,minmax(min(100%,var(--min-column,290px)),1fr))" : `repeat(${Math.max(1, Math.min(4,Number(c.columns)||1))}, minmax(0,1fr))`;
       const visible = clamp(c.carousel_visible, 1, 4, 1);
       const items = streams.map(s => this._streamCard(entry,s)).join("");
       // Always conceal the native scrollbar; navigation remains via buttons,
@@ -962,13 +964,9 @@
       const classes = `streams ${E(c.mode)}`;
       const emptyText = entry && !entry.connected ? "Tracearr indisponible" : String(c.empty_message ?? "Aucune lecture en cours");
       const body = !streams.length && c.empty_mode === "header_only" ? "" :
-        `<div class="${classes}" ${c.mode === "carousel" ? `tabindex="0" role="region" aria-label="Lectures en carrousel"` : ""} style="grid-template-columns:${E(cols)};--carousel-visible:${visible}">${items || `<div class="empty-message">${E(emptyText)}</div>`}</div>`;
+        `<div class="${classes}" ${c.mode === "carousel" ? `tabindex="0" role="region" aria-label="Lectures en carrousel"` : ""} style="--carousel-visible:${visible}">${items || `<div class="empty-message">${E(emptyText)}</div>`}</div>`;
       const nav = c.mode === "carousel" && c.carousel_show_arrows && streams.length > 1 ? `<div class="carousel-nav"><button class="nav" data-step="-1" aria-label="Précédent">❮</button><span>${streams.length} lectures</span><button class="nav" data-step="1" aria-label="Suivant">❯</button></div>` : "";
-      // When HA Sections assigns grid_options.rows, the native grid height wins.
-      // Otherwise the optional pixel height applies (e.g. masonry dashboards).
-      const rowsAssigned = Number(c.grid_options?.rows) > 0;
-      const fixedHeight = Number(c.height) > 0 && !rowsAssigned ? `height:${clamp(c.height,100,2000,240)}px;` : "";
-      this.shadowRoot.innerHTML = `<style>${style}</style><ha-card style="${fixedHeight}--tr-font-size:${clamp(c.font_size,10,28,14)}px"><div class="root ${c.compact?"compact":""} ${c.stream_surface === "transparent" ? "flat-streams" : ""}" style="--min-column:${c.compact?"210px":"290px"}">${head}${body}${nav}</div></ha-card>`;
+      this.shadowRoot.innerHTML = `<style>${style}</style><ha-card style="--tr-font-size:${clamp(c.font_size,10,28,14)}px"><div class="root ${c.compact?"compact":""} ${c.stream_surface === "transparent" ? "flat-streams" : ""}">${head}${body}${nav}</div></ha-card>`;
       const newCarousel = this.shadowRoot.querySelector(".streams.carousel");
       if (newCarousel) {
         const cards = [...newCarousel.querySelectorAll(".stream")];
@@ -1019,8 +1017,12 @@
       border:1px solid var(--divider-color,#7775); border-radius:6px; color:var(--primary-text-color);
       cursor:pointer; padding:5px 8px; font:inherit; }
     .move-controls button:disabled { opacity:.3; cursor:default; }
-    .badge-row { display:grid; gap:8px; border:1px solid var(--divider-color,#7775);
-      padding:9px; border-radius:8px; margin:6px 0; }
+    .badge-row { display:grid; gap:8px; padding:10px; }
+    details.subpanel { background:var(--card-background-color); border-radius:8px; }
+    details.subpanel summary { padding:10px; font-weight:600; font-size:13px;
+      background:transparent; }
+    details.subpanel .section-body { gap:9px; }
+    .group-label { margin-top:3px; }
     .badge-row ha-entity-picker { display:block; width:100%; }
     .badge-row button,.add-badge { border:1px solid var(--divider-color,#7775);
       border-radius:7px; padding:8px; color:var(--primary-text-color);
@@ -1029,7 +1031,8 @@
   class TracearrCardEditor extends HTMLElement {
     constructor() {
       super(); this.attachShadow({mode:"open"}); this._config={...DEFAULTS};
-      this._payload={entries:[]}; this._openSections=new Set(["header","layout"]);
+      this._payload={entries:[]}; this._openSections=new Set(["global","source"]);
+      this._openSubdetails=new Set();
     }
     setConfig(config) {
       // Keep opened categories across dashboard editor rerenders.
@@ -1050,9 +1053,14 @@
     _captureOpenSections() {
       const details=this.shadowRoot.querySelectorAll("details[data-section]");
       if (details.length) this._openSections=new Set([...details].filter(d=>d.open).map(d=>d.dataset.section));
+      const subdetails=this.shadowRoot.querySelectorAll("details[data-subdetail]");
+      if (subdetails.length) this._openSubdetails=new Set([...subdetails].filter(d=>d.open).map(d=>d.dataset.subdetail));
     }
     _group(key,title,contents) {
       return `<details data-section="${E(key)}" ${this._openSections.has(key)?"open":""}><summary>${E(title)}</summary><div class="section-body">${contents}</div></details>`;
+    }
+    _subgroup(key,title,contents) {
+      return `<details class="subpanel" data-subdetail="${E(key)}" ${this._openSubdetails.has(key)?"open":""}><summary>${E(title)}</summary><div class="section-body">${contents}</div></details>`;
     }
     _option(value,text) { return `<option value="${E(value)}">${E(text)}</option>`; }
     _select(name,label,options) {
@@ -1084,9 +1092,10 @@
     }
     _entityBadgeEditor() {
       const rows = this._config.header_entity_badges || [];
-      return `<div class="group-label">Badges d'entités Home Assistant</div>`+
-        `<small>Ajoutez un capteur, compteur ou toute autre entité ; son état sera actualisé automatiquement.</small>`+
-        rows.map((row,index) => `<div class="badge-row" data-badge-row="${index}">`+
+      return `<small>Ajoutez une entité, puis ouvrez sa fiche pour modifier ses options.</small>`+
+        rows.map((row,index) => this._subgroup(`entity-${row.id}`,
+          `${row.label || row.entity || 'Nouveau badge'}${row.entity ? ' · '+row.entity : ''}`,
+          `<div class="badge-row" data-badge-row="${index}">`+
           `<label>Entité<ha-entity-picker data-badge-index="${index}" aria-label="Choisir une entité"></ha-entity-picker></label>`+
           `<label>Nom facultatif<input type="text" data-badge-label="${index}" placeholder="Nom de l'entité" value="${E(row.label || "")}"></label>`+
           `<div class="columns">`+
@@ -1099,7 +1108,7 @@
           `<label>Couleur si valeur à zéro<select data-badge-setting="zero_color_mode" data-badge-index="${index}"><option value="inherit" ${row.zero_color_mode !== "custom" ? "selected" : ""}>Réglage global</option><option value="custom" ${row.zero_color_mode === "custom" ? "selected" : ""}>Couleur particulière</option></select></label>`+
           `<label>Couleur personnalisée à zéro<input type="color" data-badge-setting="zero_custom_color" data-badge-index="${index}" value="${E(validColor(row.zero_custom_color || "#576574"))}"></label>`+
           `<button class="remove-badge" type="button" data-badge-remove="${index}" aria-label="Supprimer le badge">Supprimer</button>`+
-          `</div>`).join("")+
+          `</div>`)).join("")+
         `<button type="button" class="add-badge" data-badge-add ${rows.length>=20?"disabled":""}>+ Ajouter un badge</button>`;
     }
     render() {
@@ -1109,49 +1118,51 @@
       const servers=[...new Map((selected?.servers||[]).map(s=>[s.server_id,[s.server_id,s.server_name]])).values()];
       const users=[...new Set((selected?.streams||[]).map(s=>s.username).filter(Boolean))].sort();
       const isIndividual=c.type==="custom:tracearr-stream-card";
+      const streams=selected?.streams||[];
+      const accounts=[...new Map(streams.filter(s=>s.username && s.server_id).map(s=>
+        [`${s.server_id}:${s.username}`,[`${s.server_id}:${s.username}`,`${s.server_name||s.server_type} · ${s.username}`]])).values()];
+      const sessionChoices=[...streams.map(s=>[s.id,`${s.server_name||s.server_type} · ${s.username} — ${s.show_title ? s.show_title + ' / ' : ''}${s.media_title}`])];
+      // Keep stored targets selectable even after the session has ended.
+      const withSaved=(choices,value,label)=>value && !choices.some(([id])=>String(id)===String(value))
+        ? [...choices,[value,label]] : choices;
       const source=this._select("entry_id","Instance Tracearr",[["","Automatique (première instance)"],...entries.map(e=>[e.id,e.name])])+
+        (isIndividual ?
+          this._select("selection","Quelle lecture afficher ?",[
+            ["recent","Dernière lecture active"],["account","Lecture d'un utilisateur"],
+            ["server","Lecture d'un serveur"],["stream","Session en cours précise"]])+
+          this._select("selected_account","Utilisateur (continue sur ses prochains films)",[["","Choisir un utilisateur"],
+            ...withSaved(accounts,c.selected_account,"Utilisateur précédemment choisi")])+
+          this._select("selected_server","Serveur",[["","Choisir un serveur"],
+            ...withSaved(servers,c.selected_server,"Serveur précédemment choisi")])+
+          this._select("stream_id","Session active (disparaît quand elle se termine)",[["","Choisir une lecture"],
+            ...withSaved(sessionChoices,c.stream_id,"Session précédemment choisie (terminée)")])+
+          `<small>Choisis une cible ci-dessus ; seuls les champs du mode sélectionné sont utilisés. Pour une carte permanente, privilégie un utilisateur plutôt qu'un ID de session temporaire.</small>`
+        : "")+
         this._select("filter_server","Filtrer par serveur",[["","Tous les serveurs"],...servers])+
         this._select("filter_user","Filtrer par utilisateur",[["","Tous les utilisateurs"],...users.map(u=>[u,u])])+
         this._select("filter_transcode","Mode de lecture",[["all","Tous"],["direct","Direct"],["video","Vidéo seule"],["audio","Audio seul"],["both","Vidéo et audio"],["unknown","Inconnu"]])+
         this._select("sort","Ordre des flux",[["recent","Plus récent d'abord"],["user","Utilisateur"],["server","Serveur"]]);
-      const header=this._toggle("show_header","Afficher le bandeau d'en-tête")+
-        `<label>Titre de l'en-tête<input type="text" data-field="title" placeholder="Lectures en cours" value="${E(c.title||"")}"></label>`+
+      const headerMetrics=HEADER_FIELDS.map(field=>this._subgroup(`metric-${field}`,
+        `${HEADER_LABELS[field]} · ${c[`header_show_${field}`] ? "Visible" : "Masqué"}`,
+        this._toggle(`header_show_${field}`,`Afficher « ${HEADER_LABELS[field]} »`))).join("");
+      const headerCommon=this._checks([
+        ["header_show_names","Afficher les noms des statistiques"],
+        ["header_positive_only","Masquer les badges à zéro"],
+        ["header_blink_positive","Clignoter si la valeur est positive"],
+      ])+
+        this._number("header_blink_seconds","Période de clignotement (secondes)",0.5,20)+
+        this._select("header_badge_color_mode","Couleur des badges",[["inherit","Palette globale"],["theme","Thème Home Assistant"],["server","Couleur du serveur"],["custom","Personnalisée"]])+
+        `<label>Couleur personnalisée<input type="color" data-field="header_badge_custom_color" value="${E(validColor(c.header_badge_custom_color))}"></label>`+
+        this._select("header_zero_color_mode","Couleur à zéro",[["normal","Palette normale"],["custom","Personnalisée"]])+
+        `<label>Couleur personnalisée à zéro<input type="color" data-field="header_zero_custom_color" value="${E(validColor(c.header_zero_custom_color))}"></label>`;
+      const header=this._toggle("show_header","Afficher l'en-tête")+
+        `<label>Titre<input type="text" data-field="title" placeholder="Lectures en cours" value="${E(c.title||"")}"></label>`+
         this._toggle("show_title","Afficher le titre")+
-        `<small>Les compteurs correspondent aux lectures affichées après filtrage.</small>`+
-        this._checks([
-          ["header_show_streams","Nombre de flux"],["header_show_bandwidth","Débit total"],
-          ["header_show_direct","Lectures directes"],["header_show_paused","Lectures en pause"],
-          ["header_show_video","Transcode vidéo seul"],["header_show_audio","Transcode audio seul"],
-          ["header_show_both","Transcode vidéo + audio"],["header_show_transcodes_total","Total transcodages"],
-          ["header_show_server_counts","Nombre de flux par serveur"],
-        ])+
-        `<div class="group-label">Couleur des badges d'en-tête</div>`+
-        this._select("header_badge_color_mode","Palette des statistiques",[["inherit","Utiliser la palette globale"],["theme","Thème Home Assistant"],["server","Couleur du serveur (comptages par serveur)"],["custom","Couleur personnalisée"]])+
-        `<label>Couleur personnalisée de l'en-tête<input type="color" data-field="header_badge_custom_color" value="${E(validColor(c.header_badge_custom_color))}"></label>`+
-        `<small>En mode serveur, les statistiques globales utilisent la couleur du thème ; chaque compteur Plex/Jellyfin/Emby conserve sa couleur propre.</small>`+
-        `<div class="group-label">Comportement des badges d'en-tête</div>`+
-        this._checks([
-          ["header_show_names","Afficher les noms des statistiques"],
-          ["header_positive_only","Masquer les badges à zéro"],
-          ["header_blink_positive","Clignoter quand la valeur est supérieure à zéro"],
-        ])+
-        this._number("header_blink_seconds","Durée du cycle de clignotement (secondes)",0.5,20)+
-        this._select("header_zero_color_mode","Couleur quand la valeur est zéro",[
-          ["normal","Palette habituelle"],["custom","Couleur spécifique"],
-        ])+
-        `<label>Couleur à zéro<input type="color" data-field="header_zero_custom_color" value="${E(validColor(c.header_zero_custom_color))}"></label>`+
-        `<small>Pour les entités, vous pouvez aussi choisir ces comportements individuellement. Les animations sont désactivées si le navigateur demande de réduire les mouvements.</small>`+
-        this._entityBadgeEditor()+
-        `<div class="group-label">Ordre des badges (statistiques et entités)</div>`+
-        this._headerOrderEditor();
-      const layout=(isIndividual ? this._select("selection","Choix de la lecture",[["recent","Lecture la plus récente"],["stream","Session précise"]])+
-        `<label>ID de session<input type="text" data-field="stream_id" value="${E(c.stream_id||"")}"></label>` :
-        this._select("mode","Disposition",[["list","Liste verticale"],["grid","Grille adaptative"],["carousel","Carrousel"]])+
-        this._select("columns","Colonnes en mode grille",[["auto","Automatique"],["1","1"],["2","2"],["3","3"],["4","4"]]))+
-        this._checks([["compact","Mode compact"],["show_paused","Inclure les lectures en pause"]])+
-        `<div class="columns">${this._number("grid_columns","Largeur Sections (3–12)",3,12)}${this._number("grid_rows","Hauteur initiale Sections (0=4)",0,30)}</div>`+
-        this._number("height","Hauteur CSS hors Sections (0=auto)",0,2000)+
-        `<small>Dans un dashboard Sections, la poignée native permet de redimensionner la carte en hauteur et en largeur.</small>`;
+        this._subgroup("metrics","Statistiques Tracearr",headerMetrics)+
+        this._subgroup("entities","Badges d'entités Home Assistant",this._entityBadgeEditor())+
+        this._subgroup("shared-badges","Style et comportement communs aux badges",headerCommon)+
+        this._subgroup("badge-order","Ordre des badges",this._headerOrderEditor());
+      const layout=isIndividual ? "" : this._select("mode","Disposition",[["list","Liste verticale"],["carousel","Carrousel"]]);
       const carousel=this._checks([
           ["carousel_autoplay","Défilement automatique"],["carousel_show_arrows","Flèches de navigation"],
           ["carousel_mouse_drag","Glissement à la souris"],["carousel_pause_on_hover","Pause au survol"],
@@ -1160,12 +1171,6 @@
         this._select("carousel_transition","Transition",[["slide","Glissement"],["fade","Fondu"],["zoom","Zoom"],["flip","Retournement 3D"],["none","Sans animation"]])+
         this._number("carousel_transition_speed","Durée de transition (ms)",100,3000)+
         `<small>Barre horizontale masquée. Navigation tactile toujours disponible.</small>`;
-      const content=this._checks([
-        ["show_poster","Affiche"],["show_avatar","Avatar utilisateur"],
-        ["show_progress","Barre de lecture"],["show_remaining","Temps restant / En pause"],
-        ["show_end_time","Heure de fin estimée (pendant lecture)"],
-        ["show_transcode_icons","Icônes vidéo et audio"],
-      ]);
       const media = `<div class="group-label">Films</div>`+
         this._checks([["movie_show_title","Afficher le titre"],["movie_show_year","Afficher l'année"]])+
         `<small>Ordre d'affichage (flèches pour déplacer les champs, même masqués) :</small>`+
@@ -1189,32 +1194,32 @@
           ["both","Tous les débits"],["local","Flux locaux uniquement"],["remote","Flux distants uniquement"]])+
         `<label>Exceptions pour cette carte (facultatif, priorité sur les réglages de l’intégration)<textarea data-field="network_locations" placeholder="plex:alice=remote&#10;device:Apple TV=local">${E(c.network_locations||"")}</textarea></label>`+
         `<small>Les affectations globales se configurent dans Paramètres → Appareils et services → Tracearr HA → Configurer → Localisation des appareils. Ici, vous pouvez ajouter des exceptions : serveur:utilisateur=local/remote, device:Nom=local/remote, player:Nom=local/remote ou utilisateur=local/remote. Les flux sans correspondance restent inconnus et ne sont pas comptés en mode local/distant.</small>`;
-      const empty=this._select("empty_mode","Quand aucun flux n'est actif",[
-          ["message","Afficher un message"],["header_only","Afficher uniquement l'en-tête"],["hide","Masquer complètement la carte"]])+
-        `<label>Message personnalisé<input type="text" data-field="empty_message" value="${E(c.empty_message??"Aucune lecture en cours")}"></label>`+
-        `<small>Le message est remplacé par « Tracearr indisponible » si la connexion est perdue.</small>`;
-      const colors=this._select("accent_color_mode","Palette commune (progression, badges, statistiques)",[
-          ["theme","Couleur du thème Home Assistant"],["server","Selon Plex / Jellyfin / Emby"],["custom","Couleur personnalisée"],
-        ])+
-        `<label>Couleur personnalisée<input type="color" data-field="accent_custom_color" value="${E(validColor(c.accent_custom_color))}"></label>`+
+      const globalDisplay=this._checks([
+        ["compact","Mode compact"],["show_paused","Inclure les lectures en pause"],
+        ["show_poster","Affiche"],["show_avatar","Avatar"],
+        ["show_progress","Progression"],["show_remaining","Temps restant et pause"],
+        ["show_end_time","Fin de lecture estimée"],["show_transcode_icons","Icônes vidéo/audio"],
+      ])+
         this._select("stream_surface","Fond intérieur des lectures",[["soft","Légèrement contrasté"],["transparent","Transparent"]])+
         this._number("font_size","Taille du texte (px)",10,28)+
-        `<small>Le cadre extérieur utilise le fond, les arrondis et les bordures natifs de Home Assistant. Les badges calculent automatiquement leur contraste.</small>`;
-      const usersSection=`<label>Alias (exemple : plex:alice=Alice)<textarea data-field="aliases">${E(c.aliases||"")}</textarea></label>`+
-        `<label>Avatars (URL HTTPS, une ligne par utilisateur)<textarea data-field="avatars">${E(c.avatars||"")}</textarea></label>`+
-        `<small>Ces réglages sont propres à cette carte et prioritaires sur les alias globaux.</small>`;
+        this._select("empty_mode","En l'absence de lecture",[["message","Message personnalisé"],["header_only","En-tête uniquement"],["hide","Masquer la carte"]])+
+        `<label>Message sans lecture<input type="text" data-field="empty_message" value="${E(c.empty_message??"Aucune lecture en cours")}"></label>`+
+        this._select("accent_color_mode","Palette globale des couleurs",[["theme","Thème Home Assistant"],["server","Couleur de Plex / Jellyfin / Emby"],["custom","Personnalisée"]])+
+        `<label>Couleur globale personnalisée<input type="color" data-field="accent_custom_color" value="${E(validColor(c.accent_custom_color))}"></label>`+
+        `<small>La hauteur et la largeur se règlent uniquement dans l'onglet Mise en page de Home Assistant. Les couleurs propres aux badges restent prioritaires sur la palette globale.</small>`;
+      const usersSection=`<label>Alias propres à cette carte<textarea data-field="aliases">${E(c.aliases||"")}</textarea></label>`+
+        `<label>Avatars propres à cette carte (URLs HTTPS)<textarea data-field="avatars">${E(c.avatars||"")}</textarea></label>`+
+        `<small>Pour modifier tous les utilisateurs, utilisez la liste dans Paramètres → Appareils et services → Tracearr HA → Configurer.</small>`;
       this.shadowRoot.innerHTML=`<style>${editorStyle}</style><div class="editor">${[
-        this._group("header","En-tête et statistiques",header),
-        this._group("layout","Disposition et dimensions",layout),
+        this._group("global","Affichage général",globalDisplay),
+        this._group("source","Choix des lectures et filtres",source),
+        ...(!isIndividual ? [this._group("layout","Disposition (taille dans Mise en page)",layout)] : []),
         ...(!isIndividual ? [this._group("carousel","Navigation et carrousel",carousel)] : []),
-        this._group("content","Contenu de la lecture",content),
+        this._group("header","En-tête et badges",header),
         this._group("media","Titres, saisons et années",media),
         this._group("footer","Bandeau d'informations du flux",footer),
-        this._group("network","Débit et localisation des flux",network),
-        this._group("empty","Comportement sans lecture",empty),
-        this._group("colors","Apparence, couleurs et typographie",colors),
-        this._group("source","Filtres et tri",source),
-        this._group("users","Noms et avatars personnalisés",usersSection),
+        this._group("network","Débit local / distant",network),
+        this._group("users","Réglages avancés par carte",usersSection),
       ].join("")}</div>`;
       this.shadowRoot.querySelectorAll("[data-field]").forEach(el => {
         const name=el.dataset.field;
@@ -1303,7 +1308,7 @@
   customElements.define("tracearr-card-editor",TracearrCardEditor);
   window.customCards=window.customCards||[];
   for (const [type,name,description] of [
-    ["tracearr-streams-card","Tracearr – Lectures en cours","Liste, grille ou carrousel des flux Plex, Jellyfin et Emby"],
+    ["tracearr-streams-card","Tracearr – Lectures en cours","Liste ou carrousel des flux Plex, Jellyfin et Emby"],
     ["tracearr-stream-card","Tracearr – Lecture individuelle","Un seul flux Tracearr, à afficher séparément"],
   ]) if (!window.customCards.some(card=>card.type===type)) window.customCards.push({type,name,description,preview:false});
 })();

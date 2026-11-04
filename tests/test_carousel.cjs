@@ -313,39 +313,38 @@ test('native ha-card surface, nested stream panel and centered poster survive wr
   assert.match(card.shadowRoot.innerHTML,/flat-streams/);
 });
 
-test('visual editor groups settings by header, stream, footer and shared palette', () => {
+test('editor keeps global display settings together and uses collapsible header items', () => {
   const Editor=classes.get('tracearr-card-editor');
   const editor=new Editor();
   editor.setConfig({type:'custom:tracearr-streams-card'});
   const html=editor.shadowRoot.innerHTML;
-  for(const title of ['En-tête et statistiques','Disposition et dimensions','Navigation et carrousel',
-    'Contenu de la lecture','Bandeau d\'informations du flux','Apparence, couleurs et typographie',
-    'Filtres et tri','Noms et avatars personnalisés']) {
+  for (const title of ['Affichage général','Choix des lectures et filtres','Disposition (taille dans Mise en page)',
+    'Navigation et carrousel','En-tête et badges','Titres, saisons et années',
+    "Bandeau d'informations du flux",'Débit local / distant','Réglages avancés par carte'])
     assert.ok(html.includes(title.replaceAll("'",'&#39;')),title);
-  }
+  assert.match(html,/data-subdetail="metric-server_counts"/);
+  assert.match(html,/data-subdetail="shared-badges"/);
   assert.match(html,/data-field="header_show_server_counts"/);
   assert.match(html,/data-field="accent_color_mode"/);
   assert.match(html,/data-field="show_quality"/);
+  for (const obsolete of ['Largeur Sections','Hauteur initiale Sections','Hauteur CSS hors Sections','Grille adaptative'])
+    assert.ok(!html.includes(obsolete),obsolete);
 });
 
-test('native Sections height is resizable and pixel height is not forced on grid-resized cards', () => {
-  const {card} = setup();
-  let opts=card.getGridOptions();
+test('native Sections layout owns size regardless of legacy pixel/row settings', () => {
+  const {card}=setup();
+  const opts=card.getGridOptions();
   assert.equal(opts.rows,4);
   assert.equal(opts.min_rows,2);
   assert.equal(opts.max_rows,30);
-  card._config.grid_rows=7;
-  opts=card.getGridOptions();
-  assert.equal(opts.rows,7);
-  card._config.height=330;
-  card._config.font_size=18;
-  card.render();
-  assert.match(card.shadowRoot.innerHTML,/height:330px/);
-  assert.match(card.shadowRoot.innerHTML,/--tr-font-size:18px/);
-  card._config.grid_options={columns:6, rows:3};
-  card._renderFingerprint=null;
+  card.setConfig({mode:'grid',height:330,grid_rows:7,grid_columns:6,font_size:18});
+  assert.equal(card._config.mode,'list');
+  for(const removed of ['height','grid_rows','grid_columns','columns'])
+    assert.ok(!(removed in card._config),removed);
   card.render();
   assert.doesNotMatch(card.shadowRoot.innerHTML,/height:330px/);
+  assert.match(card.shadowRoot.innerHTML,/--tr-font-size:18px/);
+  assert.equal(card.getGridOptions().rows,4);
 });
 
 test('arrows can be hidden but carousel keyboard controls and dragging remain supported', () => {
@@ -691,8 +690,8 @@ test('new editor exposes entity picker, independent season options, network scop
   assert.match(html,/data-badge-label="0"/);
   assert.match(html,/data-badge-remove="0"/);
   assert.match(html,/data-badge-add/);
-  assert.match(html,/Comportement sans lecture/);
-  assert.match(html,/Débit et localisation des flux/);
+  assert.match(html,/En l&#39;absence de lecture/);
+  assert.match(html,/Débit local \/ distant/);
 });
 
 // 0.1.8: paired clocks, projected end-time, clearer video/audio pictograms and
@@ -892,4 +891,43 @@ test('paused stream displays En pause beside elapsed and no predicted end', () =
     media_title:'Film',media_type:'movie',state:'paused',progress_ms:60000,duration_ms:180000});
   assert.match(html, /class="time-left">[\s\S]*class="time-current"[\s\S]*class="time-paused">En pause/);
   assert.doesNotMatch(html, /class="time-end"/);
+});
+
+
+test('individual card offers active session selection and durable account/server targeting', () => {
+  const Individual=classes.get('tracearr-stream-card');
+  const individual=new Individual();
+  const entry={id:'server-config',name:'Tracearr',streams:[
+    {id:'session-a',server_id:'plex-id',username:'alice',server_name:'Plex',media_title:'Film A',started_at:'2026-11-04T10:00:00Z'},
+    {id:'session-b',server_id:'jelly-id',username:'bob',server_name:'Jellyfin',media_title:'Film B',started_at:'2026-11-04T11:00:00Z'},
+  ],servers:[{server_id:'plex-id',server_name:'Plex'},{server_id:'jelly-id',server_name:'Jellyfin'}]};
+  individual._payload={entries:[entry]};
+  individual.setConfig({type:'custom:tracearr-stream-card', selection:'account',selected_account:'plex-id:alice'});
+  assert.equal(individual._streams(entry)[0].id,'session-a');
+  individual.setConfig({type:'custom:tracearr-stream-card', selection:'server',selected_server:'jelly-id'});
+  assert.equal(individual._streams(entry)[0].id,'session-b');
+  individual.setConfig({type:'custom:tracearr-stream-card', selection:'stream',stream_id:'session-a'});
+  assert.equal(individual._streams(entry)[0].id,'session-a');
+  const Editor=classes.get('tracearr-card-editor');
+  const editor=new Editor();
+  editor._payload={entries:[entry]};
+  editor.setConfig({type:'custom:tracearr-stream-card'});
+  const html=editor.shadowRoot.innerHTML;
+  assert.match(html,/value="session-a"/);
+  assert.match(html,/value="plex-id:alice"/);
+  assert.match(html,/data-field="selection"/);
+  assert.match(html,/data-field="selected_account"/);
+  assert.match(html,/data-field="selected_server"/);
+  assert.match(html,/data-field="stream_id"/);
+});
+
+test('entity badge options are collapsed by default with nested detail sections', () => {
+  const Editor=classes.get('tracearr-card-editor');
+  const editor=new Editor();
+  editor.setConfig({type:'custom:tracearr-streams-card',header_entity_badges:[{id:'request',entity:'sensor.seerr_requests',label:'Seerr'}]});
+  const html=editor.shadowRoot.innerHTML;
+  assert.match(html,/data-subdetail="entity-request"/);
+  assert.match(html,/Seerr/);
+  assert.match(html,/data-badge-setting="blink_positive"/);
+  assert.match(html,/data-badge-setting="zero_custom_color"/);
 });

@@ -27,7 +27,10 @@
           "raw_maps": "Éditeur JSON avancé",
           "network_device": "Classer un appareil détecté",
           "network_manual": "Ajouter un appareil manuellement",
-          "network_json": "Règles LAN/WAN (JSON)"
+          "network_json": "Règles LAN/WAN (JSON)",
+          "devices_table": "Classer tous les appareils détectés",
+          "aliases_table": "Modifier les noms de tous les utilisateurs",
+          "advanced": "Options avancées / anciennes méthodes"
         }
       },
       "user_alias": {
@@ -77,6 +80,23 @@
         "description": "Exemple : {\"device:Apple TV\":\"local\", \"player:Plex Web\":\"remote\"}",
         "data": {
           "network_locations": "Appareils locaux et distants (JSON)"
+        }
+      },
+      "devices_table": {
+        "title": "Appareils locaux et distants",
+        "description": "Choisissez Local, Distant ou Non classé pour chaque appareil connu. Les valeurs enregistrées sont préremplies. Les appareils sont regroupés par nom de serveur."
+      },
+      "aliases_table": {
+        "title": "Noms affichés des utilisateurs",
+        "description": "Un champ par compte. Laissez vide pour conserver le nom d’origine. Les noms enregistrés sont préremplis."
+      },
+      "advanced": {
+        "title": "Configuration avancée",
+        "menu_options": {
+          "user_alias": "Modifier un compte individuellement",
+          "network_device": "Classer un seul appareil",
+          "network_json": "Règles LAN/WAN (JSON)",
+          "raw_maps": "Alias et avatars (JSON)"
         }
       }
     },

@@ -1,3 +1,13 @@
+## 0.1.12 Alpha (2026-11-04)
+
+- Sélection visuelle du flux de la carte individuelle : session active, utilisateur, serveur, ou lecture la plus récente. La sélection utilisateur reste valable pour les prochaines lectures.
+- Suppression du mode grille adaptative (migration automatique des cartes existantes vers la liste verticale).
+- Suppression des réglages de taille dans l'éditeur : largeur/hauteur pilotées exclusivement par la mise en page native de Home Assistant Sections.
+- Formulaires groupés pour les localisations LAN/WAN par appareil et pour les alias utilisateur ; les valeurs précédemment enregistrées sont automatiquement préremplies et conservées.
+- Récupération facultative de jusqu'à 500 lectures historiques pour identifier également les appareils inactifs, en plus des appareils actifs et déjà configurés.
+- Éditeur Lovelace réorganisé avec une catégorie Affichage général et des panneaux repliables par badge/compteur dans l'en-tête.
+- Aucune modification de l'icône validée, des réglages existants d'avatars ni des capteurs API.
+
 ## 0.1.11 Alpha (2026-11-04)
 
 - Remplacement de l’icône locale de l’intégration par la variante minimaliste validée : maison cyan, bouton lecture et barre de progression, en 256 et 512 pixels.

@@ -27,7 +27,10 @@
           "raw_maps": "Advanced JSON editor",
           "network_device": "Classify detected device",
           "network_manual": "Add device manually",
-          "network_json": "LAN/WAN rules (JSON)"
+          "network_json": "LAN/WAN rules (JSON)",
+          "devices_table": "Classify detected devices",
+          "aliases_table": "Edit all user display names",
+          "advanced": "Advanced options / legacy editors"
         }
       },
       "user_alias": {
@@ -77,6 +80,23 @@
         "description": "Example: {\"device:Apple TV\":\"local\", \"player:Plex Web\":\"remote\"}",
         "data": {
           "network_locations": "Device locations (JSON)"
+        }
+      },
+      "devices_table": {
+        "title": "Local and remote devices",
+        "description": "Set local, remote or unclassified for each detected device. Saved values are filled in."
+      },
+      "aliases_table": {
+        "title": "User display names",
+        "description": "One field per account. Leave blank to use the original name. Existing aliases are prefilled."
+      },
+      "advanced": {
+        "title": "Advanced settings",
+        "menu_options": {
+          "user_alias": "Edit a single account",
+          "network_device": "Classify one device",
+          "network_json": "LAN/WAN JSON rules",
+          "raw_maps": "Aliases and avatars JSON"
         }
       }
     },

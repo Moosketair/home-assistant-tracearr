@@ -18,7 +18,7 @@ def methods():
     selected = [node for node in cls.body if isinstance(node, ast.AsyncFunctionDef) and node.name in {
         '_load_devices', 'async_step_network_location',
     }]
-    scope = {'DOMAIN':'tracearr_ha','CONF_NETWORK_LOCATIONS':'network_locations'}
+    scope = {'DOMAIN':'tracearr_ha','CONF_NETWORK_LOCATIONS':'network_locations','CONF_URL':'url'}
     exec(compile(ast.fix_missing_locations(ast.Module(body=selected,type_ignores=[])), str(SOURCE),'exec'),scope)
     return scope
 

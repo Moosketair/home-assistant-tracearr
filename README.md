@@ -2,9 +2,18 @@
 
 [![Validation](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml/badge.svg)](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml)
 
-**Suivez en temps réel les lectures Plex, Jellyfin et Emby directement dans votre tableau de bord Home Assistant.** Une intégration HACS, des capteurs et deux cartes Lovelace entièrement personnalisables : liste verticale, grille adaptative ou carrousel.
+**Suivez en temps réel les lectures Plex, Jellyfin et Emby directement dans votre tableau de bord Home Assistant.** Une intégration HACS, des capteurs et deux cartes Lovelace entièrement personnalisables : liste verticale ou carrousel.
 
-**Version 0.1.10 Alpha.** Ce projet est en cours de test sur de vraies installations Home Assistant. N'utilisez pas encore ses capteurs pour des automatismes critiques.
+**Version 0.1.12 Alpha.** Ce projet est en cours de test sur de vraies installations Home Assistant. N'utilisez pas encore ses capteurs pour des automatismes critiques.
+
+## Nouveautés de la version 0.1.12
+
+- **Carte « Lecture individuelle » :** sélection d’une session active dans une liste déroulante, d’un utilisateur (suivi de ses prochaines lectures), d’un serveur ou de la dernière session. Une session spécifique disparaît de la carte lorsqu’elle se termine.
+- **Plus de grille adaptative :** seules les dispositions *liste* et *carrousel* sont proposées. Les anciens dashboards en grille sont convertis automatiquement en liste.
+- **Dimensions natives :** les champs de largeur Sections, hauteur Sections et hauteur CSS ont disparu. Utilisez **Mise en page** dans le tableau de bord Home Assistant.
+- **Configuration groupée :** dans la configuration de l’intégration, un formulaire prérempli liste tous les appareils détectés (lectures en cours + jusqu’à 500 lectures récentes de l’historique + anciens appareils enregistrés), avec le choix **Local / Distant / Non classé**. Les noms personnalisés des utilisateurs se modifient également en une fois, un champ par compte.
+- **En-tête simplifié :** chaque compteur et chaque entité dispose de son propre panneau repliable. Les réglages globaux d’affichage et de couleurs sont regroupés, avec toujours des exceptions possibles pour les badges.
+- **Rétrocompatibilité :** les classifications LAN/WAN, alias, avatars, badges et filtres existants sont conservés ; la nouvelle interface préremplit les valeurs enregistrées.
 
 ## Fonctionnalités
 
@@ -12,11 +21,11 @@
 - **Temps réel :** une seule connexion SSE pour toute l'instance Home Assistant, avec reconnexion automatique et interrogation REST de secours (~15 s hors connexion SSE, vérification ~60 s en temps réel). Après chaque événement `ready`, les données sont resynchronisées, car Tracearr ne rejoue pas les événements manqués.
 - **Capteurs :** flux actifs, lectures directes, transcodages vidéo seulement, audio seulement, vidéo + audio, transcodages non classés, débit estimé et disponibilité des serveurs.
 - **Deux cartes Lovelace :** carte *Lectures en cours* (tous les flux) et carte *Lecture individuelle* (un flux filtré ou choisi).
-- **Trois dispositions :** liste verticale, grille adaptative et carrousel avec un à quatre flux visibles.
+- **Deux dispositions :** liste verticale et carrousel avec un à quatre flux visibles.
 - **Carrousel personnalisable :** défilement automatique, intervalle, durée de transition, cinq effets, barre de défilement horizontale toujours cachée, flèches activables/désactivables et navigation au cliquer-glisser avec la souris, au doigt ou au clavier. La pause au survol de la souris est facultative.
 - **Couleurs par serveur :** liseré latéral jaune/orange pour Plex, violet pour Jellyfin et vert pour Emby.
-- **Affichage adaptable :** redimensionnement natif en largeur ET en hauteur dans les dashboards Home Assistant *Sections* ; hauteur CSS facultative pour les autres dashboards et mode compact.
-- **Éditeur visuel organisé par catégories :** en-tête, dimensions, navigation, contenu des lectures, informations de bas de carte, palette, filtres et alias.
+- **Affichage adaptable :** redimensionnement par l’onglet **Mise en page** de Home Assistant (dashboards *Sections*) et mode compact. Les anciennes dimensions CSS de la carte ont été supprimées.
+- **Éditeur visuel simplifié :** affichage général, choix des lectures, en-tête avec sous-menus par badge, médias, bandeau inférieur, carrousel et réglages avancés.
 - **En-tête personnalisable :** masquer le bandeau, changer son titre et sélectionner individuellement les compteurs (flux, débit cumulé, transcodages vidéo/audio/mixtes/total, direct, pause et flux par serveur). Ajouter autant de badges d’entités Home Assistant (capteurs, compteurs, etc.) que souhaité, jusqu’à 20, avec nom facultatif et valeur mise à jour en direct.
 - **Couleurs partagées :** même palette pour barres de progression, bulles de qualité/débit et compteurs, avec choix automatique de la couleur du texte (noir ou blanc).
 - **Aspect Home Assistant natif :** carte extérieure `ha-card` avec le fond, les bordures et l'ombre du thème ; sous-cartes légèrement contrastées ou transparentes. Affiches centrées verticalement lorsque les détails se répartissent sur plusieurs lignes.
@@ -28,7 +37,7 @@ Le carrousel se pilote au **cliquer-glisser**, comme sur une interface tactile, 
 
 | Réglage | Valeurs proposées |
 |---|---|
-| Mode d'affichage | `list`, `grid`, `carousel` |
+| Mode d'affichage | `list`, `carousel` |
 | Nombre de flux dans le carrousel | `carousel_visible: 1` à `4` |
 | Défilement automatique | `carousel_autoplay: true` / `false` |
 | Intervalle avant changement de flux | `carousel_interval: 3` à `120` secondes |
@@ -53,18 +62,17 @@ L'animation automatique se suspend lorsque la page est masquée ou que le naviga
 4. Entrez l'adresse de Tracearr (accessible depuis Home Assistant) et votre clé API `trr_pub_...`, créée dans **Tracearr → Paramètres → Données et API → API**.
 5. Ouvrez votre tableau de bord → **Modifier → Ajouter une carte** et cherchez « Tracearr ». Les cartes sont également disponibles depuis l'éditeur manuel (exemples ci-dessous).
 
-**Si les cartes ne figurent pas dans le sélecteur :** ouvrez **Paramètres → Tableaux de bord → ⋮ → Ressources** et vérifiez qu'une seule ressource de type **Module JavaScript** pointe vers `/tracearr_ha/tracearr-card.js?v=0.1.8`. Si une ancienne ressource (`?v=0.1.0` ou `?v=0.1.1`) existe, modifiez-la plutôt que d'en créer une seconde. Rechargez ensuite le navigateur avec `Ctrl + F5`.
+**Si les cartes ne figurent pas dans le sélecteur :** ouvrez **Paramètres → Tableaux de bord → ⋮ → Ressources** et vérifiez qu'une seule ressource de type **Module JavaScript** pointe vers `/tracearr_ha/tracearr-card.js?v=0.1.12`. Si une ancienne ressource (`?v=0.1.0` ou `?v=0.1.1`) existe, modifiez-la plutôt que d'en créer une seconde. Rechargez ensuite le navigateur avec `Ctrl + F5`.
 
 **Installation manuelle :** copiez le dossier `custom_components/tracearr_ha` dans `/config/custom_components/tracearr_ha/`, puis redémarrez Home Assistant.
 
 ## Exemples de cartes Lovelace
 
-**Grille adaptative :**
+**Liste verticale :**
 
 ```yaml
 type: custom:tracearr-streams-card
-mode: grid
-columns: auto
+mode: list
 show_header: true
 title: Activité multimédia
 header_show_streams: true
@@ -122,11 +130,11 @@ Les mêmes réglages sont accessibles depuis **l'éditeur graphique Lovelace**.
 
 ### Redimensionnement et personnalisation
 
-Dans un tableau de bord **Sections**, utilisez la **poignée de redimensionnement** fournie par Home Assistant pour augmenter la hauteur ou la largeur. La carte déclare désormais une hauteur initiale de 4 lignes, un minimum de 2 et un maximum de 30 lignes ; contrairement à l'ancienne hauteur « auto », le redimensionnement vertical est permis. Les réglages `grid_rows` et `grid_columns` correspondent à la taille **initiale**, et la taille personnalisée par Home Assistant (`grid_options`) est prioritaire sur la hauteur CSS. Pour les vues hors Sections, utilisez `height` (pixels).
+Dans un tableau de bord **Sections**, réglez hauteur et largeur dans **Modifier le tableau de bord → Carte → Mise en page**, à l’aide des contrôles natifs de Home Assistant. Les anciens champs `grid_columns`, `grid_rows` et `height` ne sont plus proposés et sont ignorés par le moteur de rendu. Les anciennes cartes en `mode: grid` sont automatiquement affichées en liste verticale. Dans les autres types de tableaux de bord, la taille dépend de la disposition HA et de ses conteneurs, sans taille CSS forcée par Tracearr.
 
 ### Personnalisation de l'en-tête
 
-Les options de la section **En-tête et statistiques** permettent de masquer entièrement le bandeau (`show_header: false`), d'afficher un titre personnel (`title`) ou de ne garder que certains indicateurs. Vous pouvez afficher, indépendamment les uns des autres :
+Les options de la section **En-tête et badges** permettent de masquer entièrement le bandeau (`show_header: false`), d'afficher un titre personnel (`title`) ou de ne garder que certains indicateurs. Vous pouvez afficher, indépendamment les uns des autres :
 
 | Réglage | Affichage |
 |---|---|
@@ -224,7 +232,7 @@ Une sélection **Palette commune** détermine la couleur de la barre de lecture 
 - `accent_color_mode: server` : Plex orange, Jellyfin violet, Emby vert ; les statistiques générales conservent la couleur d'accent du thème, alors que les compteurs par serveur portent chacun sa couleur ;
 - `accent_color_mode: custom` : couleur `accent_custom_color` au format `#RRGGBB`.
 
-Une option **Couleur des badges d'en-tête** (dans **En-tête et statistiques**) permet désormais d'appliquer **une couleur indépendante** : `header_badge_color_mode: inherit` (palette commune), `theme`, `server` (couleur dédiée aux compteurs de chaque serveur, thème pour les métriques générales) ou `custom` avec `header_badge_custom_color: "#223344"`.
+Une option **Couleur des badges d'en-tête** (dans **En-tête et badges**) permet désormais d'appliquer **une couleur indépendante** : `header_badge_color_mode: inherit` (palette commune), `theme`, `server` (couleur dédiée aux compteurs de chaque serveur, thème pour les métriques générales) ou `custom` avec `header_badge_custom_color: "#223344"`.
 
 Le texte de chaque badge coloré est noir ou blanc suivant le meilleur contraste. Les icônes de statut vidéo/audio (vert direct, orange transcodage) et le message « En pause » gardent leurs couleurs de statut.
 
@@ -236,7 +244,7 @@ La barre horizontale du carrousel reste masquée ; navigation par flèches facul
 
 ## Personnaliser les utilisateurs
 
-Dans **Paramètres → Appareils et services → Tracearr HA → Configurer**, sélectionnez un compte et définissez son nom d'affichage. Les identifiants Plex et Jellyfin ne sont pas modifiés.
+Dans **Paramètres → Appareils et services → Tracearr HA → Configurer → Modifier les noms de tous les utilisateurs**, un champ est proposé par compte détecté (Plex, Jellyfin et Emby). Les noms déjà enregistrés sont **préremplis** : vous pouvez modifier plusieurs comptes puis enregistrer en une fois. Les identifiants d’origine ne sont pas modifiés. Un éditeur avancé permet toujours de régler individuellement les avatars.
 
 Pour personnaliser uniquement une carte, utilisez le champ *Alias*, une ligne par correspondance :
 
@@ -271,7 +279,7 @@ L'API `/streams` v2 ne fournit pas la distinction réseau local/WAN ni un identi
 
 1. **Aucun capteur :** consultez **Paramètres → Système → Journaux** et vérifiez l'URL et la clé API Tracearr.
 2. **Le SSE se reconnecte souvent :** désactivez le buffering du proxy inverse pour `text/event-stream` et augmentez le délai d'inactivité au-delà de 30 secondes (un ping arrive environ toutes les 25 secondes).
-3. **La carte est introuvable :** vérifiez la ressource `/tracearr_ha/tracearr-card.js?v=0.1.8` dans Lovelace, redémarrez HA et rechargez votre navigateur.
+3. **La carte est introuvable :** vérifiez la ressource `/tracearr_ha/tracearr-card.js?v=0.1.12` dans Lovelace, redémarrez HA et rechargez votre navigateur.
 4. **Les images sont absentes :** vérifiez que les URL `poster_url` sont bien servies par le proxy d'images de Tracearr et qu'aucune erreur n'apparaît dans les journaux réseau du navigateur.
 5. **Transcodage « Inconnu » :** Tracearr ou le serveur média n'a pas fourni assez de détails pour classer la lecture.
 6. **Le carrousel ne défile pas automatiquement :** vérifiez qu'il y a plus de flux que de cartes visibles, que la page est au premier plan, que la pause au survol est désactivée ou que la souris est sortie de la carte, et que la réduction des animations n'est pas activée dans le système.
@@ -289,7 +297,7 @@ La suite de tests couvre notamment la classification des transcodages, les évé
 
 ## Évolutions envisagées
 
-- Sélection graphique des utilisateurs hors ligne dans les filtres.
+- Liste exhaustive des appareils de l’historique au-delà des 500 lectures récentes interrogées (les appareils déjà enregistrés restent disponibles).
 - Davantage de tests des affiches et avatars sur différentes installations Tracearr.
 - Statistiques utilisateur détaillées et diagnostics.
 - Traduction complète de l'éditeur et amélioration de l'accessibilité.

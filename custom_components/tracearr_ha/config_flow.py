@@ -55,9 +55,85 @@ class TracearrOptionsFlow(config_entries.OptionsFlow):
         self._accounts = None
         self._chosen_account = None
         self._chosen_device = None
+        self._device_bulk_fields = {}
+        self._alias_bulk_fields = {}
 
     async def async_step_init(self, user_input=None):
-        return self.async_show_menu(step_id="init", menu_options=["user_alias", "network_device", "network_manual", "network_json", "raw_maps"])
+        return self.async_show_menu(step_id="init", menu_options=[
+            "devices_table", "aliases_table", "network_manual", "advanced",
+        ])
+
+    async def async_step_advanced(self, user_input=None):
+        """Keep existing single-record/JSON tools for complex configurations."""
+        return self.async_show_menu(step_id="advanced", menu_options=[
+            "user_alias", "network_device", "network_json", "raw_maps",
+        ])
+
+    @staticmethod
+    def _unique_fields(labels: dict[str, str]) -> dict[str, str]:
+        """Map readable dynamic form labels to stable identifiers, without collisions."""
+        used: set[str] = set()
+        fields: dict[str, str] = {}
+        for key, title in sorted(labels.items(), key=lambda item: item[1].casefold()):
+            label = title.strip() or key
+            if label in used:
+                label = f"{label} · {key[-8:]}"
+            used.add(label)
+            fields[label] = key
+        return fields
+
+    async def async_step_aliases_table(self, user_input=None):
+        """Edit every detected account in one pre-filled Home Assistant form."""
+        accounts = await self._load_accounts()
+        aliases = dict(self.config_entry.options.get(CONF_ALIASES, {}))
+        for key in aliases:
+            accounts.setdefault(key, f"{key} (enregistré)")
+        if not accounts:
+            return self.async_abort(reason="no_users")
+        fields = self._unique_fields(accounts)
+        if user_input is not None:
+            updates = dict(aliases)
+            for label, key in fields.items():
+                new_value = str(user_input.get(label, aliases.get(key, ""))).strip()
+                if new_value:
+                    updates[key] = new_value
+                else:
+                    updates.pop(key, None)
+            return self.async_create_entry(title="", data={
+                **self.config_entry.options, CONF_ALIASES: updates,
+            })
+        schema = vol.Schema({
+            vol.Optional(label, default=aliases.get(key, "")): str
+            for label, key in fields.items()
+        })
+        return self.async_show_form(step_id="aliases_table", data_schema=schema)
+
+    async def async_step_devices_table(self, user_input=None):
+        """Bulk LAN/WAN choices, grouped by the server labels in each field."""
+        devices = await self._load_devices()
+        locations = dict(self.config_entry.options.get(CONF_NETWORK_LOCATIONS, {}))
+        for key in locations:
+            devices.setdefault(key, f"{key} (enregistré)")
+        if not devices:
+            return await self.async_step_network_manual()
+        fields = self._unique_fields(devices)
+        choices = {"unknown": "Non classé", "local": "Local (LAN)", "remote": "Distant (WAN)"}
+        if user_input is not None:
+            updated = dict(locations)
+            for label, key in fields.items():
+                value = user_input.get(label, locations.get(key, "unknown"))
+                if value == "unknown":
+                    updated.pop(key, None)
+                elif value in ("local", "remote"):
+                    updated[key] = value
+            return self.async_create_entry(title="", data={
+                **self.config_entry.options, CONF_NETWORK_LOCATIONS: updated,
+            })
+        schema = vol.Schema({
+            vol.Optional(label, default=locations.get(key, "unknown")): vol.In(choices)
+            for label, key in fields.items()
+        })
+        return self.async_show_form(step_id="devices_table", data_schema=schema)
 
     async def _load_accounts(self) -> dict[str, str]:
         if self._accounts is not None:
@@ -120,15 +196,43 @@ class TracearrOptionsFlow(config_entries.OptionsFlow):
         if coordinator:
             for stream in coordinator.streams.values():
                 server = stream.get("server_name") or stream.get("server_type") or "Serveur"
+                server_type = str(stream.get("server_type") or "Média").upper()
                 server_id = stream.get("server_id")
                 device = str(stream.get("device") or "").strip()
                 player = str(stream.get("player") or "").strip()
                 if device:
                     key = f"{server_id}:device:{device}" if server_id else f"device:{device}"
-                    devices[key] = f"{server} · {device} (appareil)"
+                    devices[key] = f"{server_type} · {server} · {device} (appareil)"
                 if player:
                     key = f"{server_id}:player:{player}" if server_id else f"player:{player}"
-                    devices[key] = f"{server} · {player} (lecteur)"
+                    devices[key] = f"{server_type} · {server} · {player} (lecteur)"
+        # History contains devices that are not currently playing. Limit API work
+        # to 500 recent plays; keep all previously classified inactive devices.
+        if getattr(self.config_entry, "data", {}).get(CONF_URL):
+            client = TracearrClient(async_get_clientsession(self.hass),
+                self.config_entry.data[CONF_URL], self.config_entry.data[CONF_TOKEN])
+            cursor = None
+            try:
+                for _ in range(5):
+                    params = {"pageSize": 100}
+                    if cursor:
+                        params["cursor"] = cursor
+                    result = await client.get("history", params)
+                    for record in result.get("data", []):
+                        server_id = record.get("server_id")
+                        server = record.get("server_name") or record.get("server_type") or "Serveur"
+                        server_type = str(record.get("server_type") or "Média").upper()
+                        for kind, suffix in (("device", "appareil"), ("player", "lecteur")):
+                            value = str(record.get(kind) or "").strip()
+                            if value:
+                                key = f"{server_id}:{kind}:{value}" if server_id else f"{kind}:{value}"
+                                devices.setdefault(key, f"{server_type} · {server} · {value} ({suffix})")
+                    cursor = result.get("meta", {}).get("nextCursor")
+                    if not cursor:
+                        break
+            except TracearrError:
+                # Active + saved devices still work when history is unavailable.
+                pass
         for key in self.config_entry.options.get(CONF_NETWORK_LOCATIONS, {}):
             devices.setdefault(key, f"{key} (enregistré)")
         return dict(sorted(devices.items(), key=lambda item:item[1].casefold()))
