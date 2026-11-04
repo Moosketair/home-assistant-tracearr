@@ -1,3 +1,10 @@
+## 0.1.11 Alpha (2026-11-04)
+
+- Remplacement de l’icône locale de l’intégration par la variante minimaliste validée : maison cyan, bouton lecture et barre de progression, en 256 et 512 pixels.
+- Pas de reprise du logo officiel Tracearr ni du logo protégé Home Assistant.
+- Documentation du problème connu HACS : absence d’icône dans les listes HACS malgré son affichage dans les intégrations Home Assistant.
+- Mise à jour de la version et du chargement des ressources. Aucun changement fonctionnel à l’API ni aux cartes.
+
 ## 0.1.10 Alpha (2026-11-04)
 
 - Chronomètre : « temps écoulé / temps restant » regroupés à gauche ; « Fin à HH:mm » aligné à droite.

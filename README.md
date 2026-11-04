@@ -327,3 +327,10 @@ Le dépôt Tracearr annonce une licence AGPL-3.0 pour son logiciel ; cette menti
 ### Présentation des temps
 
 Dans chaque lecture, l'affichage regroupe **temps écoulé / temps restant** à gauche et, si activé, **« Fin à HH:mm »** à droite. En pause, l'heure de fin est retirée et « En pause » reste visible.
+
+
+### Icône et limites d’affichage dans HACS
+
+L'icône du projet est une création indépendante (maison cyan, lecture et progression). Elle est distribuée dans `custom_components/tracearr_ha/brand/icon.png` et `icon@2x.png`. Aucune marque ni aucun logo officiel Tracearr ou Home Assistant n’est reproduit.
+
+Sur Home Assistant 2026.3+, l'icône locale est utilisée dans **Paramètres → Appareils et services**. Dans certaines versions de HACS, la liste des téléchargements affiche encore « icon not available » : le frontend HACS utilise l'ancien serveur de marques et ne retrouve pas les icônes locales. Ce problème est suivi en amont : https://github.com/hacs/integration/issues/5223 et https://github.com/hacs/integration/issues/5402. Il ne se corrige pas simplement avec un réglage HACS ou un fichier supplémentaire dans ce dépôt.
