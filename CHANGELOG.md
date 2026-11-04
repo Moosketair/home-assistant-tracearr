@@ -1,3 +1,10 @@
+## 0.1.10 Alpha (2026-11-04)
+
+- Chronomètre : « temps écoulé / temps restant » regroupés à gauche ; « Fin à HH:mm » aligné à droite.
+- L'état « En pause » reste visible à côté du temps écoulé ; pas d'heure de fin estimée tant que la lecture est en pause.
+- Ajout des validations HACS et hassfest à GitHub Actions, pour préparer une candidature au catalogue HACS.
+- Conservation de l'icône indépendante pour le moment : le logo officiel de Tracearr nécessitera une vérification des droits de réutilisation et des marques.
+
 # Historique des versions
 
 ## 0.1.8 — Alpha (2026-11-03)
