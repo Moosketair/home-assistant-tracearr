@@ -1,20 +1,20 @@
 {
   "domain": "tracearr_ha",
   "name": "Tracearr HA",
-  "version": "0.1.11",
-  "documentation": "https://github.com/Moosketair/home-assistant-tracearr",
-  "issue_tracker": "https://github.com/Moosketair/home-assistant-tracearr/issues",
   "codeowners": [
     "@Moosketair"
   ],
   "config_flow": true,
-  "iot_class": "local_push",
-  "integration_type": "service",
   "dependencies": [
     "http",
     "frontend",
     "lovelace",
     "websocket_api"
   ],
-  "requirements": []
+  "documentation": "https://github.com/Moosketair/home-assistant-tracearr",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/Moosketair/home-assistant-tracearr/issues",
+  "requirements": [],
+  "version": "0.1.11"
 }
