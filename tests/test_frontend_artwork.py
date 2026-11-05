@@ -33,7 +33,7 @@ def load_artwork_view():
 def test_artwork_proxy_uses_image_accept_and_accepts_octet_stream():
     async def scenario():
         seen = []
-        png = b"\\x89PNG\\r\\n\\x1a\\n" + b"test image bytes"
+        png = b"\x89PNG\r\n\x1a\n" + b"test image bytes"
 
         async def image(request):
             seen.append((request.headers.get("Accept"), request.headers.get("Authorization")))
