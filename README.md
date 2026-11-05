@@ -61,12 +61,11 @@ header_metric_settings:
     align: right
 ```
 
-**Une lecture individuelle, suivie par utilisateur :**
+**Une lecture individuelle (dernière session active) :**
 
 ```yaml
 type: custom:tracearr-stream-card
-selection: account
-selected_account: plex:alice
+selection: recent
 show_poster: true
 poster_size: 110
 show_end_time: true
