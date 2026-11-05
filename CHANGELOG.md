@@ -1,3 +1,9 @@
+## 0.1.14 Alpha (2026-11-05)
+
+- Réglage « Taille de l'affiche (%) » de 50 à 200 % dans l'éditeur visuel des deux cartes, avec maintien des proportions normales et compactes (100 % conserve les dimensions précédentes).
+- Alignement automatique des badges de l'en-tête à gauche lorsque le titre est masqué ; l'alignement à droite reste inchangé lorsque le titre est visible.
+- Tests de non-régression et mise à jour du chargement Lovelace et de la documentation HACS.
+
 ## 0.1.13 Alpha (2026-11-04)
 
 - Déplacement du choix Liste/Carrousel dans « Affichage général » pour la carte groupée ; suppression de la catégorie autonome « Disposition ».

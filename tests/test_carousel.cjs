@@ -966,3 +966,36 @@ test('server-wide rule supports explicit unclassified device exception', () => {
   assert.equal(card._networkScope({server_id:'plex-id',device:'Guest TV',username:'guest',server_type:'plex'}),'unknown');
   assert.equal(card._networkScope({server_id:'plex-id',device:'Living TV',username:'guest',server_type:'plex'}),'local');
 });
+
+test('poster size scales artwork in standard and compact cards without changing Sections sizing', () => {
+  const {card}=setup();
+  card.setConfig({poster_size:150});
+  assert.equal(card._config.poster_size,150);
+  card.render();
+  const html=card.shadowRoot.innerHTML;
+  assert.match(html,/--tr-poster-width:110px;--tr-poster-height:164px;--tr-compact-poster-width:72px;--tr-compact-poster-height:108px/);
+  assert.match(html,/\.poster-wrap \{[^}]*width:var\(--tr-poster-width,73px\)/s);
+  assert.match(html,/\.compact \.poster-wrap \{[^}]*width:var\(--tr-compact-poster-width,48px\)/s);
+  card.setConfig({poster_size:999,compact:true});
+  assert.equal(card._config.poster_size,200,'poster size is clamped');
+  card.render();
+  assert.match(card.shadowRoot.innerHTML,/--tr-poster-width:146px;--tr-poster-height:218px;--tr-compact-poster-width:96px;--tr-compact-poster-height:144px/);
+  card.setConfig({});
+  assert.equal(card._config.poster_size,100,'old dashboard cards retain their original poster size');
+  const Editor=classes.get('tracearr-card-editor');
+  const editor=new Editor();
+  editor.setConfig({type:'custom:tracearr-streams-card'});
+  assert.match(editor.shadowRoot.innerHTML,/data-field="poster_size" value="100"/);
+  editor.setConfig({type:'custom:tracearr-stream-card',poster_size:125});
+  assert.match(editor.shadowRoot.innerHTML,/data-field="poster_size" value="125"/);
+});
+
+test('header badges move left when title is hidden, and stay right when shown', () => {
+  const {card}=setup();
+  card.setConfig({show_header:true,show_title:false,header_show_streams:true});
+  assert.match(card._header([]),/<header class="head no-title"><div class="head-metrics">/);
+  card.render();
+  assert.match(card.shadowRoot.innerHTML,/\.head\.no-title \.head-metrics \{ justify-content:flex-start; \}/);
+  card._config.show_title=true;
+  assert.match(card._header([]),/<header class="head"><h3>Lectures en cours<\/h3><div class="head-metrics">/);
+});

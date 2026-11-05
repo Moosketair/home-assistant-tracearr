@@ -1,4 +1,4 @@
-/* Tracearr HA Lovelace cards 0.1.13 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.14 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;
@@ -8,7 +8,7 @@
     carousel_interval: 7, carousel_transition: "slide", carousel_transition_speed: 600,
     carousel_hide_scrollbar: true, carousel_show_arrows: true, carousel_mouse_drag: true,
     carousel_pause_on_hover: false, compact: false, show_title: true, show_counter: true,
-    show_transcodes: false, show_transcode_icons: true, show_poster: true, show_avatar: true,
+    show_transcodes: false, show_transcode_icons: true, show_poster: true, poster_size: 100, show_avatar: true,
     show_progress: true, show_end_time: false, show_quality: true, show_device: true, show_server: true,
     show_bitrate: false, show_health: true, show_codecs: false, show_year: true, show_remaining: true,
     show_paused: true, hide_empty: false, empty_mode: "message", empty_message: "Aucune lecture en cours",
@@ -152,6 +152,7 @@
       color:var(--primary-text-color,#fff); overflow-wrap:anywhere; }
     .head-metrics { display:flex; flex:1 1 auto; flex-wrap:wrap; align-items:center; gap:5px;
       min-width:0; justify-content:flex-end; }
+    .head.no-title .head-metrics { justify-content:flex-start; }
     .metric { display:inline-flex; align-items:center; gap:4px; padding:4px 9px; border-radius:20px;
       font-size:calc(var(--tr-font-size)*.80); font-weight:600; background:var(--pill-bg);
       color:var(--pill-text); white-space:nowrap; }
@@ -173,7 +174,7 @@
     .stream::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
       border-radius:3px; background:var(--stream-accent,var(--accent-color,#00BCD4)); }
     .root.flat-streams .stream { background:transparent; }
-    .poster-wrap { position:relative; width:73px; height:109px; flex:0 0 73px; align-self:center;
+    .poster-wrap { position:relative; width:var(--tr-poster-width,73px); height:var(--tr-poster-height,109px); flex:0 0 var(--tr-poster-width,73px); align-self:center;
       border-radius:7px; overflow:hidden; background:rgba(100,100,100,.15); }
     .poster { width:100%; height:100%; display:block; object-fit:cover; }
     .poster.empty { display:grid; place-items:center; font-size:calc(var(--tr-font-size)*1.8); }
@@ -226,7 +227,7 @@
       border-radius:8px; padding:6px 11px; cursor:pointer; font-size:calc(var(--tr-font-size)*.95); }
     button.nav:focus-visible,.streams.carousel:focus-visible { outline:2px solid var(--focus-color,#00bcd4); outline-offset:2px; }
     .compact .stream { min-height:78px; padding:8px; gap:8px; }
-    .compact .poster-wrap { width:48px; flex-basis:48px; height:72px; }
+    .compact .poster-wrap { width:var(--tr-compact-poster-width,48px); flex-basis:var(--tr-compact-poster-width,48px); height:var(--tr-compact-poster-height,72px); }
     .compact .user { font-size:calc(var(--tr-font-size)*.83); }
     .compact .info { gap:3px; }
     .compact .media-flags { top:8px; right:8px; }
@@ -267,6 +268,7 @@
     if (!("empty_mode" in config) && config.hide_empty) result.empty_mode = "hide";
     if (!["message", "header_only", "hide"].includes(result.empty_mode)) result.empty_mode = "message";
     if (!["both", "local", "remote"].includes(result.bitrate_scope)) result.bitrate_scope = "both";
+    result.poster_size = Math.round(clamp(result.poster_size, 50, 200, 100));
     result.header_blink_seconds = clamp(result.header_blink_seconds, .5, 20, 2);
     result.header_entity_badges = Array.isArray(result.header_entity_badges) ? result.header_entity_badges.slice(0, 20)
       .filter(row => row && typeof row === "object" && typeof row.entity === "string")
@@ -630,7 +632,7 @@
         [...HEADER_FIELDS, ...(c.header_entity_badges || []).map(row => `entity:${row.id}`)]);
       const orderedMetrics = order.flatMap(key => metrics.get(key) || []);
       if (!title && !orderedMetrics.length) return "";
-      return `<header class="head">${title}${orderedMetrics.length ? `<div class="head-metrics">${orderedMetrics.join("")}</div>` : ""}</header>`;
+      return `<header class="head${title ? "" : " no-title"}">${title}${orderedMetrics.length ? `<div class="head-metrics">${orderedMetrics.join("")}</div>` : ""}</header>`;
     }
     // API samples may be slightly older than the local playback time. Keep a
     // monotonic client-side clock for ordinary SSE updates; only snap when the
@@ -966,6 +968,8 @@
       this._headerMarkup = head;
       this._liveFingerprints = new Map(streams.map(s => [s.id, this._liveSnapshot(s,entry)]));
       const visible = clamp(c.carousel_visible, 1, 4, 1);
+      const posterScale = clamp(c.poster_size, 50, 200, 100) / 100;
+      const posterVars = `--tr-poster-width:${Math.round(73 * posterScale)}px;--tr-poster-height:${Math.round(109 * posterScale)}px;--tr-compact-poster-width:${Math.round(48 * posterScale)}px;--tr-compact-poster-height:${Math.round(72 * posterScale)}px`;
       const items = streams.map(s => this._streamCard(entry,s)).join("");
       // Always conceal the native scrollbar; navigation remains via buttons,
       // touch swipe, optional mouse drag and keyboard arrow keys.
@@ -974,7 +978,7 @@
       const body = !streams.length && c.empty_mode === "header_only" ? "" :
         `<div class="${classes}" ${c.mode === "carousel" ? `tabindex="0" role="region" aria-label="Lectures en carrousel"` : ""} style="--carousel-visible:${visible}">${items || `<div class="empty-message">${E(emptyText)}</div>`}</div>`;
       const nav = c.mode === "carousel" && c.carousel_show_arrows && streams.length > 1 ? `<div class="carousel-nav"><button class="nav" data-step="-1" aria-label="Précédent">❮</button><span>${streams.length} lectures</span><button class="nav" data-step="1" aria-label="Suivant">❯</button></div>` : "";
-      this.shadowRoot.innerHTML = `<style>${style}</style><ha-card style="--tr-font-size:${clamp(c.font_size,10,28,14)}px"><div class="root ${c.compact?"compact":""} ${c.stream_surface === "transparent" ? "flat-streams" : ""}">${head}${body}${nav}</div></ha-card>`;
+      this.shadowRoot.innerHTML = `<style>${style}</style><ha-card style="--tr-font-size:${clamp(c.font_size,10,28,14)}px;${posterVars}"><div class="root ${c.compact?"compact":""} ${c.stream_surface === "transparent" ? "flat-streams" : ""}">${head}${body}${nav}</div></ha-card>`;
       const newCarousel = this.shadowRoot.querySelector(".streams.carousel");
       if (newCarousel) {
         const cards = [...newCarousel.querySelectorAll(".stream")];
@@ -1212,6 +1216,8 @@
       ])+
         this._select("stream_surface","Fond intérieur des lectures",[["soft","Légèrement contrasté"],["transparent","Transparent"]])+
         this._number("font_size","Taille du texte (px)",10,28)+
+        this._number("poster_size","Taille de l\'affiche (%)",50,200)+
+        `<small>100 % correspond à la taille actuelle. Le réglage s\'applique aussi au mode compact.</small>`+
         this._select("empty_mode","En l'absence de lecture",[["message","Message personnalisé"],["header_only","En-tête uniquement"],["hide","Masquer la carte"]])+
         `<label>Message sans lecture<input type="text" data-field="empty_message" value="${E(c.empty_message??"Aucune lecture en cours")}"></label>`+
         this._select("accent_color_mode","Palette globale des couleurs",[["theme","Thème Home Assistant"],["server","Couleur de Plex / Jellyfin / Emby"],["custom","Personnalisée"]])+

@@ -4,9 +4,14 @@
 
 **Suivez en temps réel les lectures Plex, Jellyfin et Emby directement dans votre tableau de bord Home Assistant.** Une intégration HACS, des capteurs et deux cartes Lovelace entièrement personnalisables : liste verticale ou carrousel.
 
-**Version 0.1.13 Alpha.** Ce projet est en cours de test sur de vraies installations Home Assistant. N'utilisez pas encore ses capteurs pour des automatismes critiques.
+**Version 0.1.14 Alpha.** Ce projet est en cours de test sur de vraies installations Home Assistant. N'utilisez pas encore ses capteurs pour des automatismes critiques.
 
-## Nouveautés de la version 0.1.13
+## Nouveautés de la version 0.1.14
+
+- **Taille des affiches réglable** de 50 à 200 % dans « Affichage général », pour les cartes groupées et individuelles ; le mode compact conserve ses proportions.
+- **Badges alignés à gauche** automatiquement lorsque le titre de l'en-tête est masqué.
+
+## Améliorations récentes
 
 - **Carte « Lecture individuelle » :** sélection d’une session active dans une liste déroulante, d’un utilisateur (suivi de ses prochaines lectures), d’un serveur ou de la dernière session. Une session spécifique disparaît de la carte lorsqu’elle se termine.
 - **Plus de grille adaptative :** seules les dispositions *liste* et *carrousel* sont proposées. Les anciens dashboards en grille sont convertis automatiquement en liste.
@@ -48,6 +53,7 @@ Le carrousel se pilote au **cliquer-glisser**, comme sur une interface tactile, 
 | Cliquer-glisser à la souris | `carousel_mouse_drag: true` / `false` |
 | Icônes vidéo/audio | `show_transcode_icons: true` / `false` |
 | Taille des polices | `font_size: 10` à `28` (pixels) |
+| Taille de l'affiche | `poster_size: 50` à `200` (% ; défaut `100`) |
 | Palette commune (progression et badges) | `accent_color_mode: theme`, `server` ou `custom` |
 | Couleur personnalisée | `accent_custom_color: "#00BCD4"` |
 | Arrêter au survol de la souris | `carousel_pause_on_hover: true` / `false` |
@@ -56,13 +62,13 @@ L'animation automatique se suspend lorsque la page est masquée ou que le naviga
 
 ## Installation avec HACS
 
-1. Dans **HACS → ⋮ → Dépôts personnalisés**, ajoutez `https://github.com/Moosketair/home-assistant-tracearr` comme **Intégration**.
+1. Dans **HACS**, recherchez **Tracearr HA** dans le catalogue officiel puis cliquez sur **Télécharger**.
 2. Installez **Tracearr HA**, puis **redémarrez Home Assistant**.
 3. Allez dans **Paramètres → Appareils et services → Ajouter une intégration → Tracearr HA**.
 4. Entrez l'adresse de Tracearr (accessible depuis Home Assistant) et votre clé API `trr_pub_...`, créée dans **Tracearr → Paramètres → Données et API → API**.
 5. Ouvrez votre tableau de bord → **Modifier → Ajouter une carte** et cherchez « Tracearr ». Les cartes sont également disponibles depuis l'éditeur manuel (exemples ci-dessous).
 
-**Si les cartes ne figurent pas dans le sélecteur :** ouvrez **Paramètres → Tableaux de bord → ⋮ → Ressources** et vérifiez qu'une seule ressource de type **Module JavaScript** pointe vers `/tracearr_ha/tracearr-card.js?v=0.1.13`. Si une ancienne ressource (`?v=0.1.0` ou `?v=0.1.1`) existe, modifiez-la plutôt que d'en créer une seconde. Rechargez ensuite le navigateur avec `Ctrl + F5`.
+**Si les cartes ne figurent pas dans le sélecteur :** ouvrez **Paramètres → Tableaux de bord → ⋮ → Ressources** et vérifiez qu'une seule ressource de type **Module JavaScript** pointe vers `/tracearr_ha/tracearr-card.js?v=0.1.14`. Si une ancienne ressource (`?v=0.1.0` ou `?v=0.1.1`) existe, modifiez-la plutôt que d'en créer une seconde. Rechargez ensuite le navigateur avec `Ctrl + F5`.
 
 **Installation manuelle :** copiez le dossier `custom_components/tracearr_ha` dans `/config/custom_components/tracearr_ha/`, puis redémarrez Home Assistant.
 
@@ -130,7 +136,7 @@ Les mêmes réglages sont accessibles depuis **l'éditeur graphique Lovelace**.
 
 ### Redimensionnement et personnalisation
 
-Dans un tableau de bord **Sections**, réglez hauteur et largeur dans **Modifier le tableau de bord → Carte → Mise en page**, à l’aide des contrôles natifs de Home Assistant. Les anciens champs `grid_columns`, `grid_rows` et `height` ne sont plus proposés et sont ignorés par le moteur de rendu. Les anciennes cartes en `mode: grid` sont automatiquement affichées en liste verticale. Dans les autres types de tableaux de bord, la taille dépend de la disposition HA et de ses conteneurs, sans taille CSS forcée par Tracearr.
+Dans un tableau de bord **Sections**, réglez hauteur et largeur dans **Modifier le tableau de bord → Carte → Mise en page**, à l’aide des contrôles natifs de Home Assistant. La taille de la jaquette se règle indépendamment dans **Affichage général → Taille de l'affiche (%)** (`poster_size`, de 50 à 200 %, 100 % par défaut), y compris pour les cartes individuelles et en mode compact. Les anciens champs `grid_columns`, `grid_rows` et `height` ne sont plus proposés et sont ignorés par le moteur de rendu. Les anciennes cartes en `mode: grid` sont automatiquement affichées en liste verticale. Dans les autres types de tableaux de bord, la taille dépend de la disposition HA et de ses conteneurs, sans taille CSS forcée par Tracearr.
 
 ### Personnalisation de l'en-tête
 
@@ -148,7 +154,7 @@ Les options de la section **En-tête et badges** permettent de masquer entièrem
 | `header_show_transcodes_total` | Total des transcodages |
 | `header_show_server_counts` | Un compteur pour chaque serveur Plex/Jellyfin/Emby ayant au moins un flux visible |
 
-Les compteurs correspondent aux lectures visibles après application des filtres de la carte ; ils ne prétendent donc pas représenter d'autres flux cachés par les réglages. Le titre reste optionnel (`show_title`).
+Les compteurs correspondent aux lectures visibles après application des filtres de la carte ; ils ne prétendent donc pas représenter d'autres flux cachés par les réglages. Le titre reste optionnel (`show_title`) ; quand il est masqué, les badges sont alignés à gauche automatiquement.
 
 ### Titres, saisons, épisodes et années (0.1.7)
 
@@ -279,7 +285,7 @@ L'API `/streams` v2 ne fournit pas la distinction réseau local/WAN ni un identi
 
 1. **Aucun capteur :** consultez **Paramètres → Système → Journaux** et vérifiez l'URL et la clé API Tracearr.
 2. **Le SSE se reconnecte souvent :** désactivez le buffering du proxy inverse pour `text/event-stream` et augmentez le délai d'inactivité au-delà de 30 secondes (un ping arrive environ toutes les 25 secondes).
-3. **La carte est introuvable :** vérifiez la ressource `/tracearr_ha/tracearr-card.js?v=0.1.13` dans Lovelace, redémarrez HA et rechargez votre navigateur.
+3. **La carte est introuvable :** vérifiez la ressource `/tracearr_ha/tracearr-card.js?v=0.1.14` dans Lovelace, redémarrez HA et rechargez votre navigateur.
 4. **Les images sont absentes :** vérifiez que les URL `poster_url` sont bien servies par le proxy d'images de Tracearr et qu'aucune erreur n'apparaît dans les journaux réseau du navigateur.
 5. **Transcodage « Inconnu » :** Tracearr ou le serveur média n'a pas fourni assez de détails pour classer la lecture.
 6. **Le carrousel ne défile pas automatiquement :** vérifiez qu'il y a plus de flux que de cartes visibles, que la page est au premier plan, que la pause au survol est désactivée ou que la souris est sortie de la carte, et que la réduction des animations n'est pas activée dans le système.
@@ -321,12 +327,9 @@ Les temps « déjà lu » et « restant » sont calculés localement à partir d
 
 ## Publication au catalogue HACS (pour les mainteneurs)
 
-L'intégration est **non officielle** : elle utilise l'API publique de Tracearr et n'est ni approuvée ni maintenue par Tracearr ou Home Assistant.
+Le dépôt figure dans le **catalogue officiel HACS** depuis la fusion de la [PR #13306](https://github.com/hacs/default/pull/13306). Cela ne signifie pas une affiliation avec Tracearr ou Home Assistant : l'intégration est un projet communautaire indépendant.
 
-1. Vérifier le fonctionnement sur des installations Home Assistant réelles et éliminer les problèmes connus.
-2. Faire passer sans erreur les workflows HACS et hassfest dans **GitHub Actions**.
-3. Publier une **GitHub Release** complète depuis une version stable (pas seulement un tag).
-4. Proposer le dépôt `Moosketair/home-assistant-tracearr` au catalogue via une pull request sur [`hacs/default`](https://github.com/hacs/default), en respectant son modèle de PR et les conditions en vigueur. L'examen peut prendre plusieurs mois.
+Pour chaque mise à jour, incrémentez la version dans `manifest.json`, vérifiez les workflows HACS et hassfest dans **GitHub Actions**, puis publiez une **GitHub Release** correspondant au commit validé. HACS détectera la nouvelle version après synchronisation ; un simple commit ou tag sans Release ne suffit pas.
 
 ### Droit des marques et logo
 
