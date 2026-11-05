@@ -2,6 +2,12 @@
 
 Les changements sont classés par version publique. Les préversions et les anciennes notes restent consultables ci-dessous. Les [GitHub Releases](https://github.com/Moosketair/home-assistant-tracearr/releases) permettent de télécharger une version précise.
 
+## 0.1.16 — 2026-11-05
+
+- Badge centré à largeur intrinsèque : la colonne du centre utilise `max-content` plutôt qu'un tiers fixe de l'en-tête ; les deux colonnes latérales se partagent le reste, conservant le badge au milieu.
+- Suppression du passage systématique du groupe central sur une seconde ligne sous 440 px. Sur les cartes très étroites (moins de 260 px), un retour à la ligne reste possible pour conserver la lisibilité.
+- Aucun changement des réglages enregistrés ; tests de régression responsive ajoutés.
+
 ## 0.1.15 — 2026-11-05
 
 - Correction de l'alignement central des badges : trois colonnes de largeur égale lorsque le centre est utilisé, avec badge central étiré et contenu centré.
