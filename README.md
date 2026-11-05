@@ -11,6 +11,7 @@
 - **Taille des affiches réglable** de 50 à 200 % dans « Affichage général », pour les cartes groupées et individuelles ; le mode compact conserve ses proportions.
 - **Badges alignés à gauche** automatiquement lorsque le titre de l'en-tête est masqué.
 - **Affiches plus fiables** : chargement dès l'arrivée des liens signés, sans attendre une nouvelle lecture, jusqu'à trois nouvelles tentatives en cas d'échec (2, 5 puis 15 secondes), et affichage de remplacement si l'image reste indisponible.
+- **Nouveau fond cinéma** : affiche floutée derrière chaque lecture, avec intensité et assombrissement réglables. Le liseré coloré suit désormais les coins arrondis ; ancien trait droit ou masquage disponibles en options.
 
 ## Améliorations récentes
 
@@ -29,12 +30,12 @@
 - **Deux cartes Lovelace :** carte *Lectures en cours* (tous les flux) et carte *Lecture individuelle* (un flux filtré ou choisi).
 - **Deux dispositions :** liste verticale et carrousel avec un à quatre flux visibles.
 - **Carrousel personnalisable :** défilement automatique, intervalle, durée de transition, cinq effets, barre de défilement horizontale toujours cachée, flèches activables/désactivables et navigation au cliquer-glisser avec la souris, au doigt ou au clavier. La pause au survol de la souris est facultative.
-- **Couleurs par serveur :** liseré latéral jaune/orange pour Plex, violet pour Jellyfin et vert pour Emby.
+- **Couleurs par serveur :** liseré latéral jaune/orange pour Plex, violet pour Jellyfin et vert pour Emby. Son style et son épaisseur sont réglables (arrondi, ancien trait droit ou masqué).
 - **Affichage adaptable :** redimensionnement par l’onglet **Mise en page** de Home Assistant (dashboards *Sections*) et mode compact. Les anciennes dimensions CSS de la carte ont été supprimées.
 - **Éditeur visuel simplifié :** affichage général, choix des lectures, en-tête avec sous-menus par badge, médias, bandeau inférieur, carrousel et réglages avancés.
 - **En-tête personnalisable :** masquer le bandeau, changer son titre et sélectionner individuellement les compteurs (flux, débit cumulé, transcodages vidéo/audio/mixtes/total, direct, pause et flux par serveur). Ajouter autant de badges d’entités Home Assistant (capteurs, compteurs, etc.) que souhaité, jusqu’à 20, avec nom facultatif et valeur mise à jour en direct.
 - **Couleurs partagées :** même palette pour barres de progression, bulles de qualité/débit et compteurs, avec choix automatique de la couleur du texte (noir ou blanc).
-- **Aspect Home Assistant natif :** carte extérieure `ha-card` avec le fond, les bordures et l'ombre du thème ; sous-cartes légèrement contrastées ou transparentes. Affiches centrées verticalement lorsque les détails se répartissent sur plusieurs lignes.
+- **Aspect Home Assistant natif :** carte extérieure `ha-card` avec le fond, les bordures et l'ombre du thème ; sous-cartes légèrement contrastées, transparentes ou avec l'affiche floutée en arrière-plan. Affiches centrées verticalement lorsque les détails se répartissent sur plusieurs lignes.
 - **Informations par lecture :** affiche, utilisateur, titre, épisode, saison et numéro d’épisode indépendamment masquables, progression, durée restante, lecteur, résolution, codecs et débit. Les affiches passent par le proxy sécurisé de Home Assistant lorsque Tracearr fournit une URL de son proxy d'images ; les erreurs temporaires sont retentées sans réinitialiser le carrousel. Icônes vidéo/audio indépendantes (vert = direct/copie, orange = transcodage, gris = inconnu), masquables. En pause : symbole sur l’affiche et « En pause » orange en remplacement du temps restant.
 
 ### Réglages du carrousel et de la présentation
@@ -54,6 +55,11 @@ Le carrousel se pilote au **cliquer-glisser**, comme sur une interface tactile, 
 | Cliquer-glisser à la souris | `carousel_mouse_drag: true` / `false` |
 | Icônes vidéo/audio | `show_transcode_icons: true` / `false` |
 | Taille des polices | `font_size: 10` à `28` (pixels) |
+| Fond intérieur | `stream_surface: soft` / `transparent` / `blur` |
+| Flou de l'affiche | `stream_blur: 0` à `50` (pixels, défaut 26) |
+| Assombrissement de l'affiche | `stream_overlay: 25` à `95` (%, défaut 72) |
+| Liseré gauche | `stream_accent_style: rounded` / `straight` / `none` |
+| Épaisseur du liseré | `stream_accent_width: 2` à `8` (pixels, défaut 4) |
 | Taille de l'affiche | `poster_size: 50` à `200` (% ; défaut `100`) |
 | Palette commune (progression et badges) | `accent_color_mode: theme`, `server` ou `custom` |
 | Couleur personnalisée | `accent_custom_color: "#00BCD4"` |
@@ -231,7 +237,7 @@ empty_message: Rien à regarder en ce moment
 
 ### Fond natif et palette de couleurs
 
-L'enveloppe de la carte utilise les couleurs, les bordures et les ombres natives de Home Assistant. Pour les panneaux des lectures, le champ `stream_surface` accepte `soft` (léger contraste avec le fond) ou `transparent`.
+L'enveloppe de la carte utilise les couleurs, les bordures et les ombres natives de Home Assistant. Pour les panneaux des lectures, le champ `stream_surface` accepte `soft` (léger contraste avec le fond), `transparent` ou `blur` (fond cinéma flouté issu de l'affiche déjà fournie par Tracearr). L'intensité (`stream_blur`) et l'assombrissement (`stream_overlay`) se règlent dans **Affichage général**, de même que le style et l'épaisseur du liseré gauche. Par défaut, les anciennes cartes restent avec leur fond contrasté et un liseré arrondi. Une affiche indisponible donne un fond sombre sans image ; aucune nouvelle source externe n'est contactée.
 
 Une sélection **Palette commune** détermine la couleur de la barre de lecture et des badges de qualité et de débit. Par défaut, les badges de l'en-tête reprennent cette palette :
 

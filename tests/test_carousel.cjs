@@ -1072,3 +1072,109 @@ test('successful image load resets the retry budget', () => {
   card._onArtworkLoad({target:img});
   assert.equal(card._imageAttempts.has(path),false);
 });
+
+test('cinematic stream surface renders blurred artwork underneath readable content', () => {
+  const {card}=setup();
+  const entry={id:'instance',servers:[]};
+  const stream={id:'movie-1',username:'alice',server_type:'plex',media_title:'Film',media_type:'movie',
+    state:'paused',progress_ms:12000,duration_ms:45000,poster_url:'/api/v1/images/proxy?poster=1'};
+  card._image=(_,__,kind)=>kind==='poster'?'https://example.test/movie-poster.jpg':'';
+  card.setConfig({stream_surface:'blur',stream_blur:30,stream_overlay:64,
+    stream_accent_width:6,stream_accent_style:'rounded'});
+  const html=card._streamCard(entry,stream);
+  assert.match(html,/class="stream accent-rounded surface-blur"/);
+  assert.match(html,/--tr-stream-blur:30px;--tr-stream-overlay:0\.64;--tr-edge-width:6px/);
+  assert.match(html,/class="stream-backdrop" aria-hidden="true"/);
+  assert.match(html,/class="backdrop-image" src="https:\/\/example\.test\/movie-poster\.jpg"/);
+  assert.match(html,/class="poster" data-kind="poster"/);
+  assert.match(html,/class="poster-paused"/);
+  card.render();
+  assert.match(card.shadowRoot.innerHTML,/\.stream-backdrop .backdrop-image \{/);
+  assert.match(card.shadowRoot.innerHTML,/\.stream::before \{[^}]*border-left:var\(--tr-edge-width,4px\) solid/s);
+  assert.match(card.shadowRoot.innerHTML,/\.stream > \.poster-wrap, \.stream > \.info \{ position:relative; z-index:1; \}/);
+  assert.match(card.shadowRoot.innerHTML,/\.stream > \.media-flags \{ z-index:2; \}/);
+});
+
+test('legacy surface remains unchanged, and missing poster never leaves broken background', () => {
+  const {card}=setup();
+  card._image=()=>'';
+  const stream={id:'a',username:'alice',server_type:'jellyfin',media_title:'Film',media_type:'movie',
+    state:'playing',progress_ms:0,duration_ms:10000};
+  card.setConfig({});
+  assert.equal(card._config.stream_surface,'soft');
+  assert.equal(card._config.stream_accent_style,'rounded');
+  assert.doesNotMatch(card._streamCard(null,stream),/stream-backdrop/);
+  card.setConfig({stream_surface:'blur',show_poster:false,stream_accent_style:'none'});
+  let html=card._streamCard(null,stream);
+  assert.match(html,/class="stream accent-none surface-blur"/);
+  assert.match(html,/class="backdrop-empty"/);
+  assert.doesNotMatch(html,/<img class="poster"/);
+  card.setConfig({stream_surface:'blur',stream_blur:999,stream_overlay:-50,
+    stream_accent_width:999,stream_accent_style:'invalid'});
+  assert.equal(card._config.stream_blur,50);
+  assert.equal(card._config.stream_overlay,25);
+  assert.equal(card._config.stream_accent_width,8);
+  assert.equal(card._config.stream_accent_style,'rounded');
+  card.setConfig({stream_surface:'transparent',stream_accent_style:'straight'});
+  html=card._streamCard(null,stream);
+  assert.match(html,/class="stream accent-straight"/);
+  assert.doesNotMatch(html,/stream-backdrop/);
+});
+
+test('visual editor offers blur intensity, darkening and rounded edge styling for both cards', () => {
+  const Editor=classes.get('tracearr-card-editor');
+  const editor=new Editor();
+  for (const type of ['custom:tracearr-streams-card','custom:tracearr-stream-card']) {
+    editor.setConfig({type,stream_surface:'blur',stream_blur:32,stream_overlay:62,stream_accent_width:5});
+    const html=editor.shadowRoot.innerHTML;
+    assert.match(html,/value="blur">Affiche floutée \(cinéma\)/);
+    assert.match(html,/data-field="stream_blur" value="32"/);
+    assert.match(html,/data-field="stream_overlay" value="62"/);
+    assert.match(html,/data-field="stream_accent_style"/);
+    assert.match(html,/data-field="stream_accent_width" value="5"/);
+  }
+});
+
+test('late signed poster updates both blurred background and visible poster without rebuilding', () => {
+  const {card}=setup({count:1});
+  const stream={id:'s1',poster_url:'/api/v1/images/proxy?test=1',username:'Alice'};
+  const entry={id:'e1',streams:[stream]};
+  card._payload={entries:[entry]};
+  card.setConfig({stream_surface:'blur',show_poster:false});
+  let backdropUpdated='';
+  const backdrop={tagName:'DIV',set outerHTML(html){backdropUpdated=html;}};
+  const node={dataset:{session:'s1'},querySelector(selector) {
+    return selector.includes('.stream-backdrop .backdrop-image') ? backdrop : null;
+  }};
+  card.shadowRoot.querySelectorAll=selector=>selector==='.stream'?[node]:[];
+  const before=card.shadowRoot.renders;
+  card._applyArtwork('s1','poster','/api/tracearr_ha/image/e1/s1/poster?authSig=good');
+  assert.match(backdropUpdated,/class="backdrop-image" data-kind="poster"/);
+  assert.match(backdropUpdated,/authSig=good/);
+  assert.equal(card.shadowRoot.renders,before);
+  card._config.show_poster=true;
+  card._applyArtwork('s1','poster','/api/tracearr_ha/image/e1/s1/poster?authSig=new');
+  assert.doesNotMatch(backdropUpdated,/data-kind="poster"/);
+});
+
+test('poster failure removes broken blurred background and schedules retries', () => {
+  const {card}=setup();
+  const stream={id:'s1',poster_url:'/api/v1/images/proxy?img=1',username:'Alice'};
+  const entry={id:'e1',streams:[stream]};
+  card._payload={entries:[entry]};
+  card.setConfig({stream_surface:'blur',show_poster:true});
+  let posterFallback='',backdropFallback='';
+  const backdrop={set outerHTML(value){backdropFallback=value;}};
+  const parent={dataset:{session:'s1'},querySelector(){return backdrop;}};
+  const img={
+    getAttribute: key=>key==='data-kind'?'poster':'signed',
+    closest:()=>parent,
+    set outerHTML(value){posterFallback=value;}
+  };
+  card._images.set(card._artworkPath(entry,stream,'poster'),{url:'signed'});
+  card._onArtworkError({target:img});
+  assert.match(posterFallback,/poster empty/);
+  assert.match(backdropFallback,/backdrop-empty/);
+  assert.equal(card._imageRetryTimers.size,1);
+  card.disconnectedCallback();
+});

@@ -21,7 +21,8 @@
     header_positive_only: false, header_blink_positive: false,
     header_blink_seconds: 2, header_show_names: true,
     header_zero_color_mode: "normal", header_zero_custom_color: "#576574",
-    stream_surface: "soft",
+    stream_surface: "soft", stream_blur: 26, stream_overlay: 72,
+    stream_accent_style: "rounded", stream_accent_width: 4,
     selection: "recent",
     font_size: 14, accent_color_mode: "theme", accent_custom_color: "#00BCD4",
     // Independent movie / TV fields, with a rearrangeable visual order.
@@ -167,13 +168,34 @@
     .streams.carousel.is-dragging { cursor:grabbing; scroll-snap-type:none!important; user-select:none; }
     .streams.carousel.is-dragging * { user-select:none; pointer-events:none; }
     .carousel .stream { flex:0 0 calc((100% - (var(--carousel-visible,1) - 1)*10px)/var(--carousel-visible,1)); scroll-snap-align:start; min-width:0; }
-    .stream { position:relative; display:flex; align-items:center; gap:12px; min-width:0; min-height:116px;
+    .stream { position:relative; isolation:isolate; overflow:hidden;
+      display:flex; align-items:center; gap:12px; min-width:0; min-height:116px;
       padding:12px; box-sizing:border-box; border-radius:12px; background:color-mix(in srgb,
       var(--primary-text-color,#fff) 4%,transparent); border:1px solid var(--divider-color,rgba(255,255,255,.12));
       color:var(--primary-text-color,#fff); }
-    .stream::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
-      border-radius:3px; background:var(--stream-accent,var(--accent-color,#00BCD4)); }
+    /* The inner edge follows the stream's rounded border instead of sitting
+       outside the card. The old straight edge remains optional. */
+    .stream::before { content:""; position:absolute; left:0; top:0; bottom:0;
+      box-sizing:border-box; width:calc(var(--tr-edge-width,4px) + 10px);
+      border-left:var(--tr-edge-width,4px) solid var(--stream-accent,var(--accent-color,#00BCD4));
+      border-radius:11px 0 0 11px; z-index:3; pointer-events:none; }
+    .stream.accent-straight::before { width:var(--tr-edge-width,4px); border-left:0;
+      border-radius:0; background:var(--stream-accent,var(--accent-color,#00BCD4)); }
+    .stream.accent-none::before { display:none; }
     .root.flat-streams .stream { background:transparent; }
+    /* Blurred poster used purely as decoration; readable information stays
+       above the dark overlay. Missing posters keep the ordinary dark surface. */
+    .stream.surface-blur { background:#191a1d; }
+    .stream-backdrop { position:absolute; inset:0; z-index:0;
+      overflow:hidden; border-radius:inherit; pointer-events:none; }
+    .stream-backdrop .backdrop-image { position:absolute; inset:0;
+      width:100%; height:100%; display:block; object-fit:cover; object-position:center;
+      filter:blur(var(--tr-stream-blur,26px)) saturate(1.18);
+      transform:scale(1.25); }
+    .stream-backdrop::after { content:""; position:absolute; inset:0;
+      background:rgba(7,8,12,var(--tr-stream-overlay,.72)); }
+    .stream > .poster-wrap, .stream > .info { position:relative; z-index:1; }
+    .stream > .media-flags { z-index:2; }
     .poster-wrap { position:relative; width:var(--tr-poster-width,73px); height:var(--tr-poster-height,109px); flex:0 0 var(--tr-poster-width,73px); align-self:center;
       border-radius:7px; overflow:hidden; background:rgba(100,100,100,.15); }
     .poster { width:100%; height:100%; display:block; object-fit:cover; }
@@ -269,6 +291,11 @@
     if (!["message", "header_only", "hide"].includes(result.empty_mode)) result.empty_mode = "message";
     if (!["both", "local", "remote"].includes(result.bitrate_scope)) result.bitrate_scope = "both";
     result.poster_size = Math.round(clamp(result.poster_size, 50, 200, 100));
+    if (!["soft","transparent","blur"].includes(result.stream_surface)) result.stream_surface = "soft";
+    if (!["rounded","straight","none"].includes(result.stream_accent_style)) result.stream_accent_style = "rounded";
+    result.stream_blur = Math.round(clamp(result.stream_blur,0,50,26));
+    result.stream_overlay = Math.round(clamp(result.stream_overlay,25,95,72));
+    result.stream_accent_width = Math.round(clamp(result.stream_accent_width,2,8,4));
     result.header_blink_seconds = clamp(result.header_blink_seconds, .5, 20, 2);
     result.header_entity_badges = Array.isArray(result.header_entity_badges) ? result.header_entity_badges.slice(0, 20)
       .filter(row => row && typeof row === "object" && typeof row.entity === "string")
@@ -472,10 +499,20 @@
         if (card.dataset.session !== String(sessionId)) continue;
         const target = kind === "poster" ? card.querySelector(".poster-wrap .poster") :
           card.querySelector(".user .avatar");
-        if (!target || (target.tagName === "IMG" && target.getAttribute("src") === url)) continue;
-        const css = kind === "poster" ? "poster" : "avatar";
-        const alt = kind === "poster" ? "Affiche" : "";
-        target.outerHTML = `<img class="${css}" data-kind="${kind}" src="${E(url)}" alt="${alt}" loading="eager" decoding="async">`;
+        if (target && !(target.tagName === "IMG" && target.getAttribute("src") === url)) {
+          const css = kind === "poster" ? "poster" : "avatar";
+          const alt = kind === "poster" ? "Affiche" : "";
+          target.outerHTML = `<img class="${css}" data-kind="${kind}" src="${E(url)}" alt="${alt}" loading="eager" decoding="async">`;
+        }
+        // Signed artwork may arrive after the backdrop was initially rendered.
+        // Update its image in place, preserving the live carousel DOM and index.
+        if (kind === "poster") {
+          const backdrop = card.querySelector(".stream-backdrop .backdrop-image, .stream-backdrop .backdrop-empty");
+          if (backdrop && !(backdrop.tagName === "IMG" && backdrop.getAttribute("src") === url)) {
+            const track = this._config.show_poster ? "" : ' data-kind="poster"';
+            backdrop.outerHTML = `<img class="backdrop-image"${track} src="${E(url)}" alt="" decoding="async">`;
+          }
+        }
       }
     }
     _scheduleImageRetry(entry,stream,kind) {
@@ -491,7 +528,7 @@
         if (this._closed) return;
         const currentEntry = this._entryData();
         const current = currentEntry?.streams?.find(item => String(item.id) === String(stream.id));
-        if (!current || !(kind === "poster" ? this._config.show_poster : this._config.show_avatar)) return;
+        if (!current || !(kind === "poster" ? (this._config.show_poster || this._config.stream_surface === "blur") : this._config.show_avatar)) return;
         this._images.delete(path);
         const url = this._image(currentEntry,current,kind);
         if (url) this._applyArtwork(stream.id,kind,url);
@@ -510,8 +547,14 @@
       const cached = this._images.get(path);
       // Ignore errors from an older URL if a newer signature already exists.
       if (cached?.url && cached.url !== img.getAttribute("src")) return;
-      const fallback = kind === "poster" ? '<div class="poster empty">▣</div>' :
+      const isBackdrop = !!img.classList?.contains?.("backdrop-image");
+      const fallback = kind === "poster" ?
+        (isBackdrop ? '<div class="backdrop-empty"></div>' : '<div class="poster empty">▣</div>') :
         `<span class="avatar fallback-avatar">${E(this._name(entry,stream).slice(0,1).toUpperCase())}</span>`;
+      // A failed foreground image must not leave a broken blurred image behind.
+      const background = !isBackdrop && kind === "poster" ?
+        img.closest?.(".stream")?.querySelector?.(".stream-backdrop .backdrop-image") : null;
+      if (background) background.outerHTML = '<div class="backdrop-empty"></div>';
       img.outerHTML = fallback;
       this._images.delete(path);
       this._scheduleImageRetry(entry,stream,kind);
@@ -779,7 +822,8 @@
     }
     _streamCard(entry,s) {
       const c = this._config;
-      const poster = c.show_poster ? this._image(entry,s,"poster") : "";
+      const blurred = c.stream_surface === "blur";
+      const poster = c.show_poster || blurred ? this._image(entry,s,"poster") : "";
       const avatar = c.show_avatar ? this._image(entry,s,"avatar") : "";
       const name = this._name(entry,s);
       const mediaMarkup = this._mediaMarkup(s);
@@ -802,7 +846,12 @@
       const meta = normalizedOrder(c.footer_field_order, FOOTER_FIELDS).map(k => metaByKey[k]).filter(Boolean);
       const accent = SERVER_ACCENTS[String(s.server_type || "").toLowerCase()] || "var(--tr-accent)";
       const palette = this._palette(s.server_type);
-      const sharedStyle = `--shared-accent:${palette.bg};--pill-bg:${palette.bg};--pill-text:${palette.text}`;
+      const sharedStyle = `--shared-accent:${palette.bg};--pill-bg:${palette.bg};--pill-text:${palette.text};--tr-stream-blur:${clamp(c.stream_blur,0,50,26)}px;--tr-stream-overlay:${clamp(c.stream_overlay,25,95,72)/100};--tr-edge-width:${clamp(c.stream_accent_width,2,8,4)}px`;
+      const edgeMode = ["rounded","straight","none"].includes(c.stream_accent_style) ? c.stream_accent_style : "rounded";
+      // Use the existing poster URL (no external backdrop requests).
+      const backdropMarkup = blurred ? `<div class="stream-backdrop" aria-hidden="true">${poster ?
+        `<img class="backdrop-image"${c.show_poster ? "" : ' data-kind="poster"'} src="${E(poster)}" alt="" decoding="async">` :
+        '<div class="backdrop-empty"></div>'}</div>` : "";
       const indicators = c.show_transcode_icons ? `<div class="media-flags" aria-label="État du flux audio et vidéo">${["video","audio"].map(kind => {
         const decision = kind === "video" ? s.video_decision : s.audio_decision;
         const state = codecState(decision);
@@ -810,7 +859,8 @@
         return `<span class="stream-indicator ${state}" role="img" aria-label="${E(tip)}" title="${E(tip)}">${badgeIcon(kind)}</span>`;
       }).join("")}</div>` : "";
       const posterMarkup = c.show_poster ? `<div class="poster-wrap">${poster ? `<img class="poster" data-kind="poster" src="${E(poster)}" alt="Affiche" loading="eager" decoding="async">` : `<div class="poster empty">▣</div>`}${paused ? `<span class="poster-paused" aria-label="Lecture en pause"><span class="pause-symbol" aria-hidden="true"></span></span>` : ""}</div>` : "";
-      return `<article class="stream" data-session="${E(s.id)}" style="--stream-accent:${accent};${sharedStyle}">
+      return `<article class="stream accent-${edgeMode}${blurred ? " surface-blur" : ""}" data-session="${E(s.id)}" style="--stream-accent:${accent};${sharedStyle}">
+        ${backdropMarkup}
         ${posterMarkup}
         ${indicators}
         <div class="info">
@@ -1127,6 +1177,9 @@
     .badge-row button,.add-badge { border:1px solid var(--divider-color,#7775);
       border-radius:7px; padding:8px; color:var(--primary-text-color);
       background:var(--secondary-background-color,transparent); cursor:pointer; text-align:left; }
+    .range-row { display:flex; gap:12px; align-items:center; }
+    .range-row input[type=range] { flex:1; min-width:0; accent-color:var(--accent-color); }
+    .range-row output { min-width:50px; text-align:right; font-variant-numeric:tabular-nums; }
   `;
   class TracearrCardEditor extends HTMLElement {
     constructor() {
@@ -1172,6 +1225,10 @@
     _checks(fields) { return `<div class="columns">${fields.map(([key,label])=>this._toggle(key,label)).join("")}</div>`; }
     _number(name,label,min,max) {
       return `<label>${E(label)}<input type="number" min="${min}" max="${max}" step="${Number.isInteger(min) ? 1 : .5}" data-field="${E(name)}" value="${E(this._config[name])}"></label>`;
+    }
+    _range(name,label,min,max,unit) {
+      const value = Math.round(clamp(this._config[name],min,max,min));
+      return `<label>${E(label)}<span class="range-row"><input type="range" min="${min}" max="${max}" step="1" data-field="${E(name)}" value="${value}"><output data-range-output="${E(name)}">${value} ${E(unit)}</output></span></label>`;
     }
     _orderEditor(configKey, fields, labels=MEDIA_LABELS) {
       const order = normalizedOrder(this._config[configKey], fields);
@@ -1302,7 +1359,12 @@
         ["show_progress","Progression"],["show_remaining","Temps restant et pause"],
         ["show_end_time","Fin de lecture estimée"],["show_transcode_icons","Icônes vidéo/audio"],
       ])+
-        this._select("stream_surface","Fond intérieur des lectures",[["soft","Légèrement contrasté"],["transparent","Transparent"]])+
+        this._select("stream_surface","Fond intérieur des lectures",[["soft","Légèrement contrasté"],["transparent","Transparent"],["blur","Affiche floutée (cinéma)"]])+
+        `<small>Le fond cinéma utilise l'affiche du média et reste sombre pour préserver la lisibilité. Sans affiche, le fond reste uni.</small>`+
+        this._range("stream_blur","Intensité du flou",0,50,"px")+
+        this._range("stream_overlay","Assombrissement du fond",25,95,"%")+
+        this._select("stream_accent_style","Style du liseré gauche",[["rounded","Arrondi (suit les coins)"],["straight","Trait droit (ancien style)"],["none","Masqué"]])+
+        this._range("stream_accent_width","Épaisseur du liseré",2,8,"px")+
         this._number("font_size","Taille du texte (px)",10,28)+
         this._number("poster_size","Taille de l\'affiche (%)",50,200)+
         `<small>100 % correspond à la taille actuelle. Le réglage s\'applique aussi au mode compact.</small>`+
@@ -1328,11 +1390,16 @@
         const name=el.dataset.field;
         if (el.tagName==="SELECT") el.value=String(c[name]??"");
         const fn=()=>{
-          const value=el.type==="checkbox" ? el.checked : el.type==="number" ? Number(el.value) : el.value;
+          const value=el.type==="checkbox" ? el.checked :
+            (el.type==="number" || el.type==="range") ? Number(el.value) : el.value;
           this._config={...this._config,[name]:value};
           this.dispatchEvent(new CustomEvent("config-changed",{detail:{config:this._config},bubbles:true,composed:true}));
         };
         el.addEventListener("change",fn);
+        if (el.type === "range") el.addEventListener("input", () => {
+          const output = this.shadowRoot.querySelector(`[data-range-output="${name}"]`);
+          if (output) output.textContent = `${el.value} ${name === "stream_overlay" ? "%" : "px"}`;
+        });
       });
       // HA's native searchable entity picker; each badge can display any domain.
       this.shadowRoot.querySelectorAll("ha-entity-picker[data-badge-index]").forEach(picker => {

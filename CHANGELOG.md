@@ -1,5 +1,9 @@
 ## 0.1.14 Alpha (2026-11-05)
 
+- Fond cinéma optionnel à partir de l'affiche : flou et assombrissement ajustables, repli automatique vers un fond sombre si image absente.
+- Liseré gauche arrondi et intégré aux angles de chaque lecture, avec options trait droit/masqué et réglage d'épaisseur.
+- Les options s'appliquent aux cartes groupées et individuelles, sans perturber la lecture, les badges ni le carrousel.
+
 - Réglage « Taille de l'affiche (%) » de 50 à 200 % dans l'éditeur visuel des deux cartes, avec maintien des proportions normales et compactes (100 % conserve les dimensions précédentes).
 - Alignement automatique des badges de l'en-tête à gauche lorsque le titre est masqué ; l'alignement à droite reste inchangé lorsque le titre est visible.
 - Correction des affiches parfois absentes : résultat asynchrone des URL signées inséré dans la carte sans reconstruction, gestion des images en échec avec trois nouvelles tentatives (2/5/15 s) et remplacement visuel.
