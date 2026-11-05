@@ -1,6 +1,7 @@
 """Expose the bundled dashboard cards and a credential-protected image proxy."""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -9,6 +10,9 @@ from homeassistant.components.http import HomeAssistantView, StaticPathConfig
 from homeassistant.components.http import KEY_HASS
 
 from .const import DOMAIN, FRONTEND_URL
+
+_LOGGER = logging.getLogger(__name__)
+MAX_ARTWORK_BYTES = 8_000_000
 
 
 async def async_register_frontend(hass):
@@ -67,18 +71,40 @@ class TracearrArtworkView(HomeAssistantView):
             return web.Response(status=404)
         url = f"{coord.client.base_url}{parsed.path}?{parsed.query}"
         try:
-            async with coord.client.session.get(url, headers=coord.client.headers,
-                    timeout=ClientTimeout(total=12), allow_redirects=False) as response:
+            # Tracearr's normal API client advertises JSON; the artwork proxy
+            # needs image content negotiation instead.
+            headers = {**coord.client.headers, "Accept": "image/avif,image/webp,image/*,*/*;q=0.8"}
+            async with coord.client.session.get(url, headers=headers,
+                    timeout=ClientTimeout(total=20), allow_redirects=False) as response:
                 if response.status != 200:
-                    return web.Response(status=404)
-                data = await response.content.read(2_000_001)
-                if len(data) > 2_000_000:
+                    _LOGGER.debug("Tracearr artwork returned HTTP %s", response.status)
+                    return web.Response(status=502 if response.status >= 500 else 404)
+                if response.content_length and response.content_length > MAX_ARTWORK_BYTES:
+                    return web.Response(status=413)
+                data = await response.content.read(MAX_ARTWORK_BYTES + 1)
+                if len(data) > MAX_ARTWORK_BYTES:
                     return web.Response(status=413)
                 content_type = response.headers.get("Content-Type", "")
                 safe_type = content_type.split(";", 1)[0].strip().lower()
+                if safe_type in ("image/jpg", "image/pjpeg"):
+                    safe_type = "image/jpeg"
+                if safe_type == "application/octet-stream":
+                    # Some image backends omit the MIME type; accept only
+                    # recognized image signatures, never HTML/JSON/SVG.
+                    if data.startswith(b"\xff\xd8\xff"):
+                        safe_type = "image/jpeg"
+                    elif data.startswith(b"\x89PNG\r\n\x1a\n"):
+                        safe_type = "image/png"
+                    elif data.startswith((b"GIF87a", b"GIF89a")):
+                        safe_type = "image/gif"
+                    elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+                        safe_type = "image/webp"
+                    elif data[4:8] == b"ftyp" and b"avif" in data[8:32]:
+                        safe_type = "image/avif"
                 if safe_type not in ("image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"):
                     return web.Response(status=415)
                 return web.Response(body=data, content_type=safe_type,
                                     headers={"Cache-Control": "private, max-age=60", "X-Content-Type-Options": "nosniff"})
-        except (ClientError, TimeoutError):
+        except (ClientError, TimeoutError) as exc:
+            _LOGGER.debug("Tracearr artwork request failed: %s", type(exc).__name__)
             return web.Response(status=502)

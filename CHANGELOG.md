@@ -2,6 +2,8 @@
 
 - Réglage « Taille de l'affiche (%) » de 50 à 200 % dans l'éditeur visuel des deux cartes, avec maintien des proportions normales et compactes (100 % conserve les dimensions précédentes).
 - Alignement automatique des badges de l'en-tête à gauche lorsque le titre est masqué ; l'alignement à droite reste inchangé lorsque le titre est visible.
+- Correction des affiches parfois absentes : résultat asynchrone des URL signées inséré dans la carte sans reconstruction, gestion des images en échec avec trois nouvelles tentatives (2/5/15 s) et remplacement visuel.
+- Proxy d'images renforcé : en-tête Accept adapté, délai de 20 s, plafond de 8 Mo et reconnaissance sécurisée des formats d'image sans MIME déclaré.
 - Tests de non-régression et mise à jour du chargement Lovelace et de la documentation HACS.
 
 ## 0.1.13 Alpha (2026-11-04)

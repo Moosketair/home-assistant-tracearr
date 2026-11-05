@@ -289,6 +289,9 @@
     constructor() {
       super();
       this.attachShadow({mode: "open"});
+      // Capture image events inside the shadow root; <img> errors do not bubble.
+      this.shadowRoot.addEventListener?.("error", event => this._onArtworkError(event), true);
+      this.shadowRoot.addEventListener?.("load", event => this._onArtworkLoad(event), true);
       this._config = {...DEFAULTS};
       this._hass = null;
       this._payload = {entries: []};
@@ -296,6 +299,8 @@
       this._unsubscribe = null;
       this._closed = false;
       this._images = new Map();
+      this._imageRetryTimers = new Map();
+      this._imageAttempts = new Map();
       this._positions = new Map();
       this._tick = null;
       this._carouselTimer = null;
@@ -343,6 +348,8 @@
       if (this._unsubscribe) this._unsubscribe();
       this._unsubscribe = null;
       this._connection = null;
+      for (const timer of this._imageRetryTimers.values()) clearTimeout(timer);
+      this._imageRetryTimers.clear();
     }
     _subscribe(connection) {
       if (this._unsubscribe) this._unsubscribe();
@@ -424,23 +431,104 @@
       }
       return streams;
     }
+    _artworkPath(entry, stream, kind) {
+      return `/api/tracearr_ha/image/${encodeURIComponent(entry.id)}/${encodeURIComponent(stream.id)}/${kind}`;
+    }
     _image(entry,s,kind) {
       const direct = kind === "avatar" ? this._avatar(entry,s) : "";
       if (direct) return direct;
       const raw = kind === "poster" ? s.poster_url : s.user_avatar_url;
       if (!raw) return "";
-      // Only proxy /api/v1/images/proxy URLs or same-origin ones; absolute external avatars can be shown directly.
+      // Keep external URLs direct: the HA proxy must never fetch arbitrary hosts.
       if (typeof raw === "string" && /^https?:\/\//i.test(raw) && !raw.includes("/api/v1/images/proxy")) return safeImage(raw);
-      const path = `/api/tracearr_ha/image/${encodeURIComponent(entry.id)}/${encodeURIComponent(s.id)}/${kind}`;
+      if (!entry?.id || !s?.id) return "";
+      const path = this._artworkPath(entry,s,kind);
       const cached = this._images.get(path);
-      if (cached && cached.expires > Date.now()) return cached.url;
-      if (!cached?.pending && this._hass?.connection) {
+      if (cached?.raw === raw && cached.expires > Date.now()) return cached.url || "";
+      if (cached?.pending && cached.raw === raw) return "";
+      if (this._hass?.connection) {
+        // A signature arriving after the initial render must update the image
+        // directly: unchanged SSE fingerprints otherwise leave placeholders forever.
         const pending = this._hass.connection.sendMessagePromise({type:"auth/sign_path", path, expires:600})
-          .then(result => { this._images.set(path,{url:result.path,expires:Date.now()+540000}); if (!this._closed) { this._liveFingerprints.delete(s.id); this.render(); } })
-          .catch(() => { this._images.set(path,{url:"",expires:Date.now()+60000}); });
-        this._images.set(path,{pending,expires:Date.now()+60000});
+          .then(result => {
+            if (this._images.get(path)?.raw !== raw) return;
+            if (typeof result?.path !== "string" || !result.path.startsWith("/")) throw Error("Invalid signed image path");
+            this._images.set(path,{url:result.path,raw,expires:Date.now()+540000});
+            if (!this._closed) this._applyArtwork(s.id,kind,result.path);
+          })
+          .catch(() => {
+            if (this._images.get(path)?.raw !== raw) return;
+            this._images.delete(path);
+            this._scheduleImageRetry(entry,s,kind);
+          });
+        this._images.set(path,{pending,raw,expires:Date.now()+60000});
       }
       return "";
+    }
+    _applyArtwork(sessionId,kind,url) {
+      if (!url || !this.shadowRoot) return;
+      // Replace only the relevant image, never the carousel/stream container.
+      for (const card of this.shadowRoot.querySelectorAll(".stream")) {
+        if (card.dataset.session !== String(sessionId)) continue;
+        const target = kind === "poster" ? card.querySelector(".poster-wrap .poster") :
+          card.querySelector(".user .avatar");
+        if (!target || (target.tagName === "IMG" && target.getAttribute("src") === url)) continue;
+        const css = kind === "poster" ? "poster" : "avatar";
+        const alt = kind === "poster" ? "Affiche" : "";
+        target.outerHTML = `<img class="${css}" data-kind="${kind}" src="${E(url)}" alt="${alt}" loading="eager" decoding="async">`;
+      }
+    }
+    _scheduleImageRetry(entry,stream,kind) {
+      if (!entry?.id || !stream?.id || this._closed) return;
+      const path = this._artworkPath(entry,stream,kind);
+      if (this._imageRetryTimers.has(path)) return;
+      const count = (this._imageAttempts.get(path) || 0) + 1;
+      if (count > 3) return;
+      this._imageAttempts.set(path,count);
+      const delay = [2000,5000,15000][count-1];
+      const timer = setTimeout(() => {
+        this._imageRetryTimers.delete(path);
+        if (this._closed) return;
+        const currentEntry = this._entryData();
+        const current = currentEntry?.streams?.find(item => String(item.id) === String(stream.id));
+        if (!current || !(kind === "poster" ? this._config.show_poster : this._config.show_avatar)) return;
+        this._images.delete(path);
+        const url = this._image(currentEntry,current,kind);
+        if (url) this._applyArtwork(stream.id,kind,url);
+      },delay);
+      this._imageRetryTimers.set(path,timer);
+    }
+    _onArtworkError(event) {
+      const img = event.target;
+      const kind = img?.getAttribute?.("data-kind");
+      if (kind !== "poster" && kind !== "avatar") return;
+      const sessionId = img.closest?.(".stream")?.dataset?.session;
+      const entry = this._entryData();
+      const stream = entry?.streams?.find(s => String(s.id) === sessionId);
+      if (!stream) return;
+      const path = this._artworkPath(entry,stream,kind);
+      const cached = this._images.get(path);
+      // Ignore errors from an older URL if a newer signature already exists.
+      if (cached?.url && cached.url !== img.getAttribute("src")) return;
+      const fallback = kind === "poster" ? '<div class="poster empty">▣</div>' :
+        `<span class="avatar fallback-avatar">${E(this._name(entry,stream).slice(0,1).toUpperCase())}</span>`;
+      img.outerHTML = fallback;
+      this._images.delete(path);
+      this._scheduleImageRetry(entry,stream,kind);
+    }
+    _onArtworkLoad(event) {
+      const img = event.target;
+      const kind = img?.getAttribute?.("data-kind");
+      if (kind !== "poster" && kind !== "avatar") return;
+      const sessionId = img.closest?.(".stream")?.dataset?.session;
+      const entry = this._entryData();
+      const stream = entry?.streams?.find(s => String(s.id) === sessionId);
+      if (!stream) return;
+      const path = this._artworkPath(entry,stream,kind);
+      this._imageAttempts.delete(path);
+      const timer = this._imageRetryTimers.get(path);
+      if (timer !== undefined) clearTimeout(timer);
+      this._imageRetryTimers.delete(path);
     }
     _themeAccent() {
       // Use the theme's true RGB value for legible foreground contrast.
@@ -721,12 +809,12 @@
         const tip = `${kind === "video" ? "Vidéo" : "Audio"} : ${state === "transcode" ? "Transcodage" : state === "direct" ? "Lecture directe" : "Inconnu"}`;
         return `<span class="stream-indicator ${state}" role="img" aria-label="${E(tip)}" title="${E(tip)}">${badgeIcon(kind)}</span>`;
       }).join("")}</div>` : "";
-      const posterMarkup = c.show_poster ? `<div class="poster-wrap">${poster ? `<img class="poster" src="${E(poster)}" alt="Affiche" loading="lazy">` : `<div class="poster empty">▣</div>`}${paused ? `<span class="poster-paused" aria-label="Lecture en pause"><span class="pause-symbol" aria-hidden="true"></span></span>` : ""}</div>` : "";
+      const posterMarkup = c.show_poster ? `<div class="poster-wrap">${poster ? `<img class="poster" data-kind="poster" src="${E(poster)}" alt="Affiche" loading="eager" decoding="async">` : `<div class="poster empty">▣</div>`}${paused ? `<span class="poster-paused" aria-label="Lecture en pause"><span class="pause-symbol" aria-hidden="true"></span></span>` : ""}</div>` : "";
       return `<article class="stream" data-session="${E(s.id)}" style="--stream-accent:${accent};${sharedStyle}">
         ${posterMarkup}
         ${indicators}
         <div class="info">
-          ${c.show_avatar ? `<div class="user">${avatar ? `<img class="avatar" src="${E(avatar)}" alt="">` : `<span class="avatar fallback-avatar">${E(name.slice(0,1).toUpperCase())}</span>`}<span>${E(name)}</span></div>` : `<div class="user">${E(name)}</div>`}
+          ${c.show_avatar ? `<div class="user">${avatar ? `<img class="avatar" data-kind="avatar" src="${E(avatar)}" alt="" loading="eager" decoding="async">` : `<span class="avatar fallback-avatar">${E(name.slice(0,1).toUpperCase())}</span>`}<span>${E(name)}</span></div>` : `<div class="user">${E(name)}</div>`}
           ${mediaMarkup}
           ${c.show_progress ? `<div class="progress"><span class="fill" data-id="${E(s.id)}" style="width:${ratio.toFixed(2)}%"></span></div>` : ""}
           ${c.show_progress || c.show_end_time ? `<div class="times"><span class="time-left"><span class="time-current" data-id="${E(s.id)}">${formattedSeconds(timePair.elapsed)}</span>${paused ? `<span class="time-separator">/</span><span class="time-paused">En pause</span>` : c.show_remaining && c.show_progress ? `<span class="time-separator">/</span><span class="time-remaining" data-id="${E(s.id)}">-${formattedSeconds(timePair.remaining)}</span>` : ""}</span>${endLabel}</div>` : ""}

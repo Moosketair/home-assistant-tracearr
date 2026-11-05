@@ -9,6 +9,7 @@ const vm = require('node:vm');
 const classes = new Map();
 let time = 0, nextId = 0;
 const timers = new Map();
+const artworkTimers = new Map();
 const frames = new Map();
 class MockHTMLElement {
   attachShadow() {
@@ -31,6 +32,8 @@ const env = {
   document: {hidden: false, createElement() { return {}; }},
   setInterval(fn, duration) { const id = ++nextId; timers.set(id, {fn, duration}); return id; },
   clearInterval(id) { timers.delete(id); },
+  setTimeout(fn, delay) { const id = ++nextId; artworkTimers.set(id, {fn, delay}); return id; },
+  clearTimeout(id) { artworkTimers.delete(id); },
   requestAnimationFrame(fn) { const id = ++nextId; frames.set(id, fn); return id; },
   cancelAnimationFrame(id) { frames.delete(id); },
   performance: {now: () => time},
@@ -998,4 +1001,74 @@ test('header badges move left when title is hidden, and stay right when shown', 
   assert.match(card.shadowRoot.innerHTML,/\.head\.no-title \.head-metrics \{ justify-content:flex-start; \}/);
   card._config.show_title=true;
   assert.match(card._header([]),/<header class="head"><h3>Lectures en cours<\/h3><div class="head-metrics">/);
+});
+
+test('a signed poster appears as soon as its URL resolves, without rebuilding the carousel', async () => {
+  const {card}=setup({count:1});
+  const stream={id:'stream-poster',poster_url:'/api/v1/images/proxy?key=poster',username:'Alice'};
+  const entry={id:'entry-poster',streams:[stream]};
+  card._payload={entries:[entry]};
+  let replacement='';
+  const placeholder={tagName:'DIV',set outerHTML(value){replacement=value;}};
+  const node={dataset:{session:stream.id},querySelector(sel){
+    return sel === '.poster-wrap .poster' ? placeholder : null;
+  }};
+  card.shadowRoot.querySelectorAll=sel=>sel === '.stream' ? [node] : [];
+  card._hass={connection:{sendMessagePromise:async()=>({path:'/api/tracearr_ha/image/entry-poster/stream-poster/poster?authSig=signed'})}};
+  const before=card.shadowRoot.renders;
+  assert.equal(card._image(entry,stream,'poster'),'');
+  assert.equal(card._image(entry,stream,'poster'),'','pending URL must not become undefined image src');
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.match(replacement,/data-kind="poster"/);
+  assert.match(replacement,/authSig=signed/);
+  assert.equal(card.shadowRoot.renders,before,'signed URL must not rebuild the carousel');
+});
+
+test('failed signed image is replaced by fallback and retried with a new signature', async () => {
+  const {card}=setup();
+  const stream={id:'broken-poster',poster_url:'/api/v1/images/proxy?key=poster',username:'Alice'};
+  const entry={id:'entry-retry',streams:[stream]};
+  card._payload={entries:[entry]};
+  let requests=0, applied=0, fallback='';
+  card._hass={connection:{sendMessagePromise:async()=>{
+    requests++;
+    if (requests === 1) throw Error('temporary auth error');
+    return {path:'/api/tracearr_ha/image/entry-retry/broken-poster/poster?authSig=renewed'};
+  }}};
+  card._applyArtwork=()=>applied++;
+  card._image(entry,stream,'poster');
+  await Promise.resolve();await Promise.resolve();await Promise.resolve();
+  assert.equal(card._imageAttempts.get(card._artworkPath(entry,stream,'poster')),1);
+  assert.equal(card._imageRetryTimers.size,1);
+  const timer=[...artworkTimers.values()][0];
+  assert.equal(timer.delay,2000);
+  timer.fn();artworkTimers.clear();
+  await Promise.resolve();await Promise.resolve();
+  assert.equal(requests,2);
+  assert.equal(applied,1);
+  assert.match(card._images.get(card._artworkPath(entry,stream,'poster')).url,/authSig=renewed/);
+  const img={
+    getAttribute(key){return key==='data-kind'?'poster':'/api/tracearr_ha/image/entry-retry/broken-poster/poster?authSig=renewed';},
+    closest(){return {dataset:{session:stream.id}};},
+    set outerHTML(value){fallback=value;}
+  };
+  card._onArtworkError({target:img});
+  assert.match(fallback,/poster empty/);
+  assert.equal(card._imageAttempts.get(card._artworkPath(entry,stream,'poster')),2);
+  assert.equal([...artworkTimers.values()][0].delay,5000);
+  card.disconnectedCallback();
+  assert.equal(artworkTimers.size,0,'pending retry canceled when card disconnects');
+});
+
+test('successful image load resets the retry budget', () => {
+  const {card}=setup();
+  const stream={id:'s',poster_url:'/api/v1/images/proxy?x=1'};
+  const entry={id:'e',streams:[stream]};
+  card._payload={entries:[entry]};
+  const path=card._artworkPath(entry,stream,'poster');
+  card._imageAttempts.set(path,2);
+  const img={getAttribute:key=>key==='data-kind'?'poster':null,closest:()=>({dataset:{session:'s'}})};
+  card._onArtworkLoad({target:img});
+  assert.equal(card._imageAttempts.has(path),false);
 });

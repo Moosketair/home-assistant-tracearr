@@ -10,6 +10,7 @@
 
 - **Taille des affiches réglable** de 50 à 200 % dans « Affichage général », pour les cartes groupées et individuelles ; le mode compact conserve ses proportions.
 - **Badges alignés à gauche** automatiquement lorsque le titre de l'en-tête est masqué.
+- **Affiches plus fiables** : chargement dès l'arrivée des liens signés, sans attendre une nouvelle lecture, jusqu'à trois nouvelles tentatives en cas d'échec (2, 5 puis 15 secondes), et affichage de remplacement si l'image reste indisponible.
 
 ## Améliorations récentes
 
@@ -34,7 +35,7 @@
 - **En-tête personnalisable :** masquer le bandeau, changer son titre et sélectionner individuellement les compteurs (flux, débit cumulé, transcodages vidéo/audio/mixtes/total, direct, pause et flux par serveur). Ajouter autant de badges d’entités Home Assistant (capteurs, compteurs, etc.) que souhaité, jusqu’à 20, avec nom facultatif et valeur mise à jour en direct.
 - **Couleurs partagées :** même palette pour barres de progression, bulles de qualité/débit et compteurs, avec choix automatique de la couleur du texte (noir ou blanc).
 - **Aspect Home Assistant natif :** carte extérieure `ha-card` avec le fond, les bordures et l'ombre du thème ; sous-cartes légèrement contrastées ou transparentes. Affiches centrées verticalement lorsque les détails se répartissent sur plusieurs lignes.
-- **Informations par lecture :** affiche, utilisateur, titre, épisode, saison et numéro d’épisode indépendamment masquables, progression, durée restante, lecteur, résolution, codecs et débit. Icônes vidéo/audio indépendantes (vert = direct/copie, orange = transcodage, gris = inconnu), masquables. En pause : symbole sur l’affiche et « En pause » orange en remplacement du temps restant.
+- **Informations par lecture :** affiche, utilisateur, titre, épisode, saison et numéro d’épisode indépendamment masquables, progression, durée restante, lecteur, résolution, codecs et débit. Les affiches passent par le proxy sécurisé de Home Assistant lorsque Tracearr fournit une URL de son proxy d'images ; les erreurs temporaires sont retentées sans réinitialiser le carrousel. Icônes vidéo/audio indépendantes (vert = direct/copie, orange = transcodage, gris = inconnu), masquables. En pause : symbole sur l’affiche et « En pause » orange en remplacement du temps restant.
 
 ### Réglages du carrousel et de la présentation
 
