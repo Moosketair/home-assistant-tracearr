@@ -1000,7 +1000,7 @@ test('header badges move left when title is hidden, and stay right when shown', 
   assert.match(card._header([]),/<header class="head no-title"><div class="head-metrics">/);
   card.render();
   assert.match(card._header([]),/class="head-group align-left"><span class="metric/);
-  assert.match(card.shadowRoot.innerHTML,/\.head-metrics \{ display:grid;/);
+  assert.match(card.shadowRoot.innerHTML,/\.head-metrics \{ display:flex;/);
   card._config.show_title=true;
   assert.match(card._header([]),/<header class="head"><h3>Lectures en cours<\/h3><div class="head-metrics">/);
   assert.match(card._header([]),/class="head-group align-right"><span class="metric/);
@@ -1289,4 +1289,51 @@ test('editor renders the same advanced style and alignment controls for both car
     assert.match(html,/data-field="header_show_video"/);
     assert.match(html,/data-order="header_badge_order"/);
   }
+});test('mobile: left and right badges share a row without reserving an empty center column', () => {
+  const {card}=setup();
+  card.setConfig({
+    show_title:false,header_show_streams:true,header_show_transcodes_total:true,
+    header_show_bandwidth:true,header_entity_badges:[
+      {id:'requests',entity:'counter.seerr',label:'Seerr',align:'right'},
+    ],
+    header_metric_settings:{
+      streams:{align:'left'},transcodes_total:{align:'left'},bandwidth:{align:'right'},
+    },
+  });
+  card._hass={states:{'counter.seerr':{state:'0',attributes:{}}}};
+  const html=card._header([{id:'play',server_type:'plex',is_transcode:true,
+    video_decision:'transcode',audio_decision:'copy',state:'playing',bitrate:1200}]);
+  assert.match(html,/<div class="head-metrics"><div class="head-group align-left">/);
+  assert.match(html,/class="head-group align-right">/);
+  assert.doesNotMatch(html,/class="head-group align-center"/);
+  assert.doesNotMatch(html,/class="head-metrics with-center"/);
+  const before=html.indexOf('1 flux'),after=html.indexOf('Seerr : 0');
+  assert.ok(before>=0 && after>before);
+  card.render();
+  const css=card.shadowRoot.innerHTML;
+  assert.match(css,/\.head-metrics \{ display:flex;[^}]*flex-wrap:wrap;/s);
+  assert.match(css,/\.head-group \{ display:flex; flex:0 1 auto;/);
+  assert.match(css,/\.head-group\.align-right \{ justify-content:flex-end; margin-left:auto; \}/);
+  assert.doesNotMatch(css,/\.head-group \{ flex:1 1 100%; \}/);
+});
+
+test('center columns are created only while a centered badge is visible', () => {
+  const {card}=setup();
+  card.setConfig({
+    show_title:false,header_show_streams:true,header_show_video:true,
+    header_metric_settings:{streams:{align:'left'},video:{align:'center',only_positive:true}},
+  });
+  let html=card._header([]);
+  assert.match(html,/<div class="head-metrics"><div class="head-group align-left">/);
+  assert.doesNotMatch(html,/head-metrics with-center|head-group align-center/);
+  html=card._header([{id:'a',video_decision:'transcode',audio_decision:'copy',state:'playing'}]);
+  assert.match(html,/class="head-metrics with-center"/);
+  assert.match(html,/class="head-group align-center">/);
+  card.setConfig({
+    show_title:false,header_show_streams:false,header_show_video:true,
+    header_metric_settings:{video:{align:'center'}},
+  });
+  html=card._header([{id:'a',video_decision:'transcode',audio_decision:'copy',state:'playing'}]);
+  assert.match(html,/class="head-metrics only-center"/);
+  assert.doesNotMatch(html,/class="head-group align-left"|class="head-group align-right"/);
 });

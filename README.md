@@ -4,7 +4,7 @@
 
 **Suivez en temps réel les lectures Plex, Jellyfin et Emby directement dans votre tableau de bord Home Assistant.** Une intégration HACS, des capteurs et deux cartes Lovelace entièrement personnalisables : liste verticale ou carrousel.
 
-**Version de test 0.1.14b2 (bêta).** La dernière version stable publiée reste v0.1.13. Ce projet est en cours de test sur de vraies installations Home Assistant. N'utilisez pas encore ses capteurs pour des automatismes critiques.
+**Version de test 0.1.14b3 (bêta).** La dernière version stable publiée reste v0.1.13. Ce projet est en cours de test sur de vraies installations Home Assistant. N'utilisez pas encore ses capteurs pour des automatismes critiques.
 
 ## Nouveautés de la version 0.1.14
 
@@ -12,7 +12,7 @@
 - **Badges alignés à gauche** automatiquement lorsque le titre de l'en-tête est masqué.
 - **Affiches plus fiables** : chargement dès l'arrivée des liens signés, sans attendre une nouvelle lecture, jusqu'à trois nouvelles tentatives en cas d'échec (2, 5 puis 15 secondes), et affichage de remplacement si l'image reste indisponible.
 - **Nouveau fond cinéma** : affiche floutée derrière chaque lecture, avec intensité et assombrissement réglables. Le liseré coloré suit désormais les coins arrondis ; ancien trait droit ou masquage disponibles en options.
-- **Badges d'en-tête personnalisés individuellement** : chaque statistique Tracearr et entité Home Assistant peut être alignée à gauche, au centre ou à droite, indépendamment de l'ordre global. Les statistiques disposent des mêmes options de visibilité du nom/de l'icône, masquage à zéro, clignotement, période et couleur à zéro que les entités, avec un nom et une icône MDI personnalisables.
+- **Badges d'en-tête personnalisés individuellement** : chaque statistique Tracearr et entité Home Assistant peut être alignée à gauche, au centre ou à droite, indépendamment de l'ordre global. Les groupes vides ne prennent aucune place : les badges à gauche et à droite restent sur une même ligne sur mobile lorsqu'ils tiennent. Les statistiques disposent des mêmes options de visibilité du nom/de l'icône, masquage à zéro, clignotement, période et couleur à zéro que les entités, avec un nom et une icône MDI personnalisables.
 
 ## Améliorations récentes
 
@@ -148,7 +148,7 @@ Dans un tableau de bord **Sections**, réglez hauteur et largeur dans **Modifier
 
 ### Personnalisation de l'en-tête
 
-Les options de la section **En-tête et badges** permettent de masquer entièrement le bandeau (`show_header: false`), d'afficher un titre personnel (`title`) ou de ne garder que certains indicateurs. Chaque badge (statistique Tracearr ou entité HA) possède une option **Alignement** : automatique, gauche, centre ou droite. Les groupes conservent leur ordre défini par `header_badge_order`. Sous **Statistiques Tracearr**, les interrupteurs de visibilité restent accessibles, et chaque statistique peut être ouverte pour régler son nom, son icône MDI, le masquage à zéro, l'animation, sa durée et sa couleur à zéro. Ces valeurs sont enregistrées dans `header_metric_settings` ; les anciennes cartes gardent leurs réglages précédents. Vous pouvez afficher, indépendamment les uns des autres :
+Les options de la section **En-tête et badges** permettent de masquer entièrement le bandeau (`show_header: false`), d'afficher un titre personnel (`title`) ou de ne garder que certains indicateurs. Chaque badge (statistique Tracearr ou entité HA) possède une option **Alignement** : automatique, gauche, centre ou droite. Les badges sont regroupés dans des zones qui ne sont créées que lorsqu'elles contiennent des badges visibles : en l'absence de badge au centre, aucune colonne centrale n'est réservée. Sur téléphone, les groupes gauche et droite restent côte à côte lorsque leur largeur le permet et reviennent à la ligne seulement si nécessaire. Les groupes conservent leur ordre défini par `header_badge_order`. Sous **Statistiques Tracearr**, les interrupteurs de visibilité restent accessibles, et chaque statistique peut être ouverte pour régler son nom, son icône MDI, le masquage à zéro, l'animation, sa durée et sa couleur à zéro. Ces valeurs sont enregistrées dans `header_metric_settings` ; les anciennes cartes gardent leurs réglages précédents. Vous pouvez afficher, indépendamment les uns des autres :
 
 | Réglage | Affichage |
 |---|---|

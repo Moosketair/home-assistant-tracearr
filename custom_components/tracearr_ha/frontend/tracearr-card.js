@@ -1,4 +1,4 @@
-/* Tracearr HA Lovelace cards 0.1.14b2 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.14b3 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;
@@ -158,19 +158,29 @@
       margin:0 0 12px; color:var(--primary-text-color,#fff); }
     .head h3 { flex:0 1 auto; margin:0; font-size:calc(var(--tr-font-size)*1.24); font-weight:700;
       color:var(--primary-text-color,#fff); overflow-wrap:anywhere; }
-    /* Three equal logical positions keep center badges truly centered within
-       the badge area, independently of left and right badge counts. */
-    .head-metrics { display:grid; flex:1 1 320px; width:0;
-      grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
-      align-items:center; gap:5px 10px; min-width:0; }
-    .head-group { display:flex; flex-wrap:wrap; align-items:center; gap:5px; min-width:0; }
+    /* Only render populated badge groups. Without center badges, the left and
+       right groups share a flexible row and no empty middle column is reserved. */
+    .head-metrics { display:flex; flex:1 1 320px; width:0; flex-wrap:wrap;
+      align-items:center; justify-content:space-between; gap:5px 10px; min-width:0; }
+    .head-group { display:flex; flex:0 1 auto; flex-wrap:wrap; align-items:center; gap:5px; min-width:0; }
     .head-group.align-left { justify-content:flex-start; }
     .head-group.align-center { justify-content:center; }
-    .head-group.align-right { justify-content:flex-end; }
+    .head-group.align-right { justify-content:flex-end; margin-left:auto; }
     .head.no-title .head-metrics { width:100%; }
+    .head-metrics.only-center { justify-content:center; }
+    /* Reserve symmetrical tracks only if a center badge actually exists,
+       so its content stays centered independently of left/right badge widths. */
+    .head-metrics.with-center { display:grid;
+      grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); }
+    .head-metrics.with-center > .align-left { grid-column:1; }
+    .head-metrics.with-center > .align-center { grid-column:2; }
+    .head-metrics.with-center > .align-right { grid-column:3; margin-left:0; }
     @container (max-width:440px) {
-      .head-metrics { display:flex; flex-wrap:wrap; width:100%; }
-      .head-group { flex:1 1 100%; }
+      /* Allow every populated group to share a row when space permits.
+         Do not force each group to 100% width on phones/tablets. */
+      .head-metrics.with-center { display:flex; }
+      .head-metrics.with-center > .align-center { margin-inline:auto; }
+      .head-metrics.with-center > .align-right { margin-left:auto; }
     }
     .metric { display:inline-flex; align-items:center; gap:4px; padding:4px 9px; border-radius:20px;
       font-size:calc(var(--tr-font-size)*.80); font-weight:600; background:var(--pill-bg);
@@ -812,8 +822,13 @@
       if (!title && !orderedMetrics.length) return "";
       const groups = {left:[],center:[],right:[]};
       for (const badge of orderedMetrics) groups[badge.align].push(badge.markup);
+      const populated = ["left","center","right"].filter(position => groups[position].length);
+      // No empty group in the DOM: a missing center must not reserve a column.
+      // Keep symmetrical tracks only for multiple groups with a real center badge.
+      const layout = populated.length === 1 && populated[0] === "center" ? " only-center" :
+        populated.includes("center") ? " with-center" : "";
       const badgeMarkup = orderedMetrics.length ?
-        `<div class="head-metrics">${["left","center","right"].map(position =>
+        `<div class="head-metrics${layout}">${populated.map(position =>
           `<div class="head-group align-${position}">${groups[position].join("")}</div>`).join("")}</div>` : "";
       return `<header class="head${title ? "" : " no-title"}">${title}${badgeMarkup}</header>`;
     }

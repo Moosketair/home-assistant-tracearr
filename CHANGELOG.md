@@ -1,3 +1,10 @@
+## 0.1.14b3 Bêta (2026-11-05)
+
+- Correctif responsive de l'en-tête : ne crée plus les groupes vides, ni de colonne centrale lorsqu'aucun badge centré n'est visible.
+- Sur téléphone et tablette, les badges gauches et droits partagent désormais la même ligne tant que la largeur est suffisante.
+- Conservation de l'alignement centré (grille symétrique uniquement si nécessaire) et du retour à la ligne naturel sur les cartes étroites.
+- Aucun changement des réglages enregistrés ni de la version stable.
+
 ## 0.1.14b2 Bêta (2026-11-05)
 
 - Alignement indépendant gauche/centre/droite ou automatique pour chaque badge statistique et entité Home Assistant. Trois zones préservent l'ordre configuré au sein de chaque groupe.
