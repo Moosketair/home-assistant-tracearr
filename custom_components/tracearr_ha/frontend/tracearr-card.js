@@ -1,4 +1,4 @@
-/* Tracearr HA Lovelace cards 0.1.14 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.15 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;
@@ -168,19 +168,22 @@
     .head-group.align-right { justify-content:flex-end; margin-left:auto; }
     .head.no-title .head-metrics { width:100%; }
     .head-metrics.only-center { justify-content:center; }
-    /* Reserve symmetrical tracks only if a center badge actually exists,
-       so its content stays centered independently of left/right badge widths. */
+    /* Equal-width tracks keep the middle badge at the true midpoint of the
+       header, even when left and right badge groups have different widths. */
     .head-metrics.with-center { display:grid;
-      grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); }
+      grid-template-columns:repeat(3,minmax(0,1fr)); }
     .head-metrics.with-center > .align-left { grid-column:1; }
-    .head-metrics.with-center > .align-center { grid-column:2; }
+    .head-metrics.with-center > .align-center { grid-column:2; width:100%;
+      justify-self:stretch; justify-content:center; }
     .head-metrics.with-center > .align-right { grid-column:3; margin-left:0; }
     @container (max-width:440px) {
-      /* Allow every populated group to share a row when space permits.
-         Do not force each group to 100% width on phones/tablets. */
+      /* Center badges on their own row on narrow screens. Side groups
+         can still share the previous row when enough room remains. */
       .head-metrics.with-center { display:flex; }
-      .head-metrics.with-center > .align-center { margin-inline:auto; }
-      .head-metrics.with-center > .align-right { margin-left:auto; }
+      .head-metrics.with-center > .align-left { order:1; }
+      .head-metrics.with-center > .align-right { order:2; margin-left:auto; }
+      .head-metrics.with-center > .align-center { order:3; flex:1 1 100%;
+        width:100%; margin-inline:0; justify-content:center; }
     }
     .metric { display:inline-flex; align-items:center; gap:4px; padding:4px 9px; border-radius:20px;
       font-size:calc(var(--tr-font-size)*.80); font-weight:600; background:var(--pill-bg);
