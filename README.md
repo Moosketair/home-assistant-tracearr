@@ -6,9 +6,13 @@
 
 **Surveillez les lectures Plex, Jellyfin et Emby dans Home Assistant avec les données de Tracearr.** L'intégration comprend des capteurs, une connexion temps réel et deux cartes Lovelace personnalisables (lectures groupées ou lecture individuelle).
 
-**Version actuelle : 0.1.15** · Disponible dans le catalogue officiel HACS après publication de la Release. Le projet reste communautaire et évolutif ; testez les capteurs avant de les utiliser pour des automatismes critiques.
+**Version actuelle : 0.1.16** · Disponible dans le catalogue officiel HACS après publication de la Release. Le projet reste communautaire et évolutif ; testez les capteurs avant de les utiliser pour des automatismes critiques.
 
-## Nouveautés de la 0.1.15
+## Nouveautés de la 0.1.16
+
+- **Badge centré compact :** le groupe central prend uniquement la largeur de ses badges et garde son centrage exact. Sur les écrans mobiles, les groupes gauche, centre et droite restent sur la même ligne dès que la place disponible le permet.
+
+### Autres améliorations récentes (0.1.15)
 
 - **Badge réellement centré :** lorsqu'un badge est placé au centre, la grille utilise des colonnes de même largeur et centre le contenu de sa colonne, indépendamment de la longueur des badges latéraux. Sur écran étroit, le badge central occupe sa propre ligne centrée.
 
@@ -32,7 +36,7 @@ Consultez le [journal complet des versions](CHANGELOG.md) pour retrouver toutes 
 
 L'intégration conserve les réglages des cartes et les entrées de configuration Home Assistant lors des mises à jour normales. Après une mise à jour, rechargez aussi le navigateur avec `Ctrl + F5` (ou actualisez la page sur mobile).
 
-**Carte non proposée dans Lovelace ?** Vérifiez dans **Paramètres → Tableaux de bord → Ressources** qu'il n'existe qu'une seule ressource Module JavaScript pour `/tracearr_ha/tracearr-card.js?v=0.1.15`. En mode YAML, la ressource se configure manuellement.
+**Carte non proposée dans Lovelace ?** Vérifiez dans **Paramètres → Tableaux de bord → Ressources** qu'il n'existe qu'une seule ressource Module JavaScript pour `/tracearr_ha/tracearr-card.js?v=0.1.16`. En mode YAML, la ressource se configure manuellement.
 
 ## Ce que propose Tracearr HA
 
