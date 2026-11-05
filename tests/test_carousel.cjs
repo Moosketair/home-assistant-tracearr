@@ -324,7 +324,8 @@ test('editor keeps layout in general display and renders header counters as simp
   for (const title of ['Affichage général','Choix des lectures et filtres','Navigation et carrousel','En-tête et badges','Titres, saisons et années',
     "Bandeau d'informations du flux",'Débit local / distant','Réglages avancés par carte'])
     assert.ok(html.includes(title.replaceAll("'",'&#39;')),title);
-  assert.doesNotMatch(html,/data-section="layout"|data-subdetail="metric-/);
+  assert.doesNotMatch(html,/data-section="layout"/);
+  assert.match(html,/data-subdetail="metric-streams"/);
   assert.match(html,/data-section="global"[\s\S]*data-field="mode"[\s\S]*data-section="source"/);
   for (const field of ['streams','bandwidth','direct','paused','video','audio','both','transcodes_total','server_counts']) {
     assert.match(html,new RegExp(`<input type="checkbox" data-field="header_show_${field}"`));
@@ -998,9 +999,11 @@ test('header badges move left when title is hidden, and stay right when shown', 
   card.setConfig({show_header:true,show_title:false,header_show_streams:true});
   assert.match(card._header([]),/<header class="head no-title"><div class="head-metrics">/);
   card.render();
-  assert.match(card.shadowRoot.innerHTML,/\.head\.no-title \.head-metrics \{ justify-content:flex-start; \}/);
+  assert.match(card._header([]),/class="head-group align-left"><span class="metric/);
+  assert.match(card.shadowRoot.innerHTML,/\.head-metrics \{ display:grid;/);
   card._config.show_title=true;
   assert.match(card._header([]),/<header class="head"><h3>Lectures en cours<\/h3><div class="head-metrics">/);
+  assert.match(card._header([]),/class="head-group align-right"><span class="metric/);
 });
 
 test('a signed poster appears as soon as its URL resolves, without rebuilding the carousel', async () => {
@@ -1177,4 +1180,113 @@ test('poster failure removes broken blurred background and schedules retries', (
   assert.match(backdropFallback,/backdrop-empty/);
   assert.equal(card._imageRetryTimers.size,1);
   card.disconnectedCallback();
+});
+
+test('statistic and Home Assistant badges can independently choose left, center or right', () => {
+  const {card}=setup();
+  card.setConfig({
+    show_title:false,show_header:true,
+    header_show_streams:true,header_show_bandwidth:true,header_show_video:true,
+    header_badge_order:'entity:legacy-0,streams,entity:legacy-1,video,bandwidth',
+    header_entity_badges:[
+      {entity:'counter.request',label:'Demandes',align:'left'},
+      {entity:'sensor.storage',label:'Disque',align:'right'},
+    ],
+    header_metric_settings:{
+      streams:{align:'left'},
+      video:{align:'center'},
+      bandwidth:{align:'right'},
+    },
+  });
+  card._hass={states:{
+    'counter.request':{state:'2',attributes:{}},
+    'sensor.storage':{state:'38',attributes:{unit_of_measurement:'%'}},
+  }};
+  const streams=[{id:'s',state:'playing',video_decision:'transcode',audio_decision:'copy',bitrate:4500}];
+  const header=card._header(streams);
+  const getGroup=align => header.match(new RegExp('class="head-group align-'+align+'">([\\s\\S]*?)<\\/div>'))?.[1]||'';
+  assert.ok(getGroup('left').includes('Demandes : 2'));
+  assert.ok(getGroup('left').includes('1 flux'));
+  assert.ok(getGroup('left').indexOf('Demandes : 2') < getGroup('left').indexOf('1 flux'));
+  assert.ok(getGroup('center').includes('Vidéo : 1'));
+  assert.ok(getGroup('right').includes('Disque : 38 %'));
+  assert.ok(getGroup('right').includes('Débit : 4.5 Mb/s'));
+  assert.ok(getGroup('right').indexOf('Disque : 38 %') < getGroup('right').indexOf('Débit : 4.5 Mb/s'));
+  assert.doesNotMatch(getGroup('left'),/Débit :/);
+  card._config.show_title=true;
+  assert.ok(getGroup('left').includes('1 flux')); // explicit alignment unaffected by title
+  const shown=card._header(streams);
+  assert.match(shown,/<h3>Lectures en cours<\/h3>/);
+  assert.match(shown,/class="head-group align-left">[\s\S]*?1 flux/);
+});
+
+test('per-statistic style works like entity badges, including icon/name, zero color and blink', () => {
+  const {card}=setup();
+  card.setConfig({
+    show_title:false,header_show_names:false,
+    header_show_streams:false,header_show_bandwidth:false,header_show_audio:true,
+    header_show_video:true,header_show_transcodes_total:true,
+    header_metric_settings:{
+      audio:{show_name:true,show_icon:true,zero_color_mode:'custom',zero_custom_color:'#202020',label:'Son',align:'center'},
+      video:{show_name:false,show_icon:true,icon:'mdi:movie-open',blink_positive:true,blink_seconds:1.5,align:'right'},
+      transcodes_total:{only_positive:true},
+    },
+  });
+  let html=card._header([]);
+  assert.match(html,/Son : 0/);
+  assert.match(html,/icon="mdi:music-note"/);
+  assert.match(html,/--pill-bg:#202020;--pill-text:#FFFFFF/);
+  assert.doesNotMatch(html,/Transcodes : 0/);
+  const streams=[{id:'video',state:'playing',video_decision:'transcode',audio_decision:'copy'}];
+  html=card._header(streams);
+  assert.match(html,/icon="mdi:movie-open"/);
+  assert.match(html,/--badge-blink:1.5s/);
+  assert.match(html,/class="metric blink-positive"/);
+  assert.doesNotMatch(html,/Vidéo : 1/);
+  assert.match(html,/Transcodes : 1|>1<\/span>/);
+  assert.match(html,/Son : 0/);
+});
+
+test('per-badge settings sanitize alignment and icon and keep legacy defaults', () => {
+  const {card}=setup();
+  card.setConfig({});
+  assert.equal(Object.keys(card._config.header_metric_settings).length,0);
+  assert.equal(card._header([]).includes('class="head-group align-right"><span class="metric'),true);
+  card.setConfig({show_title:false,
+    header_metric_settings:{
+      video:{align:'middle',show_icon:true,icon:'mdi:movie" onclick="bad',show_name:false},
+      unknown:{align:'left'},
+    },
+    header_entity_badges:[{entity:'counter.alice',align:'nope',label:'Alice'}],
+  });
+  assert.equal(card._config.header_metric_settings.video.align,'auto');
+  assert.equal(card._config.header_metric_settings.video.icon,'');
+  assert.equal(card._config.header_metric_settings.unknown,undefined);
+  assert.equal(card._config.header_entity_badges[0].align,'auto');
+  card._config.header_show_video=true;
+  assert.doesNotMatch(card._header([]),/onclick=/);
+  assert.match(card._header([]),/icon="mdi:filmstrip"/);
+  assert.match(card._header([]),/class="head-group align-left">/);
+});
+
+test('editor renders the same advanced style and alignment controls for both card types', () => {
+  const Editor=classes.get('tracearr-card-editor');
+  const editor=new Editor();
+  for(const type of ['custom:tracearr-streams-card','custom:tracearr-stream-card']) {
+    editor.setConfig({type,header_metric_settings:{video:{
+      align:'center',show_icon:true,show_name:false,blink_seconds:1.5,icon:'mdi:movie',
+      zero_color_mode:'custom',zero_custom_color:'#102030',
+    }},header_entity_badges:[{id:'requests',entity:'counter.request',align:'right',label:'Demandes'}]});
+    const html=editor.shadowRoot.innerHTML;
+    assert.match(html,/data-subdetail="metric-video"/);
+    for(const field of ['align','label','show_name','show_icon','only_positive','blink_positive','blink_seconds','zero_color_mode','zero_custom_color','icon']) {
+      assert.match(html,new RegExp('data-metric-setting="'+field+'" data-metric-key="video"'));
+    }
+    assert.match(html,/data-metric-setting="align" data-metric-key="video"[\s\S]*?value="center" selected/);
+    assert.match(html,/data-badge-setting="align" data-badge-index="0"[\s\S]*?value="right" selected/);
+    assert.match(html,/data-metric-setting="zero_custom_color" data-metric-key="video" value="#102030"/);
+    assert.match(html,/data-metric-setting="blink_seconds" data-metric-key="video" value="1.5"/);
+    assert.match(html,/data-field="header_show_video"/);
+    assert.match(html,/data-order="header_badge_order"/);
+  }
 });
