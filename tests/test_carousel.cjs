@@ -1338,7 +1338,7 @@ test('center columns are created only while a centered badge is visible', () => 
   assert.doesNotMatch(html,/class="head-group align-left"|class="head-group align-right"/);
 });
 
-test('center badge track has equal widths and centers its contents on desktop and mobile', () => {
+test('center badge uses only its intrinsic width while retaining perfect horizontal centering', () => {
   const {card}=setup();
   card.setConfig({
     show_title:false, header_show_streams:true, header_show_bandwidth:true,
@@ -1353,9 +1353,11 @@ test('center badge track has equal widths and centers its contents on desktop an
   assert.match(header,/class="head-group align-right">[\s\S]*?Débit : 2.5 Mb\/s/);
   card.render();
   const css=card.shadowRoot.innerHTML;
-  assert.match(css,/\.head-metrics\.with-center \{ display:grid;\s*grid-template-columns:repeat\(3,minmax\(0,1fr\)\); \}/);
+  assert.match(css,/\.head-metrics\.with-center \{ display:grid;\s*grid-template-columns:minmax\(0,1fr\) max-content minmax\(0,1fr\); \}/);
   assert.doesNotMatch(css,/grid-template-columns:minmax\(0,1fr\) auto minmax\(0,1fr\)/);
-  assert.match(css,/\.head-metrics\.with-center > \.align-center \{ grid-column:2; width:100%;\s*justify-self:stretch; justify-content:center; \}/);
+  assert.match(css,/\.head-metrics\.with-center > \.align-center \{ grid-column:2; width:max-content;\s*max-width:100%; justify-self:center; justify-content:center; \}/);
+  assert.match(css,/@container \(max-width:260px\) \{/);
+  assert.doesNotMatch(css,/@container \(max-width:440px\) \{/);
   assert.match(css,/\.head-metrics\.with-center > \.align-center \{ order:3; flex:1 1 100%;\s*width:100%; margin-inline:0; justify-content:center; \}/);
 });
 
@@ -1369,4 +1371,22 @@ test('center track remains absent when no badge is centered', () => {
     header_metric_settings:{bandwidth:{align:'center'}}});
   assert.match(card._header([]),/class="head-metrics only-center"/);
   assert.doesNotMatch(card._header([]),/head-metrics with-center/);
+});test('a left, center and right badge share one row at normal mobile widths', () => {
+  const {card}=setup();
+  card.setConfig({
+    show_title:false,header_show_streams:true,header_show_bandwidth:true,
+    header_entity_badges:[{id:'seerr',entity:'counter.seerr',label:'Seerr',align:'center'}],
+    header_metric_settings:{streams:{align:'left'},bandwidth:{align:'right'}},
+  });
+  card._hass={states:{'counter.seerr':{state:'0',attributes:{}}}};
+  const html=card._header([{id:'a',state:'playing',bitrate:2000}]);
+  assert.match(html,/class="head-metrics with-center"/);
+  assert.match(html,/class="head-group align-left"/);
+  assert.match(html,/class="head-group align-center"/);
+  assert.match(html,/class="head-group align-right"/);
+  card.render();
+  const css=card.shadowRoot.innerHTML;
+  assert.match(css,/grid-template-columns:minmax\(0,1fr\) max-content minmax\(0,1fr\)/);
+  assert.match(css,/@container \(max-width:260px\)/);
+  assert.doesNotMatch(css,/@container \(max-width:440px\)/);
 });
