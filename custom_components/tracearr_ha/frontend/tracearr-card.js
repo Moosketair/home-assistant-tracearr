@@ -1,4 +1,4 @@
-/* Tracearr HA Lovelace cards 0.1.14b1 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.14b2 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;
@@ -17,7 +17,8 @@
     header_show_direct: false, header_show_paused: false,
     header_show_video: false, header_show_audio: false, header_show_both: false,
     header_show_transcodes_total: false, header_show_server_counts: false,
-    header_entity_badges: [], header_badge_order: "streams,bandwidth,direct,paused,video,audio,both,transcodes_total,server_counts",
+    header_entity_badges: [], header_metric_settings: {},
+    header_badge_order: "streams,bandwidth,direct,paused,video,audio,both,transcodes_total,server_counts",
     header_positive_only: false, header_blink_positive: false,
     header_blink_seconds: 2, header_show_names: true,
     header_zero_color_mode: "normal", header_zero_custom_color: "#576574",
@@ -87,6 +88,12 @@
     paused:"Lectures en pause",video:"Transcode vidéo seul",audio:"Transcode audio seul",
     both:"Transcode vidéo + audio",transcodes_total:"Total des transcodages",server_counts:"Flux par serveur",
   });
+  const HEADER_ICONS = Object.freeze({
+    streams:"mdi:play-circle-outline",bandwidth:"mdi:speedometer",direct:"mdi:check-circle-outline",
+    paused:"mdi:pause-circle-outline",video:"mdi:filmstrip",audio:"mdi:music-note",
+    both:"mdi:movie-music",transcodes_total:"mdi:swap-horizontal",server_counts:"mdi:server",
+  });
+  const badgeAlign = value => ["left","center","right"].includes(value) ? value : "auto";
   function normalizedOrder(order, allowed) {
     const values = String(order || "").split(",").map(v => v.trim());
     return [...new Set([...values.filter(v => allowed.includes(v)), ...allowed])];
@@ -151,9 +158,20 @@
       margin:0 0 12px; color:var(--primary-text-color,#fff); }
     .head h3 { flex:0 1 auto; margin:0; font-size:calc(var(--tr-font-size)*1.24); font-weight:700;
       color:var(--primary-text-color,#fff); overflow-wrap:anywhere; }
-    .head-metrics { display:flex; flex:1 1 auto; flex-wrap:wrap; align-items:center; gap:5px;
-      min-width:0; justify-content:flex-end; }
-    .head.no-title .head-metrics { justify-content:flex-start; }
+    /* Three equal logical positions keep center badges truly centered within
+       the badge area, independently of left and right badge counts. */
+    .head-metrics { display:grid; flex:1 1 320px; width:0;
+      grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+      align-items:center; gap:5px 10px; min-width:0; }
+    .head-group { display:flex; flex-wrap:wrap; align-items:center; gap:5px; min-width:0; }
+    .head-group.align-left { justify-content:flex-start; }
+    .head-group.align-center { justify-content:center; }
+    .head-group.align-right { justify-content:flex-end; }
+    .head.no-title .head-metrics { width:100%; }
+    @container (max-width:440px) {
+      .head-metrics { display:flex; flex-wrap:wrap; width:100%; }
+      .head-group { flex:1 1 100%; }
+    }
     .metric { display:inline-flex; align-items:center; gap:4px; padding:4px 9px; border-radius:20px;
       font-size:calc(var(--tr-font-size)*.80); font-weight:600; background:var(--pill-bg);
       color:var(--pill-text); white-space:nowrap; }
@@ -297,11 +315,32 @@
     result.stream_overlay = Math.round(clamp(result.stream_overlay,25,95,72));
     result.stream_accent_width = Math.round(clamp(result.stream_accent_width,2,8,4));
     result.header_blink_seconds = clamp(result.header_blink_seconds, .5, 20, 2);
+    // Per-statistic appearance inherits legacy global settings until changed.
+    const rawMetrics = result.header_metric_settings && typeof result.header_metric_settings === "object" &&
+      !Array.isArray(result.header_metric_settings) ? result.header_metric_settings : {};
+    result.header_metric_settings = {};
+    for (const key of HEADER_FIELDS) {
+      const row = rawMetrics[key];
+      if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+      result.header_metric_settings[key] = {
+        align:badgeAlign(row.align),
+        show_name:typeof row.show_name === "boolean" ? row.show_name : undefined,
+        show_icon:!!row.show_icon,
+        only_positive:!!row.only_positive,
+        blink_positive:!!row.blink_positive,
+        blink_seconds:row.blink_seconds == null ? undefined : clamp(row.blink_seconds,.5,20,2),
+        zero_color_mode:row.zero_color_mode === "custom" ? "custom" : "inherit",
+        zero_custom_color:validColor(row.zero_custom_color || "#576574"),
+        label:String(row.label || "").slice(0,100),
+        icon:/^(mdi|hass):[a-z0-9-]+$/.test(String(row.icon || "")) ? row.icon : "",
+      };
+    }
     result.header_entity_badges = Array.isArray(result.header_entity_badges) ? result.header_entity_badges.slice(0, 20)
       .filter(row => row && typeof row === "object" && typeof row.entity === "string")
       .map((row,i) => ({...row, id: String(row.id || `legacy-${i}`), entity:row.entity, label:String(row.label || ""),
         show_name: typeof row.show_name === "boolean" ? row.show_name : undefined,
         show_icon: !!row.show_icon,
+        align:badgeAlign(row.align),
         only_positive: !!row.only_positive, blink_positive: !!row.blink_positive,
         blink_seconds: row.blink_seconds ? clamp(row.blink_seconds,.5,20,2) : undefined,
         zero_color_mode: row.zero_color_mode === "custom" ? "custom" : "inherit",
@@ -709,10 +748,11 @@
       if (!c.show_header) return "";
       const summary = this._streamSummary(streams);
       const metrics = new Map();
-      // Each numeric metric can be hidden at zero, blink while positive, and
-      // use a distinct zero-state color. Custom HA badges may override each.
+      // Every Tracearr statistic and HA entity can override the common style
+      // and choose its own horizontal position without changing badge order.
       const add = (key, enabled, name, display, value, colorType=null, custom=null) => {
         if (!enabled) return;
+        if (!key.startsWith("entity:")) custom = c.header_metric_settings?.[key] || {};
         const count = Number(value);
         const positive = Number.isFinite(count) && count > 0;
         const hideZero = c.header_positive_only || !!custom?.only_positive;
@@ -723,15 +763,22 @@
         const zeroColor = custom?.zero_color_mode === "custom" ? custom.zero_custom_color : c.header_zero_custom_color;
         const palette = !positive && zeroMode === "custom" ? this._paletteForMode("custom",null,zeroColor) : this._headerPalette(colorType);
         const showName = custom?.show_name ?? c.header_show_names;
-        const safeIcon = String(custom?.icon || "");
+        const displayName = String(custom?.label || "").trim() || name;
+        const safeIcon = String(custom?.icon || HEADER_ICONS[key] || "");
         const iconMarkup = custom?.show_icon && /^(mdi|hass):[a-z0-9-]+$/.test(safeIcon) ?
           `<ha-icon icon="${E(safeIcon)}" aria-hidden="true"></ha-icon>` : "";
-        const output = `${showName && name ? `${E(name)} : ` : ""}${E(display)}`;
-        const markup = `<span class="metric${blinking ? " blink-positive" : ""}" style="--pill-bg:${palette.bg};--pill-text:${palette.text};--badge-blink:${duration}s" title="${E(name || display)}">${iconMarkup}${output}</span>`;
-        metrics.set(key, [...(metrics.get(key) || []), markup]);
+        const output = `${showName && displayName ? `${E(displayName)} : ` : ""}${E(display)}`;
+        const markup = `<span class="metric${blinking ? " blink-positive" : ""}" style="--pill-bg:${palette.bg};--pill-text:${palette.text};--badge-blink:${duration}s" title="${E(displayName || display)}">${iconMarkup}${output}</span>`;
+        const position = badgeAlign(custom?.align);
+        const align = position === "auto" ? (c.show_title ? "right" : "left") : position;
+        metrics.set(key, [...(metrics.get(key) || []), {align,markup}]);
       };
       // Preserve the existing stream-count format "2 flux" when names are on.
-      add("streams", c.header_show_streams, "", c.header_show_names ? `${summary.total} flux` : String(summary.total), summary.total);
+      const streamSettings = c.header_metric_settings?.streams;
+      const streamLabel = String(streamSettings?.label || "").trim();
+      const showStreamName = streamSettings?.show_name ?? c.header_show_names;
+      add("streams", c.header_show_streams, streamLabel,
+        streamLabel ? String(summary.total) : (showStreamName ? `${summary.total} flux` : String(summary.total)), summary.total);
       const bandwidthTitle = c.bitrate_scope === "local" ? "Débit local" :
         c.bitrate_scope === "remote" ? "Débit distant" : "Débit";
       add("bandwidth", c.header_show_bandwidth, bandwidthTitle, `${(summary.bandwidth/1000).toFixed(1)} Mb/s`, summary.bandwidth);
@@ -763,7 +810,12 @@
         [...HEADER_FIELDS, ...(c.header_entity_badges || []).map(row => `entity:${row.id}`)]);
       const orderedMetrics = order.flatMap(key => metrics.get(key) || []);
       if (!title && !orderedMetrics.length) return "";
-      return `<header class="head${title ? "" : " no-title"}">${title}${orderedMetrics.length ? `<div class="head-metrics">${orderedMetrics.join("")}</div>` : ""}</header>`;
+      const groups = {left:[],center:[],right:[]};
+      for (const badge of orderedMetrics) groups[badge.align].push(badge.markup);
+      const badgeMarkup = orderedMetrics.length ?
+        `<div class="head-metrics">${["left","center","right"].map(position =>
+          `<div class="head-group align-${position}">${groups[position].join("")}</div>`).join("")}</div>` : "";
+      return `<header class="head${title ? "" : " no-title"}">${title}${badgeMarkup}</header>`;
     }
     // API samples may be slightly older than the local playback time. Keep a
     // monotonic client-side clock for ordinary SSE updates; only snap when the
@@ -1247,6 +1299,36 @@
     _emit() {
       this.dispatchEvent(new CustomEvent("config-changed",{detail:{config:this._config},bubbles:true,composed:true}));
     }
+    _alignmentSelect(current,attr) {
+      const align = badgeAlign(current);
+      return `<label>Alignement<select ${attr}>
+        <option value="auto" ${align==="auto"?"selected":""}>Automatique (selon le titre)</option>
+        <option value="left" ${align==="left"?"selected":""}>Gauche</option>
+        <option value="center" ${align==="center"?"selected":""}>Centre</option>
+        <option value="right" ${align==="right"?"selected":""}>Droite</option>
+      </select></label>`;
+    }
+    _metricBadgeEditor() {
+      const rows = this._config.header_metric_settings || {};
+      const checks = this._checks(HEADER_FIELDS.map(key => [`header_show_${key}`, HEADER_LABELS[key]]));
+      return checks + `<small>Ouvrez une statistique pour régler son alignement et son apparence individuellement. Les options non modifiées suivent le style global.</small>` +
+        HEADER_FIELDS.map(key => {
+          const item = rows[key] || {};
+          const content = this._alignmentSelect(item.align,`data-metric-setting="align" data-metric-key="${E(key)}"`) +
+            `<label>Nom personnalisé (facultatif)<input type="text" data-metric-setting="label" data-metric-key="${E(key)}" value="${E(item.label || "")}" placeholder="${E(HEADER_LABELS[key])}"></label>`+
+            `<div class="columns">` +
+              `<label class="check"><input type="checkbox" data-metric-setting="show_name" data-metric-key="${E(key)}" ${(item.show_name ?? this._config.header_show_names) ? "checked" : ""}>Afficher le nom</label>`+
+              `<label class="check"><input type="checkbox" data-metric-setting="show_icon" data-metric-key="${E(key)}" ${item.show_icon ? "checked" : ""}>Afficher l'icône</label>`+
+              `<label class="check"><input type="checkbox" data-metric-setting="only_positive" data-metric-key="${E(key)}" ${item.only_positive ? "checked" : ""}>Afficher si supérieur à 0</label>`+
+              `<label class="check"><input type="checkbox" data-metric-setting="blink_positive" data-metric-key="${E(key)}" ${item.blink_positive ? "checked" : ""}>Clignoter si supérieur à 0</label>`+
+            `</div>`+
+            `<label>Icône MDI (facultatif)<input type="text" data-metric-setting="icon" data-metric-key="${E(key)}" value="${E(item.icon || "")}" placeholder="${E(HEADER_ICONS[key])}"></label>`+
+            `<label>Durée d'un clignotement (secondes)<input type="number" min="0.5" max="20" step="0.5" data-metric-setting="blink_seconds" data-metric-key="${E(key)}" value="${E(item.blink_seconds ?? this._config.header_blink_seconds)}"></label>`+
+            `<label>Couleur si valeur à zéro<select data-metric-setting="zero_color_mode" data-metric-key="${E(key)}"><option value="inherit" ${item.zero_color_mode!=="custom"?"selected":""}>Réglage global</option><option value="custom" ${item.zero_color_mode==="custom"?"selected":""}>Couleur particulière</option></select></label>`+
+            `<label>Couleur personnalisée à zéro<input type="color" data-metric-setting="zero_custom_color" data-metric-key="${E(key)}" value="${E(validColor(item.zero_custom_color || "#576574"))}"></label>`;
+          return this._subgroup(`metric-${key}`, HEADER_LABELS[key], content);
+        }).join("");
+    }
     _entityBadgeEditor() {
       const rows = this._config.header_entity_badges || [];
       return `<small>Ajoutez une entité, puis ouvrez sa fiche pour modifier ses options.</small>`+
@@ -1255,6 +1337,7 @@
           `<div class="badge-row" data-badge-row="${index}">`+
           `<label>Entité<ha-entity-picker data-badge-index="${index}" aria-label="Choisir une entité"></ha-entity-picker></label>`+
           `<label>Nom facultatif<input type="text" data-badge-label="${index}" placeholder="Nom de l'entité" value="${E(row.label || "")}"></label>`+
+          this._alignmentSelect(row.align,`data-badge-setting="align" data-badge-index="${index}"`)+
           `<div class="columns">`+
             `<label class="check"><input type="checkbox" data-badge-setting="show_name" data-badge-index="${index}" ${(row.show_name ?? this._config.header_show_names) ? "checked" : ""}>Afficher le nom</label>`+
             `<label class="check"><input type="checkbox" data-badge-setting="show_icon" data-badge-index="${index}" ${row.show_icon ? "checked" : ""}>Icône de l'entité</label>`+
@@ -1299,9 +1382,8 @@
         this._select("filter_user","Filtrer par utilisateur",[["","Tous les utilisateurs"],...users.map(u=>[u,u])])+
         this._select("filter_transcode","Mode de lecture",[["all","Tous"],["direct","Direct"],["video","Vidéo seule"],["audio","Audio seul"],["both","Vidéo et audio"],["unknown","Inconnu"]])+
         this._select("sort","Ordre des flux",[["recent","Plus récent d'abord"],["user","Utilisateur"],["server","Serveur"]]);
-      // Keep Tracearr statistics compact: one checkbox per counter, not a nested panel each.
-      const headerMetrics=this._checks(HEADER_FIELDS.map(field=>
-        [`header_show_${field}`, HEADER_LABELS[field]]));
+      // Keep the visibility switches, and expose optional per-metric settings below.
+      const headerMetrics=this._metricBadgeEditor();
       const headerCommon=this._checks([
         ["header_show_names","Afficher les noms des statistiques"],
         ["header_positive_only","Masquer les badges à zéro"],
@@ -1422,6 +1504,19 @@
           if (!rows[index]) return;
           rows[index]={...rows[index],label:input.value};
           this._config={...this._config,header_entity_badges:rows};
+          this._emit();
+        });
+      });
+      this.shadowRoot.querySelectorAll("[data-metric-setting]").forEach(input => {
+        input.addEventListener("change", () => {
+          const key = input.dataset.metricKey;
+          if (!HEADER_FIELDS.includes(key)) return;
+          const field = input.dataset.metricSetting;
+          const value = input.type === "checkbox" ? input.checked :
+            input.type === "number" ? clamp(input.value,.5,20,2) : input.value;
+          const settings = {...(this._config.header_metric_settings || {})};
+          settings[key] = {...(settings[key] || {}), [field]:value};
+          this._config = {...this._config,header_metric_settings:settings};
           this._emit();
         });
       });

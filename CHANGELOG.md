@@ -1,3 +1,10 @@
+## 0.1.14b2 Bêta (2026-11-05)
+
+- Alignement indépendant gauche/centre/droite ou automatique pour chaque badge statistique et entité Home Assistant. Trois zones préservent l'ordre configuré au sein de chaque groupe.
+- Réglages avancés pour chaque statistique Tracearr : afficher le nom/l'icône, nom et icône MDI personnalisés, visibilité si valeur positive, clignotement et durée, couleur spécifique à zéro.
+- Compatibilité avec le style commun et les cartes existantes, sans changement des réglages enregistrés par défaut.
+- Version de test distincte de v0.1.14b1 : aucune Release stable créée.
+
 ## 0.1.14 Alpha (2026-11-05)
 
 - Fond cinéma optionnel à partir de l'affiche : flou et assombrissement ajustables, repli automatique vers un fond sombre si image absente.
