@@ -2,6 +2,12 @@
 
 Les changements sont classés par version publique. Les préversions et les anciennes notes restent consultables ci-dessous. Les [GitHub Releases](https://github.com/Moosketair/home-assistant-tracearr/releases) permettent de télécharger une version précise.
 
+## 0.1.15 — 2026-11-05
+
+- Correction de l'alignement central des badges : trois colonnes de largeur égale lorsque le centre est utilisé, avec badge central étiré et contenu centré.
+- Sur les écrans étroits, le groupe central dispose d'une ligne centrée tandis que les groupes gauche/droite conservent leur disposition compacte.
+- Aucun changement des réglages enregistrés ; les personnalisations et anciennes cartes restent compatibles.
+
 ## 0.1.14 — 2026-11-05
 
 ### Affichage et personnalisation
