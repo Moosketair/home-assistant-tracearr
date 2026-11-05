@@ -1,34 +1,45 @@
-## 0.1.14b4 Bêta (2026-11-05)
+# Historique des versions
 
-- Nouvelle bêta créée depuis la branche b3 correcte, après constat que le tag publié v0.1.14b3 pointait vers b1.
-- Conserve les badges alignables individuellement et toutes les options des statistiques Tracearr, ainsi que le correctif d'alignement sur mobile.
-- Aucun changement de logique par rapport à la branche b3 vérifiée : versionnement et cache frontend actualisés.
+Les changements sont classés par version publique. Les préversions et les anciennes notes restent consultables ci-dessous. Les [GitHub Releases](https://github.com/Moosketair/home-assistant-tracearr/releases) permettent de télécharger une version précise.
 
-## 0.1.14b4 Bêta (2026-11-05)
+## 0.1.14 — 2026-11-05
 
-- Correctif responsive de l'en-tête : ne crée plus les groupes vides, ni de colonne centrale lorsqu'aucun badge centré n'est visible.
-- Sur téléphone et tablette, les badges gauches et droits partagent désormais la même ligne tant que la largeur est suffisante.
-- Conservation de l'alignement centré (grille symétrique uniquement si nécessaire) et du retour à la ligne naturel sur les cartes étroites.
-- Aucun changement des réglages enregistrés ni de la version stable.
+### Affichage et personnalisation
 
-## 0.1.14b2 Bêta (2026-11-05)
+- Fond « cinéma » utilisant l'affiche floutée derrière chaque lecture, avec intensité et assombrissement réglables. Repli vers un fond sombre si l'affiche manque.
+- Liseré coloré suivant les angles arrondis de la sous-carte, avec épaisseur réglable, ancien trait droit ou masquage.
+- Taille des affiches configurable entre 50 et 200 % dans les cartes groupées et individuelles, mode compact inclus.
+- Alignement indépendant **gauche, centre ou droite** de chaque badge Tracearr et Home Assistant ; aucun espace réservé aux groupes vides sur mobile.
+- Personnalisation de chaque statistique Tracearr (nom, icône, affichage à zéro, clignotement, durée et couleur), en complément des paramètres globaux.
 
-- Alignement indépendant gauche/centre/droite ou automatique pour chaque badge statistique et entité Home Assistant. Trois zones préservent l'ordre configuré au sein de chaque groupe.
-- Réglages avancés pour chaque statistique Tracearr : afficher le nom/l'icône, nom et icône MDI personnalisés, visibilité si valeur positive, clignotement et durée, couleur spécifique à zéro.
-- Compatibilité avec le style commun et les cartes existantes, sans changement des réglages enregistrés par défaut.
-- Version de test distincte de v0.1.14b1 : aucune Release stable créée.
+### Images et fiabilité
 
-## 0.1.14 Alpha (2026-11-05)
+- Application immédiate des URL signées aux affiches, sans reconstruire le carrousel.
+- Jusqu'à trois nouvelles tentatives après un échec de chargement (2 s, 5 s, 15 s), avec élément de remplacement.
+- Proxy d'images amélioré : négociation des formats, délai porté à 20 s, taille maximale de 8 Mo et contrôle du type de contenu.
+- Configurations existantes conservées par défaut et ajout de tests de non-régression.
 
-- Fond cinéma optionnel à partir de l'affiche : flou et assombrissement ajustables, repli automatique vers un fond sombre si image absente.
-- Liseré gauche arrondi et intégré aux angles de chaque lecture, avec options trait droit/masqué et réglage d'épaisseur.
-- Les options s'appliquent aux cartes groupées et individuelles, sans perturber la lecture, les badges ni le carrousel.
+## Préversions de 0.1.14 — historique conservé
 
-- Réglage « Taille de l'affiche (%) » de 50 à 200 % dans l'éditeur visuel des deux cartes, avec maintien des proportions normales et compactes (100 % conserve les dimensions précédentes).
-- Alignement automatique des badges de l'en-tête à gauche lorsque le titre est masqué ; l'alignement à droite reste inchangé lorsque le titre est visible.
-- Correction des affiches parfois absentes : résultat asynchrone des URL signées inséré dans la carte sans reconstruction, gestion des images en échec avec trois nouvelles tentatives (2/5/15 s) et remplacement visuel.
-- Proxy d'images renforcé : en-tête Accept adapté, délai de 20 s, plafond de 8 Mo et reconnaissance sécurisée des formats d'image sans MIME déclaré.
-- Tests de non-régression et mise à jour du chargement Lovelace et de la documentation HACS.
+### 0.1.14b4 — 2026-11-05
+
+- Préversion validée avec l'alignement mobile corrigé et toutes les options de personnalisation de b2.
+- Nouvelle branche/tag créés pour éviter la mauvaise cible Git du tag b3.
+
+### 0.1.14b3 — 2026-11-05
+
+- Correction prévue : supprimer les colonnes de badges vides et éviter deux lignes inutiles sur mobile.
+- **Incident de publication :** le tag Git publié `v0.1.14b3` pointait par erreur vers le code de b1. La correction effective a été publiée dans b4.
+
+### 0.1.14b2 — 2026-11-05
+
+- Alignement par badge (statistique ou entité HA), séparément à gauche, au centre ou à droite.
+- Nouveaux réglages par statistique : nom, icône, masquage si valeur nulle, clignotement et couleur à zéro.
+
+### 0.1.14b1 / préparation initiale de 0.1.14 — 2026-11-05
+
+- Fond cinéma flouté, liseré arrondi, taille des affiches et renforcement de leur chargement.
+- Alignement automatique des badges à gauche lorsque le titre est masqué.
 
 ## 0.1.13 Alpha (2026-11-04)
 

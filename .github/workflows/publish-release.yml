@@ -1,0 +1,68 @@
+name: Publish stable release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    # A release requires an explicit, versioned commit message.
+    if: startsWith(github.event.head_commit.message, 'release: v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify release version and manifest
+        id: version
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          TAG="$(printf '%s\n' "$COMMIT_MESSAGE" | head -n 1 | sed -nE 's/^release: (v[0-9]+\.[0-9]+\.[0-9]+)$/\1/p')"
+          test -n "$TAG" || { echo "::error::Invalid release commit title"; exit 1; }
+          export TAG
+          python - <<'PY'
+          import json, os
+          with open("custom_components/tracearr_ha/manifest.json") as f:
+              version = json.load(f)["version"]
+          assert "v" + version == os.environ["TAG"], (version, os.environ["TAG"])
+          PY
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Check Python, JSON and regression tests
+        run: |
+          python -m compileall -q custom_components
+          python -m json.tool custom_components/tracearr_ha/manifest.json > /dev/null
+          python -m json.tool hacs.json > /dev/null
+          pip install pytest aiohttp
+          pytest -q tests
+          node --check custom_components/tracearr_ha/frontend/tracearr-card.js
+          node --test tests/test_carousel.cjs
+      - name: Validate HACS
+        uses: hacs/action@main
+        with:
+          category: integration
+      - name: Validate hassfest
+        uses: home-assistant/actions/hassfest@master
+      - name: Publish GitHub Release and matching tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::Release $TAG already exists; refusing to overwrite."
+            exit 1
+          fi
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "refs/tags/$TAG"; then
+            echo "::error::Tag $TAG already exists; refusing to move it."
+            exit 1
+          fi
+          awk 'BEGIN {started=0} /^## / {if (started) exit; started=1} started {print}' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          test -s "$RUNNER_TEMP/release-notes.md"
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "Tracearr HA $TAG" --notes-file "$RUNNER_TEMP/release-notes.md" --latest
