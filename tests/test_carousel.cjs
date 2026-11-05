@@ -309,7 +309,7 @@ test('native ha-card surface, nested stream panel and centered poster survive wr
   const html=card.shadowRoot.innerHTML;
   assert.match(html,/ha-card \{ border-radius:var\(--ha-card-border-radius/);
   assert.doesNotMatch(html,/background:transparent!important/);
-  assert.match(html,/\.stream \{ position:relative; display:flex; align-items:center/);
+  assert.match(html,/\.stream \{ position:relative; isolation:isolate; overflow:hidden;[\s\S]*?display:flex; align-items:center/);
   assert.match(html,/\.poster-wrap \{[^}]*align-self:center/s);
   assert.match(html,/\.meta \{[^}]*flex-wrap:wrap/s);
   card._config.stream_surface='transparent';card._renderFingerprint=null;card.render();
