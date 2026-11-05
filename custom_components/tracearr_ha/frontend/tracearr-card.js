@@ -1,4 +1,4 @@
-/* Tracearr HA Lovelace cards 0.1.15 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.16 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;
@@ -168,17 +168,18 @@
     .head-group.align-right { justify-content:flex-end; margin-left:auto; }
     .head.no-title .head-metrics { width:100%; }
     .head-metrics.only-center { justify-content:center; }
-    /* Equal-width tracks keep the middle badge at the true midpoint of the
-       header, even when left and right badge groups have different widths. */
+    /* Give the center only its badges' intrinsic width; the two remaining
+       tracks share the free space equally, keeping the badge at the true
+       midpoint. This keeps all three groups on one line on most phones. */
     .head-metrics.with-center { display:grid;
-      grid-template-columns:repeat(3,minmax(0,1fr)); }
+      grid-template-columns:minmax(0,1fr) max-content minmax(0,1fr); }
     .head-metrics.with-center > .align-left { grid-column:1; }
-    .head-metrics.with-center > .align-center { grid-column:2; width:100%;
-      justify-self:stretch; justify-content:center; }
+    .head-metrics.with-center > .align-center { grid-column:2; width:max-content;
+      max-width:100%; justify-self:center; justify-content:center; }
     .head-metrics.with-center > .align-right { grid-column:3; margin-left:0; }
-    @container (max-width:440px) {
-      /* Center badges on their own row on narrow screens. Side groups
-         can still share the previous row when enough room remains. */
+    @container (max-width:260px) {
+      /* Only extremely narrow card containers need the centered badge(s)
+         to occupy another row. Avoid arbitrary mobile-width breakpoints. */
       .head-metrics.with-center { display:flex; }
       .head-metrics.with-center > .align-left { order:1; }
       .head-metrics.with-center > .align-right { order:2; margin-left:auto; }
