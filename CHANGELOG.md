@@ -1,4 +1,10 @@
-## 0.1.14b3 Bêta (2026-11-05)
+## 0.1.14b4 Bêta (2026-11-05)
+
+- Nouvelle bêta créée depuis la branche b3 correcte, après constat que le tag publié v0.1.14b3 pointait vers b1.
+- Conserve les badges alignables individuellement et toutes les options des statistiques Tracearr, ainsi que le correctif d'alignement sur mobile.
+- Aucun changement de logique par rapport à la branche b3 vérifiée : versionnement et cache frontend actualisés.
+
+## 0.1.14b4 Bêta (2026-11-05)
 
 - Correctif responsive de l'en-tête : ne crée plus les groupes vides, ni de colonne centrale lorsqu'aucun badge centré n'est visible.
 - Sur téléphone et tablette, les badges gauches et droits partagent désormais la même ligne tant que la largeur est suffisante.
