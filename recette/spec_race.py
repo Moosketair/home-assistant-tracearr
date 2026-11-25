@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.tracearr_ha.api import TracearrClient
 from custom_components.tracearr_ha import coordinator as module
@@ -369,4 +370,223 @@ def test_periodic_poll_and_ready_share_one_rest_producer():
                 await views(b, entry, sim, ws)
                 assert len(sim.clients) == 1
                 clean(coord)
+    asyncio.run(run())
+
+
+def v321_update(row):
+    """Synthetic formatActiveStream without the /streams identity join."""
+    return {
+        **dict.fromkeys((
+            "user_thumb", "user_avatar_url", "show_title", "season_number", "episode_number",
+            "year", "artist_name", "album_name", "track_number", "disc_number", "thumb_path",
+            "source_video_codec", "source_audio_codec", "source_audio_channels",
+            "source_video_width", "source_video_height", "source_video_details",
+            "source_audio_details", "stream_video_codec", "stream_audio_codec",
+            "stream_video_details", "stream_audio_details", "transcode_info", "subtitle_info",
+            "resolution", "audio_channels_display",
+            "source_video_codec_display", "source_audio_codec_display", "stream_video_codec_display",
+            "stream_audio_codec_display", "device", "player", "product", "platform", "media_id",
+            "show_media_id", "imdb_id", "tmdb_id", "tvdb_id", "rating_key", "parent_rating_key",
+            "grandparent_rating_key",
+        )),
+        **row,
+        "library_id": None,
+        "genres": None,
+    }
+
+
+def test_v321_updates_keep_rest_enrichment_every_refresh():
+    async def run():
+        async with Tracearr().serve() as sim:
+            sim.streams["main"] = {
+                **v321_update(sim.session("main")), "library_id": "fixture-library", "genres": ["Initial"],
+            }
+            async with core() as b, b.connect() as ws:
+                entry = await b.add(sim)
+                coord = b.coord(entry)
+                samples = []
+                for i in range(1, 4):
+                    row = sim.streams["main"]
+                    row.update(library_id=f"library-{i}", genres=[f"genre-{i}"])
+                    async with held(sim, coord):
+                        row["progress_ms"] = i * 3000
+                        sim.event("stream.updated", v321_update(row))
+                        await observed(coord, lambda: coord.streams["main"]["progress_ms"] == i * 3000)
+                    clean(coord)
+                    samples.append(deepcopy(coord.streams["main"]))
+                assert [(s["library_id"], s["genres"], s["progress_ms"]) for s in samples] == [
+                    (f"library-{i}", [f"genre-{i}"], i * 3000) for i in range(1, 4)
+                ]
+                await views(b, entry, sim, ws)
+    asyncio.run(run())
+
+
+def test_partial_changes_only_overlay_fields_sent():
+    async def run():
+        async with Tracearr().serve() as sim:
+            sim.change("started", "main")
+            async with core() as b, b.connect() as ws:
+                entry = await b.add(sim)
+                coord = b.coord(entry)
+                sim.streams["main"]["bitrate"] = 2600
+                async with held(sim, coord):
+                    sim.event("stream.updated", {"id": "main", "state": "paused"})
+                    await observed(coord, lambda: coord.streams["main"]["state"] == "paused")
+                    sim.event("stream.progress", {"id": "main", "progress_ms": 45000})
+                    await observed(coord, lambda: coord.streams["main"]["progress_ms"] == 45000)
+                    assert coord.streams["main"]["bitrate"] == 1000  # GET not published yet
+                    sim.streams["main"].update(state="paused", progress_ms=45000)
+                await views(b, entry, sim, ws)
+                clean(coord)
+    asyncio.run(run())
+
+
+def test_live_update_ignores_join_nulls_but_applies_explicit_clear():
+    async def run():
+        async with Tracearr().serve() as sim:
+            sim.streams["main"] = {
+                **v321_update(sim.session("main")), "library_id": "fixture-library",
+                "genres": ["Fixture"], "bitrate": 2500,
+            }
+            async with core() as b, b.connect() as ws:
+                entry = await b.add(sim)
+                coord = b.coord(entry)
+                await ws.call("tracearr_ha/subscribe")
+                sub = ws.seq
+                await ws.snapshots(sub)
+                row = sim.streams["main"]
+                row.update(bitrate=None, state="paused")
+                sim.event("stream.updated", v321_update(row))
+                await observed(coord, lambda: coord.streams["main"]["state"] == "paused")
+                assert coord.streams["main"]["bitrate"] is None  # Tracearr's nullable bitrate
+                await views(b, entry, sim, ws)
+                (event,), = await ws.snapshots(sub)
+                assert event["streams"] == [row] and event["stats"]["bandwidth_mbps"] == 0
+    asyncio.run(run())
+
+
+def test_stop_restart_same_id_never_inherits_inflight_old_row():
+    async def run():
+        async with Tracearr().serve() as sim:
+            sim.change("started", "same", library_id="old-library", genres=["Old"], player="old player")
+            async with core() as b, b.connect() as ws:
+                entry = await b.add(sim)
+                coord = b.coord(entry)
+                async with held(sim, coord):
+                    sim.change("stopped", "same")
+                    await observed(coord, lambda: not coord.streams)
+                    sim.event("stream.updated", {"id": "same", "state": "paused"})
+                    sim.event("stream.progress", {"id": "same", "progress_ms": 50000})
+                    sim.health("down")  # FIFO fence after the two late frames
+                    await observed(coord, lambda: next(iter(coord.servers.values()))["status"] == "down")
+                    assert not coord.streams
+                    sim.change("started", "same", media_title="Nouveau")
+                    sim.change("progress", "same", progress_ms=7000)
+                    await observed(coord, lambda: coord.streams == sim.streams)
+                    await views(b, entry, sim, ws)
+                await views(b, entry, sim, ws)
+                clean(coord)
+                sim.streams["same"].update(library_id="new-library", genres=["New"], player="new player")
+                await coord.async_refresh()
+                await views(b, entry, sim, ws)
+    asyncio.run(run())
+
+
+def test_poll_error_leaves_sse_and_ha_error_intact():
+    async def run():
+        tick, settled = Gate(), asyncio.Event()
+        real_timeout = asyncio.timeout
+
+        @asynccontextmanager
+        async def clock(seconds):
+            if asyncio.current_task().get_name() == "Tracearr poll":
+                if not tick.release.is_set() and seconds == 60:
+                    await tick.wait()
+                    seconds = 0
+                elif tick.release.is_set():
+                    # Next wait means the entire failing poll, including any
+                    # post-refresh notification, has finished.
+                    settled.set()
+            async with real_timeout(seconds):
+                yield
+
+        async with Tracearr().serve() as sim, core() as b, b.connect() as ws:
+            with patch.object(module.asyncio, "timeout", clock):
+                entry = await b.add(sim)
+                coord = b.coord(entry)
+                await ws.call("tracearr_ha/subscribe")
+                sub = ws.seq
+                await ws.snapshots(sub)
+                await asyncio.wait_for(tick.entered.wait(), 5)
+                sim.errors["streams"] = (503, {})
+                tick.release.set()
+                await asyncio.wait_for(settled.wait(), 5)
+                await failure_views(b, entry, sim, ws, sub, sse=True)
+                sim.change("started", "live")
+                await observed(coord, lambda: "live" in coord.streams)
+                await failure_views(b, entry, sim, ws, sub, sse=True)
+                del sim.errors["streams"]
+                await coord.async_refresh()
+                assert (coord.connected, coord.sse_connected, coord.last_update_success) == (True, True, True)
+                await views(b, entry, sim, ws)
+    asyncio.run(run())
+
+
+async def failure_views(b, entry, sim, ws, sub, *, sse):
+    coord = b.coord(entry)
+    assert (coord.connected, coord.sse_connected, coord.last_update_success) == (False, sse, False)
+    assert isinstance(coord.last_exception, UpdateFailed)
+    assert coord.data == coord.snapshot()
+    row, = (await ws.call("tracearr_ha/get"))["entries"]
+    assert {s["id"]: s for s in row["streams"]} == sim.streams
+    assert (row["connected"], row["sse_connected"], row["stats"]["total"]) == (False, sse, len(sim.streams))
+    events = await ws.snapshots(sub)
+    assert events and events[-1] == [row]
+    reg = er.async_get(b.hass)
+    total = reg.async_get_entity_id("sensor", DOMAIN, entry.entry_id + "_total")
+    connected = reg.async_get_entity_id("binary_sensor", DOMAIN, entry.entry_id + "_connected")
+    assert b.hass.states.get(total).state == "unavailable"
+    assert b.hass.states.get(connected).state == "off"
+
+
+def test_ready_error_and_real_sse_recovery():
+    async def run():
+        failed_ready = asyncio.Queue()
+        original = module.TracearrCoordinator.async_refresh
+
+        async def witness(coord):
+            await original(coord)
+            if not coord.connected:
+                failed_ready.put_nowait(None)
+
+        async with Tracearr().serve() as sim, core() as b, b.connect() as ws:
+            entry = await b.add(sim)
+            coord = b.coord(entry)
+            await ws.call("tracearr_ha/subscribe")
+            sub = ws.seq
+            await ws.snapshots(sub)
+            sim.errors["streams"] = (503, {})
+            with patch.object(module.TracearrCoordinator, "async_refresh", witness):
+                sim.event("ready", {})  # Redis subscription recovery on same SSE
+                await asyncio.wait_for(failed_ready.get(), 5)
+                assert len(sim.clients) == 1
+                await failure_views(b, entry, sim, ws, sub, sse=True)
+                sim.raw(None)
+                await observed(coord, lambda: not coord.sse_connected)
+                await failure_views(b, entry, sim, ws, sub, sse=False)
+                await asyncio.wait_for(sim.no_clients.wait(), 5)
+                # First catch-up on the new connection also fails. It cannot
+                # confirm the transport, and does not mask the HA failure.
+                await asyncio.wait_for(failed_ready.get(), 12)
+                assert len(sim.clients) == 1
+                assert (coord.connected, coord.sse_connected, coord.last_update_success) == (False, False, False)
+                sim.change("started", "unconfirmed-live")
+                await observed(coord, lambda: "unconfirmed-live" in coord.streams)
+                await failure_views(b, entry, sim, ws, sub, sse=False)
+            sim.streams["missed"] = sim.session("missed")
+            del sim.errors["streams"]
+            sim.event("ready", {})
+            await observed(coord, lambda: coord.sse_connected and "missed" in coord.streams, timeout=12)
+            assert coord.connected and coord.last_update_success and len(sim.clients) == 1
+            await views(b, entry, sim, ws)
     asyncio.run(run())

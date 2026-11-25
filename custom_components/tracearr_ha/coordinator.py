@@ -5,46 +5,60 @@ import asyncio
 import logging
 import time
 from collections.abc import Coroutine
-from typing import Any
+from typing import Any, NamedTuple
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import TracearrAuthError, TracearrClient, TracearrRateLimited, TracearrUnavailable
-from .model import apply_event, stats
+from .model import stats, stream_mutation
 
 _LOGGER = logging.getLogger(__name__)
 _MAX_MUTATIONS = 4096
+
+
+class _RowChange(NamedTuple):
+    fields: dict
+    replace: bool
 
 
 class _RefreshChanges:
     """Coalesce overlapping mutations, never retain an event history."""
 
     def __init__(self) -> None:
-        self.rows: dict[str, dict | None] = {}
+        self.rows: dict[str, _RowChange | None] = {}
         self.overflow = False
 
-    def record(self, key: str, fields: dict | None) -> None:
+    def record(self, key: str, fields: dict | None, *, replace: bool = False) -> None:
         if self.overflow:
             return
         if key not in self.rows and len(self.rows) >= _MAX_MUTATIONS:
             self.rows.clear()
             self.overflow = True
             return
-        self.rows[key] = fields
+        if fields is None:
+            self.rows[key] = None
+        elif not replace and (previous := self.rows.get(key)) is not None:
+            previous.fields.update(fields)
+        else:
+            self.rows[key] = _RowChange(dict(fields), replace)
+
+    def was_stopped(self, key: str) -> bool:
+        return key in self.rows and self.rows[key] is None
 
     def merge(self, incoming: dict[str, dict], live: dict[str, dict]) -> dict[str, dict]:
         if self.overflow:
             # Never partially protect a snapshot. Retry at the next REST cycle.
             return live
-        for key, fields in self.rows.items():
-            if fields is None:
+        for key, change in self.rows.items():
+            if change is None:
                 incoming.pop(key, None)
             else:
-                if key not in incoming and key not in live and "id" not in fields:
-                    # Progress/health alone cannot construct a session/server.
-                    continue
-                incoming[key] = {**incoming.get(key, live.get(key, {})), **fields}
+                # After stop/start the live row belongs to the new incarnation;
+                # the in-flight REST row may still describe the stopped one.
+                base = live.get(key) if change.replace else incoming.get(key, live.get(key))
+                if base is not None:  # Progress/health alone cannot create a row.
+                    incoming[key] = {**base, **change.fields}
         return incoming
 
 
@@ -96,6 +110,9 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
                     self._stream_changes = self._server_changes = None
         except (TracearrUnavailable, TracearrAuthError) as exc:
             self.connected = False
+            # HA retains the existing data on UpdateFailed, but listeners must
+            # see REST connectivity change alongside the still-live cache.
+            self.data = self.snapshot()
             raise UpdateFailed(str(exc)) from exc
         finally:
             self._refresh_tasks.discard(task)
@@ -112,7 +129,10 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
 
     def _emit(self) -> None:
         if not self._stopped:
-            self.async_set_updated_data(self.snapshot())
+            # async_set_updated_data marks the refresh successful and cancels
+            # the request debouncer. An SSE/options notification does neither.
+            self.data = self.snapshot()
+            self.async_update_listeners()
 
     def start(self) -> None:
         self._sse_task = self._start_task(self._sse_loop(), "Tracearr SSE")
@@ -147,8 +167,11 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
             self._refresh_requested.clear()
             ready_serial = self._ready_serial
             await self.async_refresh()
-            if self._sse_ready and ready_serial == self._ready_serial:
-                self.sse_connected = self.connected
+            if (self._sse_ready and not self.sse_connected and ready_serial == self._ready_serial
+                    and self.connected and self.last_update_success):
+                # Confirm an unconfirmed connection after a successful catch-up.
+                # A REST failure cannot clear an already confirmed SSE transport.
+                self.sse_connected = True
                 self._emit()
 
     async def _sse_loop(self) -> None:
@@ -168,17 +191,13 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
                         if isinstance(payload, dict) and isinstance(payload.get("server_id"), str):
                             fields = {k: payload[k] for k in ("status", "reason") if k in payload}
                             if self._server_changes is not None:
-                                previous = self._server_changes.rows.get(payload["server_id"]) or {}
-                                self._server_changes.record(payload["server_id"], {**previous, **fields})
+                                self._server_changes.record(payload["server_id"], fields)
                             server = self.servers.get(payload.get("server_id"))
                             if server:
                                 server.update(fields)
                                 self._emit()
-                    elif event.get("type", "").startswith("stream."):
-                        changed = apply_event(self.streams, event)
-                        self._record_stream_change(event, changed)
-                        if changed:
-                            self._emit()
+                    else:
+                        self._apply_stream_event(event)
             except TracearrRateLimited as exc:
                 retry = exc.retry_after
             except TracearrAuthError:
@@ -193,24 +212,15 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
                 self._emit()
             await asyncio.sleep(retry)
 
-    def _record_stream_change(self, event: dict, changed: bool) -> None:
+    def _apply_stream_event(self, event: dict) -> None:
+        mutation = stream_mutation(self.streams, event)
+        if mutation is None:
+            return
         changes = self._stream_changes
-        payload = event.get("data")
-        if changes is None or not isinstance(payload, dict):
-            return
-        key = payload.get("id")
-        if not isinstance(key, str):
-            return
-        kind = event.get("type")
-        if kind == "stream.stopped":
-            # Also protect an absent session that the REST result may contain.
-            changes.record(key, None)
-        elif kind == "stream.progress":
-            if key in changes.rows and changes.rows[key] is None:
-                return  # A partial progress must not undo an overlapping stop.
-            row = self.streams[key] if changed else payload
-            fields = {**(changes.rows.get(key) or {}),
-                      **{k: row[k] for k in ("state", "progress_ms", "bitrate") if k in row}}
-            changes.record(key, fields)
-        elif changed:
-            changes.record(key, dict(self.streams[key]))
+        if changes is not None:
+            was_stopped = changes.was_stopped(mutation.key)
+            if was_stopped and mutation.kind not in ("stream.started", "stream.stopped"):
+                return  # An update/progress cannot undo a known overlapping stop.
+            changes.record(mutation.key, mutation.fields, replace=was_stopped)
+        if mutation.apply(self.streams):
+            self._emit()

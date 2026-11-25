@@ -151,6 +151,29 @@ Les **29 contrôles antérieurs**, dont toutes les garanties 2A, sont conservés
 
 Compilation de `custom_components` et `recette` avec cache temporaire isolé, syntaxe JS (suite `base`), lecture JSON du manifeste et de `hacs.json`, et `git diff --check` réussis. Aucun blocage de validation locale. Livraison en attente du contre-audit indépendant ; aucune intervention en production ni action distante de publication.
 
+### 2B.3 — fusion par champ et indépendance des états REST/SSE
+
+Le contre-audit 2B.2 a refusé `397f40e8` malgré la correction des six courses historiques, la réactivité SSE, la sérialisation, les réveils `ready`, la borne de 4096 ID, la convergence après saturation et la non-régression de 2A. Les deux écarts ont été reproduits sur ce SHA **avant** modification du backend, sur chacun des Core.
+
+| Cas ajouté dans `spec_race.py` | Observation avant correction et garantie après |
+|---|---|
+| Trame `stream.updated` v3.2.1 × trois refresh | Avant : trois positions SSE correctes mais trois couples `library_id`/`genres` à `null`. Après : les trois positions, les trois enrichissements REST distincts et le snapshot HA/WS concordent sans refresh de réparation. La fixture reproduit `formatActiveStream` sans la jointure. |
+| Mutations partielles successives | Avant : `updated` avec l'état seul, puis `progress` avec la position seule, recopiaient `1000` du cache. Après : état et position SSE, débit REST `2600`, capteur débit et WS à `2,6` Mbit/s. |
+| Mise à jour SSE seule | Avant : les placeholders effaçaient les enrichissements déjà connus. Après : métadonnées conservées dans le cache et la notification WS ; `bitrate: null`, réellement fourni et nullable, efface bien l'ancien débit. |
+| Stop/start du même ID pendant un GET | Avant : l'ancien snapshot pouvait réintroduire l'ancienne bibliothèque, les genres et le lecteur. Après : des update/progress tardifs entre stop et start ne recréent pas la session ; le nouveau start et sa progression n'héritent ni du cache arrêté ni du REST en vol. Un REST ultérieur enrichit la nouvelle incarnation. |
+| Poll périodique à 503, flux SSE ouvert | Avant : `(connected, sse_connected, last_update_success) = (false, false, true)`. Après : `(false, true, false)`, `last_exception` est un `UpdateFailed`, capteurs de comptage indisponibles, binaire Connected `off`. Une trame live ne masque pas l'erreur mais arrive dans le cache et le WS ; le REST réussi rétablit les capteurs. |
+| Rattrapage `ready` à 503, EOF, reconnexion | L'échec sur un flux déjà confirmé conserve sa confirmation et l'échec HA ; l'EOF seul retire la confirmation. Le premier rattrapage sur la nouvelle connexion échoue sans la confirmer ; les trames continuent d'arriver. Un nouveau `ready` réussi confirme le flux et récupère une session manquée. |
+
+La barrière HTTP capture les données avant les mutations ; les témoins de notification et le `get` WebSocket FIFO remplacent les délais arbitraires. Une barrière de test fait expirer le vrai poll périodique ; la reconnexion teste l'EOF et le backoff réels. Les nouveaux tests finaux, appliqués seuls à une archive de `397f40e8` avec `-k 'v321 or partial_changes or live_update_ignores or stop_restart or poll_error or ready_error'`, donnent **6 échecs et 55 désélectionnés sur chaque Core**. Sur la correction, les six sont verts et les 55 existants passent également.
+
+| Suite officielle (`TMPDIR=/tmp/opencode bash recette/lancer.sh …`) | Résultat |
+|---|---|
+| `base` | **21 Python réussis** (0,26 s), **72 JavaScript réussis**, 0 échec, 0 ignoré, 0 annulé |
+| `min` — Core 2025.6.0 | **61 réussis**, 0 skip, 0 xfail, **121 avertissements** (19,84 s) |
+| `current` — Core 2026.11.3 | **61 réussis**, 0 skip, 0 xfail, **67 avertissements** (20,24 s) |
+
+Les avertissements supplémentaires proviennent des six ouvertures de banc HTTP/CORS. Les limites d'ordre de l'amont et de la superposition bornée décrites dans [ARCHITECTURE](ARCHITECTURE.md) restent inchangées. Rien n'a été publié ; attendre le contre-audit ciblé **2B.4**, sans commencer 2C.
+
 ## Recette visuelle légère
 
 `recette/cartes.html` monte le JS distribué, avec une source WS de carte synthétique. Les métriques sont mesurées sur les éléments réels du Shadow DOM. Sous Chromium (152.0.7977.82 pendant la validation) :
