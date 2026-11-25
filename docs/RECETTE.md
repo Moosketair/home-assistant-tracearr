@@ -77,6 +77,26 @@ La borne FIFO `get` sépare les notifications de cycle de vie des marqueurs mét
 
 Les 12 succès sont les 10 cas WS et les 2 contrôles de transport. Aucun échec inattendu final, aucun xfail/skip A1. Pendant la mise au point, Core 2025.6.0 conservait un relais installé avant un échec injecté de chargement des plateformes ; l’installation du relais **après** leur réussite résout ce cas sans affaiblir l’assertion. Compilation Python, syntaxe JS, lecture JSON du manifeste et de `hacs.json` et `git diff --check` réussis. Résultats de recette locale, à soumettre au contre-audit.
 
+### 2A.3 — rollback, retrait définitif et récupération
+
+Le contre-audit **a refusé 2A.1** : le reload nominal conservait les abonnements, mais l’échec d’unload suivi d’une suppression (B1) et le démarrage partiel (B2) laissaient des producteurs orphelins ; une plateforme `sensor` déjà chargée pouvait garder les anciens capteurs après annulation (B3, hérité).
+
+Pour cibler les nouveaux cas : `TMPDIR=/tmp/opencode bash recette/lancer.sh min -k spec_generation` (ou `current`). `spec_generation.py` utilise le vrai registre, les plateformes HA, les sockets authentifiées et les serveurs loopback ; les mesures sont prises **avant l’arrêt de Core**. `sim.no_clients` permet d’attendre la fermeture effective du dernier flux côté serveur.
+
+| Cas | Vérification |
+|---|---|
+| B1, trois variantes | Refus de `binary_sensor`, vrai déchargement de `sensor`. Tant que HA conserve l’entrée, ses mises à jour arrivent. Suppression directe ou ultérieure, avec ou sans seconde entrée : HA répond `require_restart: True`, chaque socket reçoit un seul retrait. Le cache est retiré, les deux tâches terminées, la connexion fermée ; un événement tardif et un second nettoyage ne notifient personne. L’autre source fonctionne encore. |
+| B2, trois points d’injection | Refus de création de SSE, refus de poll après création du SSE, exception à l’installation des options après création des deux tâches. `SETUP_ERROR`, snapshot vide, zéro producteur, zéro listener sur l’ancien coordinateur. Après reload : **1 connexion / 2 tâches** ; rappeler le finaliseur de l’ancienne génération ne touche pas la nouvelle. Après suppression : **0 / 0**. |
+| B3, deux variantes | Charger réellement `sensor`, puis annuler à la barrière avant `binary_sensor` ou faire échouer son hook **dans** la vraie plateforme binaire. Aucun listener sur la source abandonnée ; mêmes ID de capteur et de registre, même nom personnalisé, état du capteur `1` = total WS `1` après récupération. |
+| Nettoyage sous erreur, deux cas | Double annulation pendant que le rollback d’une plateforme attend à une barrière : l’opération ne termine pas avant sa libération. Exception secondaire après l’arrêt réel des tâches : la panne initiale et la panne secondaire sont toutes deux visibles dans les journaux. |
+| Contrôle nominal | 8 reloads, 3 abonnements sur 2 sockets, mises à jour de 2 entrées au même tour de boucle : **48 événements attendus** (24 par entrée), aucun doublon. 4 tâches actives, 2 connexions ; les 8 anciens coordinateurs sont collectables. |
+
+**Comparaison.** Avant modification du backend : 7 cas rouges et 1 nominal vert sur chaque Core dans la première reproduction. Puis, sur une archive de `20b2901` avec les 11 cas : **10 échecs / 1 succès** sur chacune des deux versions. Après correction : les 11 sont passants, sans marqueur. La sonde complémentaire de panne à la création du poll mesurait après récupération **3 tâches avant / 2 après**, et après suppression **1 avant / 0 après**, aux deux bornes.
+
+**Suites complètes 2A.3 :** `base` : 21 Python (0,26 s), 72 JS réussis. `min` : **23 réussis, 6 xfail stricts A2, 57 warnings** (8,71 s) ; `current` : **23 réussis, 6 xfail stricts A2, 35 warnings** (9,38 s). Les 12 succès antérieurs sont conservés. L’augmentation de 22 / 11 avertissements correspond aux 11 démarrages de banc supplémentaires (`NotAppKeyWarning` HTTP HA et, sur `min`, CORS) ; pas de nouvelle famille de warnings. Aucune nouvelle dépendance.
+
+**Borne des garanties :** la collectabilité après huit reloads réussis ne signifie pas absence de toute référence interne à Core après une panne. Sur `min`, après une exception générique de démarrage, une référence faible à l’ancien coordinateur, sans listener ni tâche, restait vivante après le setup suivant, puis devenait nulle après l’unload normal. Core enregistre son propre `async_shutdown` sur la config entry. Sur `current`, la référence était déjà nulle après récupération. Le rollback n’édite pas les callbacks privés de HA. Un refus persistant d’une plateforme peut toujours nécessiter le redémarrage demandé par HA ; les tests ne constituent pas une validation HACS ou en production.
+
 ## Recette visuelle légère
 
 `recette/cartes.html` monte le JS distribué, avec une source WS de carte synthétique. Les métriques sont mesurées sur les éléments réels du Shadow DOM. Sous Chromium (152.0.7977.82 pendant la validation) :

@@ -1,4 +1,4 @@
-# Architecture — base v0.1.16 et correctif local 2A.1
+# Architecture — base v0.1.16 et cycle de vie local 2A.3
 
 ```text
 Plex / Jellyfin / Emby → Tracearr → API publique v2 (REST + SSE)
@@ -34,15 +34,27 @@ Les décisions audio et vidéo (`transcode`, `copy`, `directplay`, absentes) son
 
 `websocket.py` : `tracearr_ha/get` renvoie toutes les entrées chargées ; `tracearr_ha/subscribe` envoie immédiatement un snapshot puis un snapshot complet à chaque notification. L’enveloppe contient ID, titre, options d’affichage et données du coordinateur ; ni clé API ni `entry.data` dans l’enveloppe. Le navigateur choisit `entry_id`, sinon la première entrée. Il n’y a pas de filtrage backend par utilisateur HA ou par carte.
 
-### Qui possède les listeners WS (2A.1, en attente de contre-audit)
+### Qui possède les listeners WS
 
 Dans la stable, `subscribe` enregistrait son callback sur les seuls coordinateurs présents à la réception de la commande. La socket survivait au reload mais ses listeners restaient sur l’ancienne génération. Le correctif utilise le dispatcher natif HA avec le signal de domaine `EVENT_SIGNAL` :
 
 - **Une config entry possède un relais.** Après le premier REST réussi, l’entrée publie son coordinateur et signale l’ajout. Elle installe le relais après le chargement réussi des plateformes, juste avant de lancer SSE/poll. REST, SSE, options et changements de disponibilité empruntent alors le chemin de notification du coordinateur. Les entités continuent de l’écouter directement. Un échec du premier REST ne publie rien ; un échec pendant le chargement des plateformes retire le coordinateur provisoire déjà visible, sans listener de relais à libérer.
 - **Une demande `subscribe` possède un listener de domaine**, même avec zéro entrée. Son désabonneur est dans `connection.subscriptions[id]` : HA le libère pour cet ID sur `unsubscribe_events`, ou pour tous les ID de cette socket à sa fermeture. Le dispatcher ne conserve ni snapshot ni liste de clients propre à Tracearr. Chaque callback relit les seules sources présentes ; l’acquittement et l’événement initial n’ont pas changé.
-- **Le retrait précède l’arrêt des tâches.** Lorsqu’une source est retirée, tous les abonnés voient immédiatement le snapshot restant (`entries: []` si c’était la dernière). Le relais vérifie l’identité du coordinateur encore publié : la dernière émission du `finally` SSE, ou une émission tardive, ne produit pas de nouvelle notification après retrait. HA retire le relais via `entry.async_on_unload`. Le nouveau coordinateur crée son propre relais ; les sockets ne se réabonnent pas.
+- **Le retrait précède l’arrêt des tâches.** Lorsqu’une source est retirée, tous les abonnés voient le snapshot restant (`entries: []` si c’était la dernière). Le relais vérifie l’identité du coordinateur encore publié : la dernière émission du `finally` SSE, ou une émission tardive, ne produit pas de nouvelle notification après retrait. La génération retire explicitement son relais. Le nouveau coordinateur crée son propre relais ; les sockets ne se réabonnent pas.
 
 Un retrait, un ajout après première synchro, le refresh de `ready` et le passage de `sse_connected` à vrai sont des notifications légitimes distinctes. Le contrat n’est pas « un seul événement par reload », ni une déduplication des snapshots identiques : **une notification du coordinateur courant donne un événement par ID d’abonnement actif**. Voir les contrôles sur le fil et le comptage des listeners dans [RECETTE](RECETTE.md).
+
+### Génération de chargement et rollback (2A.3)
+
+`entry.runtime_data` contient une `EntryGeneration` (`lifecycle.py`) ; `hass.data[DOMAIN][entry_id]` reste le coordinateur publié. Il n’y a pas de second registre de clients WS. Le relais et le callback d’options appartiennent à cette génération ; les découvertes de serveurs sont détachables par plateforme. Les listeners des **entités** sont libérés par HA lors du déchargement réel de la plateforme.
+
+1. Première synchro puis publication. Forwarding **séquentiel** de `sensor`, puis `binary_sensor`. Le `finally` de chaque forward identifie, via `entity_platform.async_get_platforms`, l’objet nouvellement alloué pour cette entrée et ce domaine (même si le forward n’aboutit pas). Un retour de `async_forward_entry_setups` seul ne prouve pas que le hook Tracearr a réussi : certaines erreurs sont interceptées dans Core. La dernière opération de chaque hook enregistre son listener de découverte ; sa présence confirme que le hook est arrivé à son terme.
+2. Installation du relais, création des deux tâches, installation du callback d’options : toute cette séquence est dans le même périmètre de rollback. Si la fabrique de tâche refuse une coroutine, celle-ci est fermée ; seules les tâches effectivement créées sont annulées et attendues.
+3. **Unload ordinaire** : chaque plateforme libérée est retirée de l’inventaire. Si HA refuse une plateforme, la réponse reste `False` et la source reste publiée. **Suppression définitive** : les deux Core appellent `async_remove_entry` après la suppression du registre, même si l’unload a échoué. Le hook ferme la génération restante ; si le déchargement nominal l’a déjà fermée, il n’y a rien à faire.
+4. **Fermeture** : retirer et signaler seulement le coordinateur encore publié sous cette identité ; détacher relais/options ; arrêter les producteurs et le coordinateur ; détacher les découvertes ; décharger les plateformes restantes de cette génération et oublier son `runtime_data`. Un ancien finaliseur ne peut pas décharger les plateformes du remplaçant. Le registre d’entités et les options utilisateur ne sont pas effacés par ce rollback.
+5. Le nettoyage asynchrone est exécuté sous la protection de `asyncio.shield` **et attendu jusqu’à la fin**, avant de rendre le verrou d’entrée à HA. Une annulation du demandeur est ensuite propagée. Les actions de libération restantes sont tentées même après erreur ; une panne secondaire du rollback est journalisée et ne se substitue pas silencieusement à l’exception du setup.
+
+**Limite de responsabilité :** Tracearr ne peut pas contraindre HA à décharger une plateforme qui continue de refuser. Le refus est signalé, les ressources Tracearr sont néanmoins fermées lors d’une suppression définitive ; la décision `require_restart` appartient à HA. L’inventaire ne modifie aucune structure privée de Core. Les résultats portent sur les deux versions éprouvées, pas sur toutes les versions intermédiaires.
 
 ## Lovelace et images
 

@@ -36,7 +36,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             async_add_entities(created)
 
     add_servers()
-    entry.async_on_unload(coordinator.async_add_listener(add_servers))
+    entry.runtime_data.discovery["sensor"] = coordinator.async_add_listener(add_servers)
 
 
 class TracearrStatsSensor(CoordinatorEntity, SensorEntity):

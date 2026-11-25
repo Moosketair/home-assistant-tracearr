@@ -4,8 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Callable
-from datetime import timedelta
+from collections.abc import Coroutine
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -60,8 +59,15 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
         self.async_set_updated_data(self.snapshot())
 
     def start(self) -> None:
-        self._sse_task = self.hass.async_create_background_task(self._sse_loop(), "Tracearr SSE", eager_start=False)
-        self._poll_task = self.hass.async_create_background_task(self._poll_loop(), "Tracearr poll", eager_start=False)
+        self._sse_task = self._start_task(self._sse_loop(), "Tracearr SSE")
+        self._poll_task = self._start_task(self._poll_loop(), "Tracearr poll")
+
+    def _start_task(self, coro: Coroutine[Any, Any, None], name: str) -> asyncio.Task:
+        try:
+            return self.hass.async_create_background_task(coro, name, eager_start=False)
+        except BaseException:
+            coro.close()  # The task factory never took ownership.
+            raise
 
     async def stop(self) -> None:
         tasks = [t for t in (self._sse_task, self._poll_task) if t is not None]
@@ -69,6 +75,7 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
             task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+        await self.async_shutdown()  # Also release HA coordinator timers on failed setup.
 
     async def _poll_loop(self) -> None:
         while True:

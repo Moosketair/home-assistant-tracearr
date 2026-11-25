@@ -35,6 +35,8 @@ class Tracearr:
         ]
         self.streams = {}
         self.clients = set()
+        self.no_clients = asyncio.Event()
+        self.no_clients.set()
         self.errors = {}
         self.gates = {}
 
@@ -85,12 +87,15 @@ class Tracearr:
             await response.prepare(request)
             queue = asyncio.Queue()
             self.clients.add(queue)
+            self.no_clients.clear()
             try:
                 await response.write(f'event: ready\ndata: {{"type":"ready","at":"{STAMP}","data":{{}}}}\n\n'.encode())
                 while (frame := await queue.get()) is not None:
                     await response.write(frame)
             finally:
                 self.clients.remove(queue)
+                if not self.clients:
+                    self.no_clients.set()
             return response
         if resource == "image":
             response = web.StreamResponse(headers={"Content-Type": "image/png"})
