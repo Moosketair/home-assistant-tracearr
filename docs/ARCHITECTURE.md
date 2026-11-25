@@ -1,4 +1,4 @@
-# Architecture — repère v0.1.16
+# Architecture — base v0.1.16 et correctif local 2A.1
 
 ```text
 Plex / Jellyfin / Emby → Tracearr → API publique v2 (REST + SSE)
@@ -20,7 +20,7 @@ Sous `custom_components/tracearr_ha/`, `__init__.py` enregistre deux commandes W
 - **SSE** `/events`, sans limite totale, lecture inactive 80 s ; commentaires ignorés, lignes `data:` réunies jusqu’à la ligne vide, `event:` utilisé si le JSON omet `type`. `ready` → nouveau snapshot REST (pas de replay). `server.health` met à jour le serveur connu. `model.apply_event` fusionne `started`/`updated`, applique `progress` à une session connue, supprime sur `stopped`. Protection des positions contre certaines mises à jour complètes tardives. Les événements de violation ne sont pas utilisés.
 - **Récupération** : après chaque attente de 60 s si SSE actif, sinon 15 s, refresh REST même sans carte. SSE : délai initial 5 s, doublé sur indisponibilité jusqu’à 60 s, 300 s si refus de clé, `Retry-After` si 429 ; `ready` remet à 5 s. Une fin de flux normale reprend le délai courant ; pas de jitter ni d’exploitation de la directive SSE `retry:`. La disponibilité REST (`connected`) est distincte de `sse_connected`.
 
-`_emit()` notifie le `DataUpdateCoordinator` avec listes, statistiques, états de connexion et dernière synchro. L’entrée est dans `hass.data[DOMAIN][entry_id]`. Changer les options provoque une émission, pas un reload. Au déchargement réussi des plateformes : retrait du coordinateur, annulation et attente des deux tâches ; les écouteurs des plateformes/options sont rattachés à l’entrée. Routes HTTP/WS et ressource Lovelace sont globales. Les abonnements navigateur ont un cycle de vie distinct (audit A1).
+`_emit()` notifie le `DataUpdateCoordinator` avec listes, statistiques, états de connexion et dernière synchro. L’entrée est dans `hass.data[DOMAIN][entry_id]`. Changer les options provoque une émission, pas un reload. Au déchargement réussi des plateformes : retrait du coordinateur, notification du retrait, annulation et attente des deux tâches ; les écouteurs des plateformes/options sont rattachés à l’entrée. Routes HTTP/WS et ressource Lovelace sont globales.
 
 ## Modèle et sorties
 
@@ -33,6 +33,16 @@ Sous `custom_components/tracearr_ha/`, `__init__.py` enregistre deux commandes W
 Les décisions audio et vidéo (`transcode`, `copy`, `directplay`, absentes) sont distinguées du drapeau global `is_transcode` : un transcodage sans précision peut compter à la fois dans le total transcodé et la catégorie « inconnue ». Le backend recalcule ses statistiques plutôt que de reprendre `summary` de Tracearr. Les entités par serveur sont ajoutées à la découverte, pas retirées à chaque perte du serveur. Identifiant unique avec préfixe d’entrée, identifiant d’appareil serveur `(DOMAIN, server_id)`. Pas d’entité par session/utilisateur : leurs détails passent par WS.
 
 `websocket.py` : `tracearr_ha/get` renvoie toutes les entrées chargées ; `tracearr_ha/subscribe` envoie immédiatement un snapshot puis un snapshot complet à chaque notification. L’enveloppe contient ID, titre, options d’affichage et données du coordinateur ; ni clé API ni `entry.data` dans l’enveloppe. Le navigateur choisit `entry_id`, sinon la première entrée. Il n’y a pas de filtrage backend par utilisateur HA ou par carte.
+
+### Qui possède les listeners WS (2A.1, en attente de contre-audit)
+
+Dans la stable, `subscribe` enregistrait son callback sur les seuls coordinateurs présents à la réception de la commande. La socket survivait au reload mais ses listeners restaient sur l’ancienne génération. Le correctif utilise le dispatcher natif HA avec le signal de domaine `EVENT_SIGNAL` :
+
+- **Une config entry possède un relais.** Après le premier REST réussi, l’entrée publie son coordinateur et signale l’ajout. Elle installe le relais après le chargement réussi des plateformes, juste avant de lancer SSE/poll. REST, SSE, options et changements de disponibilité empruntent alors le chemin de notification du coordinateur. Les entités continuent de l’écouter directement. Un échec du premier REST ne publie rien ; un échec pendant le chargement des plateformes retire le coordinateur provisoire déjà visible, sans listener de relais à libérer.
+- **Une demande `subscribe` possède un listener de domaine**, même avec zéro entrée. Son désabonneur est dans `connection.subscriptions[id]` : HA le libère pour cet ID sur `unsubscribe_events`, ou pour tous les ID de cette socket à sa fermeture. Le dispatcher ne conserve ni snapshot ni liste de clients propre à Tracearr. Chaque callback relit les seules sources présentes ; l’acquittement et l’événement initial n’ont pas changé.
+- **Le retrait précède l’arrêt des tâches.** Lorsqu’une source est retirée, tous les abonnés voient immédiatement le snapshot restant (`entries: []` si c’était la dernière). Le relais vérifie l’identité du coordinateur encore publié : la dernière émission du `finally` SSE, ou une émission tardive, ne produit pas de nouvelle notification après retrait. HA retire le relais via `entry.async_on_unload`. Le nouveau coordinateur crée son propre relais ; les sockets ne se réabonnent pas.
+
+Un retrait, un ajout après première synchro, le refresh de `ready` et le passage de `sse_connected` à vrai sont des notifications légitimes distinctes. Le contrat n’est pas « un seul événement par reload », ni une déduplication des snapshots identiques : **une notification du coordinateur courant donne un événement par ID d’abonnement actif**. Voir les contrôles sur le fil et le comptage des listeners dans [RECETTE](RECETTE.md).
 
 ## Lovelace et images
 

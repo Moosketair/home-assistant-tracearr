@@ -28,7 +28,7 @@ Chaque exécution a son répertoire privé `$TMPDIR/tracearr-recette.XXXXXXXX` (
 - **Pilotage** : `sim.change("started"|"updated"|"progress"|"stopped", id, …)` ; pause/reprise via `state` ; `sim.raw(None)` pour fermer les flux, `sim.raw(bytes)` pour une trame inhabituelle, `sim.errors[route] = (statut, en_têtes)` pour une panne. `sim.gates[route] = Gate()` retient le résultat déjà capturé ; attendre `entered` puis ouvrir `release`. Pour `image`, la barrière suit les huit premiers octets. Plusieurs instances du simulateur représentent plusieurs entrées HA indépendantes.
 - **Côté HA**, `recette/core.py` utilise le chargeur Core, les registres, le vrai config flow, `ConfigEntries.async_reload`/`async_remove`, les plateformes de capteurs, les middlewares HTTP et la vue `/api/websocket` d’origine. Un utilisateur éphémère s’authentifie par l’échange `auth_required` → `auth` → `auth_ok`. Les tests n’appellent pas directement `ws_subscribe`. L’application HTTP HA est hébergée par `aiohttp.test_utils.TestServer`. Seules les dépendances graphiques `frontend`/`lovelace` sont déclarées chargées sans monter leur UI ; pas de `default_config`, de découverte multicast ni d’onboarding. Les adresses simulées sont numériques ; une demande de résolution DNS HA est une erreur de banc.
 
-### Scénarios et résultats sur v0.1.16
+### Base historique : résultats sur v0.1.16 avec la recette a77301a
 
 | Fichier, scénario | Observation aux deux bornes |
 |---|---|
@@ -42,7 +42,7 @@ Chaque exécution a son répertoire privé `$TMPDIR/tracearr-recette.XXXXXXXX` (
 
 **Ordonnancement.** Pour A1, une réponse `get` sert de borne dans la file ordonnée des messages de **la même socket** ; pas de conclusion tirée d’un silence de quelques millisecondes. Pour A2, le GET `/servers` bloqué prouve que `/streams` a déjà répondu. Un témoin autour de l’itérateur réel signale le décodage du premier événement et relève l’état après traitement. Il laisse passer les données sans les remplacer. Le test libère le REST sur **réception** plutôt que d’exiger une application sous verrou avant de le libérer : un futur correctif pourrait légitimement différer l’application. Un événement de santé derrière tous les événements de session délimite ensuite la vérification finale. Les timeouts bornent les blocages, ils n’imposent pas l’interleaving.
 
-**Lecture du résultat** : `base` → 21 Python et 72 JS réussis ; **chacune** des cibles Core → **3 passés, 9 xfail** (12 cas). Les neuf xfail sont des observations sur **deux** anomalies, pas neuf nouveaux bugs. `strict=True` et `raises=` limitent le résultat attendu à l’exception métier du test : erreur d’auth, timeout, mauvais payload ou doublon doivent rester rouges. Pour voir les assertions échouer normalement, par exemple :
+**À cette référence**, `base` → 21 Python et 72 JS réussis ; chacune des cibles Core → **3 passés, 9 xfail** (12 cas). Les neuf xfail sont des observations sur deux anomalies, pas neuf nouveaux bugs. `strict=True` et `raises=` limitent le résultat attendu à l’exception métier du test : erreur d’auth, timeout, mauvais payload ou doublon doivent rester rouges. Pour voir les assertions échouer normalement sur cette référence :
 
 ```bash
 TMPDIR=/tmp/opencode bash recette/lancer.sh current -k subscription_survives_reload --runxfail
@@ -50,6 +50,32 @@ TMPDIR=/tmp/opencode bash recette/lancer.sh min -k latest_stream_state --runxfai
 ```
 
 Cette variante doit retourner un code non nul sur la stable. Contrôle supplémentaire effectué sur Core 2026.11.3 : sans les marqueurs (`--runxfail`), les deux fichiers P1 ont produit **9 échecs ciblés et 1 succès** ; pour les six courses, le cache final était exactement l’ancien snapshot. Après correction autorisée, un `XPASS(strict)` est aussi un échec : retirer le marqueur du cas corrigé et garder son assertion de comportement. Aucun plugin pytest-asyncio, workflow distant ni dépendance de test dans le manifeste de l’intégration.
+
+### Correctif local 2A.1 : contrôles ordinaires P1-A
+
+`spec_websocket.py` contient désormais dix cas sans xfail ni skip. Pour les isoler : `TMPDIR=/tmp/opencode bash recette/lancer.sh current -k spec_websocket` (ou `min`). Avant correction, les trois cas marqués en 1.1 ont tous échoué avec `--runxfail` sur les deux Core (1/1 puis 2/2 clients manquent `after`, ancien listener retenu). Avec le fichier de tests final appliqué au backend `a77301a`, **9 échecs, 1 réussite** sur Core 2026.11.3 ; les six nouveaux cas détectent une différence.
+
+| Situation | Preuve demandée |
+|---|---|
+| Quatre cas repris de 1.1 | Même socket/ID, lectures en cours, une ou deux entrées, reload simple ou double, deuxième socket, snapshots initiaux, une notification par marqueur, retrait et désabonnement. Zéro listener sur l’ancien coordinateur **avant** désabonnement ; nombre de listeners du remplaçant stable. |
+| Reload bloqué dans le premier GET `/streams` du remplaçant | La barrière permet de souscrire une seconde fois sur la même socket, modifier l’autre entrée et se désabonner du premier ID pendant que la source est absente. Un événement par ID pour cette modification ; retour de l’entrée sans lecture puis lecture nouvelle ; aucun événement de l’ancien coordinateur forcé à émettre avant ou après retour. |
+| Zéro entrée → ajout → retrait de la dernière → nouvel ajout | L’événement initial est vide ; les deux ajouts sont visibles au même abonné. Un seul snapshot vide pour le retrait ; aucune donnée de l’ancienne entrée dans les snapshots suivants. |
+| Reload en HTTP 503 puis récupération | Core passe en `SETUP_RETRY`, la socket voit le retrait et ignore l’ancien coordinateur. Après restauration du simulateur et reload HA explicite, le même abonnement retrouve la session créée pendant la panne. |
+| Échec de chargement des plateformes après publication | Exception injectée après le premier snapshot valide. Le snapshot provisoire est retiré, l’ancien relais nettoyé et aucune émission tardive ne passe. |
+| REST seul et modification d’options après reload | Le refresh REST sans événement SSE, puis le changement d’alias via HA, produisent chacun exactement un événement visible sans recréer l’abonnement. |
+| Abandon TCP sans `unsubscribe_events` ni trame de fermeture | Deux abonnements sur la socket coupée, un troisième sur la survivante. Le signal de déconnexion de Core borne le comptage réel : **3 → 1 → 0** listeners de domaine après rupture puis désabonnement explicite. Nombre de listeners du coordinateur inchangé. |
+
+La borne FIFO `get` sépare les notifications de cycle de vie des marqueurs métier ; on ne compte pas les événements d’un reload comme des doublons par principe. Le contrôle interne des registres de listeners et du transport TCP est spécifique aux deux versions épinglées ; les assertions de livraison passent par la vraie API WebSocket. Les six cas de `spec_race.py` restent inchangés et xfail stricts.
+
+**Exécution finale 2A.1** avec `TMPDIR=/tmp/opencode bash recette/lancer.sh` :
+
+| Cible | Résultat |
+|---|---|
+| `base` | 21 tests Python réussis (0,25 s) ; 72 JS réussis, 0 ignoré, 0 annulé. |
+| `min` (2025.6.0) | 12 réussis, 6 xfail stricts A2, 35 avertissements (8,33 s). |
+| `current` (2026.11.3) | 12 réussis, 6 xfail stricts A2, 24 avertissements (8,78 s). |
+
+Les 12 succès sont les 10 cas WS et les 2 contrôles de transport. Aucun échec inattendu final, aucun xfail/skip A1. Pendant la mise au point, Core 2025.6.0 conservait un relais installé avant un échec injecté de chargement des plateformes ; l’installation du relais **après** leur réussite résout ce cas sans affaiblir l’assertion. Compilation Python, syntaxe JS, lecture JSON du manifeste et de `hacs.json` et `git diff --check` réussis. Résultats de recette locale, à soumettre au contre-audit.
 
 ## Recette visuelle légère
 

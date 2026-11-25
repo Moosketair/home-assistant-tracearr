@@ -1,19 +1,17 @@
 """P1-A: test what an already open HA WebSocket actually receives."""
 import asyncio
 from contextlib import AsyncExitStack
+from unittest.mock import patch
 
 import pytest
+from homeassistant.components.websocket_api.const import SIGNAL_WEBSOCKET_DISCONNECTED
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import callback
+from homeassistant.helpers.dispatcher import DATA_DISPATCHER, async_dispatcher_connect
 
+from custom_components.tracearr_ha.const import EVENT_SIGNAL
 from core import core, observed
-from simulateur import Tracearr
-
-
-class LostSubscription(AssertionError):
-    """Only the missing notification, after all positive controls passed."""
-
-
-class RetainedListener(AssertionError):
-    """The old coordinator retains the active client's single listener."""
+from simulateur import Gate, Tracearr
 
 
 def ids(entries, entry):
@@ -36,7 +34,6 @@ async def check_change(sim, bench, entry, sid):
 
 
 @pytest.mark.parametrize("reloads, subscribers, instances", [(1, 1, 1), (2, 2, 2)])
-@pytest.mark.xfail(strict=True, raises=LostSubscription, reason="A1: subscription bound to old coordinator")
 def test_subscription_survives_reload(reloads, subscribers, instances):
     async def run():
         async with AsyncExitStack() as stack:
@@ -45,6 +42,7 @@ def test_subscription_survives_reload(reloads, subscribers, instances):
             entries = [await bench.add(sim) for sim in sims]
             entry = entries[0]
             sockets = [await stack.enter_async_context(bench.connect()) for _ in range(subscribers)]
+            listener_count = len(bench.coord(entry)._listeners)
             subs = [await subscribe(ws, entry) for ws in sockets]
             await check_change(sims[0], bench, entry, "before")
             for ws, sub in zip(sockets, subs, strict=True):
@@ -54,28 +52,23 @@ def test_subscription_survives_reload(reloads, subscribers, instances):
                 old = bench.coord(entry)
                 assert await bench.hass.config_entries.async_reload(entry.entry_id)
                 assert await bench.ready(entry) is not old
+                assert not old._listeners
+                assert len(bench.coord(entry)._listeners) == listener_count
             # Drop lifecycle notifications. No event from another entry may
             # accidentally make the missing post-reload notification look good.
             for ws, sub in zip(sockets, subs, strict=True):
                 await ws.snapshots(sub)
             await check_change(sims[0], bench, entry, "after")
-            missing = []
             for ws, sub in zip(sockets, subs, strict=True):
                 current = await ws.call("tracearr_ha/get")
                 assert ids(current["entries"], entry) == {"before", "after"}
-                batch = await ws.snapshots(sub)
-                if batch:
-                    only, = batch  # duplicates are unexpected failures
-                    assert ids(only, entry) == {"before", "after"}
-                missing.append(not batch)
+                only, = await ws.snapshots(sub)  # exactly once, same subscription
+                assert ids(only, entry) == {"before", "after"}
             if instances > 1:
                 await check_change(sims[1], bench, entries[1], "independent")
                 for ws, sub in zip(sockets, subs, strict=True):
                     other, = await ws.snapshots(sub)
                     assert ids(other, entries[1]) == {"independent"}
-            if any(missing):
-                assert all(missing), "Only some subscribers lost data"
-                raise LostSubscription(f"{sum(missing)}/{len(sockets)} subscribers missed 'after'")
     asyncio.run(run())
 
 
@@ -109,7 +102,6 @@ def test_unsubscribe_after_reload_and_remove():
     asyncio.run(run())
 
 
-@pytest.mark.xfail(strict=True, raises=RetainedListener, reason="A1: listener still on unloaded coordinator")
 def test_old_coordinator_releases_listener():
     async def run():
         async with Tracearr().serve() as sim, core() as b:
@@ -119,10 +111,182 @@ def test_old_coordinator_releases_listener():
                 sub = await subscribe(ws, entry)
                 assert await b.hass.config_entries.async_reload(entry.entry_id)
                 assert await b.ready(entry) is not old
-                count = len(old._listeners)
+                assert not old._listeners
                 await ws.call("unsubscribe_events", subscription=sub)
                 assert not old._listeners
-                if count == 1:
-                    raise RetainedListener("old listener only released at unsubscribe")
-                assert count == 0
+    asyncio.run(run())
+
+
+def domain_listeners(bench):
+    # White-box leak check on the two pinned Core versions, in addition to wire assertions.
+    return len(bench.hass.data.get(DATA_DISPATCHER, {}).get(EVENT_SIGNAL, {}))
+
+
+def test_subscribe_and_unsubscribe_during_reload():
+    async def run():
+        async with Tracearr().serve() as sim, Tracearr().serve() as other, core() as b:
+            entry, keep = await b.add(sim), await b.add(other)
+            old = b.coord(entry)
+            async with b.connect() as ws:
+                before = await subscribe(ws, entry)
+                gate = sim.gates["streams"] = Gate()
+                reload_task = asyncio.create_task(b.hass.config_entries.async_reload(entry.entry_id))
+                try:
+                    await asyncio.wait_for(gate.entered.wait(), 5)
+                    gone, = await ws.snapshots(before)
+                    assert [r["id"] for r in gone] == [keep.entry_id]
+                    during = await subscribe(ws, keep)
+                    assert domain_listeners(b) == 2
+                    await check_change(other, b, keep, "during")
+                    await ws.call("tracearr_ha/get")  # FIFO fence for both IDs on one socket
+                    batch, ws.events = ws.events, []
+                    assert sorted(m["id"] for m in batch) == [before, during]
+                    for msg in batch:
+                        rows = msg["event"]["entries"]
+                        assert len(rows) == 1 and ids(rows, keep) == {"during"}
+                    await ws.call("unsubscribe_events", subscription=before)
+                    assert domain_listeners(b) == 1
+                    old._emit()
+                    assert await ws.snapshots(during) == []
+                finally:
+                    gate.release.set()
+                    assert await asyncio.wait_for(reload_task, 5)
+                assert await b.ready(entry) is not old
+                restored = await ws.snapshots(during)
+                assert restored and all(ids(rows, entry) == set() for rows in restored)
+                old._emit()  # late producer after a replacement is live
+                assert await ws.snapshots(during) == []
+                await check_change(sim, b, entry, "restored")
+                only, = await ws.snapshots(during)
+                assert ids(only, entry) == {"restored"}
+    asyncio.run(run())
+
+
+def test_empty_subscription_remove_last_and_add_new():
+    async def run():
+        async with Tracearr().serve() as sim, Tracearr().serve() as new, core() as b, b.connect() as ws:
+            await ws.call("tracearr_ha/subscribe")
+            sub = ws.seq
+            assert await ws.snapshots(sub) == [[]]
+            sim.change("started", "original")
+            entry = await b.add(sim)
+            old = b.coord(entry)
+            added = await ws.snapshots(sub)
+            assert added and all(ids(rows, entry) == {"original"} for rows in added)
+            await b.hass.config_entries.async_remove(entry.entry_id)
+            assert await ws.snapshots(sub) == [[]]
+            old._emit()
+            assert await ws.snapshots(sub) == []
+            new.change("started", "replacement")
+            replacement = await b.add(new)
+            assert replacement.entry_id != entry.entry_id
+            added = await ws.snapshots(sub)
+            assert added and all(len(rows) == 1 and ids(rows, replacement) == {"replacement"} for rows in added)
+    asyncio.run(run())
+
+
+def test_reload_failure_then_recovery():
+    async def run():
+        async with Tracearr().serve() as sim, core() as b, b.connect() as ws:
+            entry = await b.add(sim)
+            sub = await subscribe(ws, entry)
+            old = b.coord(entry)
+            sim.errors["streams"] = 503, {}
+            assert not await b.hass.config_entries.async_reload(entry.entry_id)
+            assert entry.state == ConfigEntryState.SETUP_RETRY
+            assert await ws.snapshots(sub) == [[]]
+            old._emit()
+            assert await ws.snapshots(sub) == []
+            del sim.errors["streams"]
+            sim.change("started", "recovered")
+            assert await b.hass.config_entries.async_reload(entry.entry_id)
+            assert await b.ready(entry) is not old
+            batch = await ws.snapshots(sub)
+            assert batch and all(ids(rows, entry) == {"recovered"} for rows in batch)
+            assert domain_listeners(b) == 1
+    asyncio.run(run())
+
+
+def test_failed_platform_setup_withdraws_published_snapshot():
+    async def run():
+        async with Tracearr().serve() as sim, core() as b, b.connect() as ws:
+            entry = await b.add(sim)
+            sub = await subscribe(ws, entry)
+            entries = b.hass.config_entries
+            gate = Gate()
+
+            async def fail_forward(*args):
+                await gate.wait()
+                raise RuntimeError("fixture: platform setup failed")
+
+            with patch.object(type(entries), "async_forward_entry_setups", fail_forward):
+                reload_task = asyncio.create_task(entries.async_reload(entry.entry_id))
+                try:
+                    await asyncio.wait_for(gate.entered.wait(), 5)
+                    provisional = b.coord(entry)
+                    removed, added = await ws.snapshots(sub)
+                    assert removed == [] and ids(added, entry) == set()
+                finally:
+                    gate.release.set()
+                    result = await asyncio.wait_for(reload_task, 5)
+            assert not result and entry.state == ConfigEntryState.SETUP_ERROR
+            assert await ws.snapshots(sub) == [[]]
+            assert not provisional._listeners
+            provisional._emit()
+            assert await ws.snapshots(sub) == []
+    asyncio.run(run())
+
+
+def test_rest_and_options_use_replacement_relay():
+    async def run():
+        async with Tracearr().serve() as sim, core() as b, b.connect() as ws:
+            entry = await b.add(sim)
+            sub = await subscribe(ws, entry)
+            assert await b.hass.config_entries.async_reload(entry.entry_id)
+            coord = await b.ready(entry)
+            await ws.snapshots(sub)
+            sim.streams["rest"] = sim.session("rest")  # no SSE: only REST can notify
+            await coord.async_refresh()
+            only, = await ws.snapshots(sub)
+            assert ids(only, entry) == {"rest"}
+            aliases = {"fixture": "Recette"}
+            b.hass.config_entries.async_update_entry(entry, options={"aliases": aliases})
+            await b.hass.async_block_till_done()
+            only, = await ws.snapshots(sub)
+            row, = only
+            assert row["id"] == entry.entry_id and row["aliases"] == aliases
+    asyncio.run(run())
+
+
+def test_aborted_socket_releases_all_its_subscriptions():
+    async def run():
+        async with Tracearr().serve() as sim, core() as b:
+            entry = await b.add(sim)
+            coord_count = len(b.coord(entry)._listeners)
+            async with b.connect() as survivor, b.connect() as dropped:
+                keep = await subscribe(survivor, entry)
+                await subscribe(dropped, entry)
+                await subscribe(dropped, entry)
+                assert domain_listeners(b) == 3
+                assert len(b.coord(entry)._listeners) == coord_count
+                closed = asyncio.Event()
+
+                @callback
+                def on_disconnect():
+                    closed.set()
+
+                remove = async_dispatcher_connect(b.hass, SIGNAL_WEBSOCKET_DISCONNECTED, on_disconnect)
+                try:
+                    # Drop TCP without sending a WS close frame or unsubscribe.
+                    dropped.ws._response.connection.transport.abort()
+                    await asyncio.wait_for(closed.wait(), 5)
+                finally:
+                    remove()
+                assert domain_listeners(b) == 1
+                await check_change(sim, b, entry, "alive")
+                only, = await survivor.snapshots(keep)
+                assert ids(only, entry) == {"alive"}
+                await survivor.call("unsubscribe_events", subscription=keep)
+                assert domain_listeners(b) == 0
+                assert len(b.coord(entry)._listeners) == coord_count
     asyncio.run(run())

@@ -6,8 +6,9 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .const import CONF_ALIASES, CONF_AVATARS, CONF_NETWORK_LOCATIONS, DOMAIN
+from .const import CONF_ALIASES, CONF_AVATARS, CONF_NETWORK_LOCATIONS, DOMAIN, EVENT_SIGNAL
 
 
 def _payload(hass) -> dict[str, Any]:
@@ -37,21 +38,11 @@ def ws_get(hass, connection, msg):
 @websocket_api.websocket_command({vol.Required("type"): "tracearr_ha/subscribe"})
 @callback
 def ws_subscribe(hass, connection, msg):
-    unsubscribers = []
-
     @callback
     def send():
         connection.send_message(websocket_api.event_message(msg["id"], _payload(hass)))
 
-    for coordinator in hass.data.get(DOMAIN, {}).values():
-        unsubscribers.append(coordinator.async_add_listener(send))
-
-    @callback
-    def unsubscribe():
-        for fn in unsubscribers:
-            fn()
-
-    connection.subscriptions[msg["id"]] = unsubscribe
+    connection.subscriptions[msg["id"]] = async_dispatcher_connect(hass, EVENT_SIGNAL, send)
     connection.send_result(msg["id"])
     send()
 

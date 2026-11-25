@@ -6,13 +6,13 @@ Lecture REST et SSE par entrée, capteurs globaux et par serveur, listes et carr
 
 ## Décisions explicites
 
-La phase 0 documentaire a été validée. L’étape **1.1**, autorisée pour les seuls outils/tests de recette, a livré la [matrice isolée et les scénarios A1/A2](RECETTE.md). Ces reproductions sont exécutables localement, sans CI supplémentaire. **Aucune correction fonctionnelle, migration, version ou échéance de publication n’est approuvée.**
+Les phases 0 et 1.1 ont été validées. L’étape **2A.1** autorise uniquement le correctif A1 (cycle WS) et ses tests. Le correctif local utilise le signal de domaine et est soumis à un **contre-audit indépendant**. Aucune publication, migration ni correction A2 n’est approuvée.
 
 ## Ordre proposé après validation
 
 | Ordre | Lot proposé | Critère de sortie avant livraison |
 |---|---|---|
-| 1 | **Fiabiliser les données en direct** (A1, A2, A4, A9, A10) : les tests de reload WS et de course SSE/REST sont en place (étape 1.1). Faire arbitrer les corrections A1/A2, puis définir reauth, états périmés et respect des limites REST. | Une carte ouverte reçoit les sessions après reload, aucun événement neuf perdu entre deux GET ; convertir les xfail corrigés en tests passants. Une trame invalide ne tue pas la boucle ; révocation/rétablissement sans perte de config. |
+| 1 | **Fiabiliser les données en direct** : contre-auditer A1 (correctif 2A.1 et tests ordinaires), puis décider séparément d’une intervention A2. A4, A9 et A10 restent des propositions. | A1 : [recette](RECETTE.md) et contre-audit. A2 : aucun événement neuf perdu entre deux GET ; six xfail stricts en attente. Ensuite : résilience aux trames invalides, reauth, états périmés et limites REST. |
 | 2 | **Fiabiliser les images et les options** (A3, A6–A8, A13) : lecture bornée jusqu’à EOF, invalidation visuelle des règles, aller-retour JSON, précisions sur version Tracearr et clé de compte. | Image fragmentée identique à l’original, rejet au-delà de la limite ; en-tête et panneaux cohérents sur changement LAN/WAN ; `unknown` explicite conservé ; anciens YAML toujours lisibles sans migration obligatoire. |
 | 3 | **Contenir le coût des dashboards et les régressions d’affichage** (A5, A11, A12) : purge des caches, mesure du trafic WS et des ticks, interactions clavier et largeur de badge. | Caches proportionnés aux sessions utiles ; comparer avant/après (abonnés, octets, temps de rendu, mémoire longue durée). Vérifier centrage court **et** libellés longs, thème clair/sombre et navigation tactile/clavier dans un vrai navigateur. |
 | 4 | **Consolider validation et maintenance** : matrice Core minimum/stable, fixtures anonymes Plex/Jellyfin/Emby, smoke HA et navigateur dans la CI selon coût, traduction progressive, précision sur l’icône (A14). | Contrats de ressource, flows, options et entités testés sans production ; contrôles reproductibles sur le SHA candidat. Pas de réécriture globale du JS proposée sans mesures et tests d’équivalence. |
