@@ -114,6 +114,43 @@ Les six cas de `spec_residual_platforms.py` injectent la faute **après** le for
 
 **Réserves reportées :** `finish_cleanup` n’a pas de durée maximale propre ; une annulation d’un unload **ordinaire** peut laisser Core en `UNLOAD_IN_PROGRESS` ; le Core 2025.6.0 peut conserver temporairement des références à des coordinateurs inactifs. Ces points n’ont pas été modifiés.
 
+**Validation définitive de 2A :** le mainteneur confirme le contre-audit indépendant de `942de6ffa8d33b0ee10319fa39938c3f587f35aa` dans sa demande 2B.1 du 25 novembre 2026. Cette référence conserve les corrections P1-A/B1/B2/B3 ; les réserves ci-dessus restent documentées. La publication demeure v0.1.16 (`443ce38`).
+
+### 2B.1 — cohérence REST/SSE (P1-B)
+
+**Reproduction avant intervention :** sur le backend `942de6f`, `min -k latest_stream_state --runxfail` puis `current` avec la même sélection ont chacun produit **6 échecs ciblés / 29 désélectionnés**. Les six exceptions `StaleSnapshot` confirmaient le retour exact aux données REST antérieures. Les marqueurs xfail ont ensuite été retirés ; les assertions exigent désormais aussi la publication SSE **avant** la libération de la barrière HTTP.
+
+`spec_race.py` compte **26 cas**, utilisant les vrais GET/SSE, plateformes HA et commandes WS authentifiées :
+
+| Cas | Preuve |
+|---|---|
+| Six reproductions × deux endpoints bloqués (12) | Start, stop, progression, pause, reprise et séquence multi-session ; course dans `/streams` et après sa réponse pendant `/servers`. Cache, `data`, WS, compteurs globaux total/playing/paused/débit et compteurs par serveur concordent avant et après libération. Les notifications abonnées ne régressent pas lors de la publication REST. |
+| Plusieurs mutations d'une session (1) | Progression, pause, seek arrière, reprise, session éphémère puis stop final. Le refresh HA demandé via le vrai debouncer récupère ensuite deux sessions REST seules, y compris un ID précédemment supprimé. |
+| Ordre snapshot/événement (3) | Mutation antérieure au GET suivie d'un REST plus récent (y compris position moindre), mutation pendant le GET, snapshot contenant déjà la même mutation. Les timestamps factices identiques ne servent pas à trier. |
+| Échec / annulation (2) | HTTP 503 sur `/servers` ou annulation pendant `/streams` après événement SSE ; cache vivant conservé, superpositions libérées, refresh ultérieur réussi et session manquée récupérée. |
+| Santé et données REST sur session active (1) | Santé reçue avant le GET serveurs remplacée par sa valeur REST plus récente ; santé pendant ce GET conservée. Trois refresh avec progression concurrente acceptent chacun des métadonnées REST nouvelles. |
+| `ready` concurrent et reconnexion (2) | `ready` répété pendant son propre refresh ; EOF réel puis nouvelle connexion pendant un refresh manuel. Les trames suivantes sont appliquées avant la réponse REST lente. Le passage suivant récupère la session manquée ; une seule connexion SSE. Le délai réel de reconnexion est conservé. |
+| Unload / reload avec deux entrées (2) | Requête externe en vol annulée et attendue avant le retour de HA ; zéro marqueur/demande `ready` sur l'ancien coordinateur, tâches finies. Même ID de session sur la seconde entrée, état différent conservé ; capteurs/WS du remplaçant corrects ; aucun retour tardif de l'ancienne génération. |
+| Borne de réconciliation (1) | Borne abaissée à 2 pour provoquer le dépassement avec 5 ID : structure vidée, cache SSE préservé, REST seul suivant supprime les sessions manquées sans marqueur persistant. |
+| Lignes découvertes par le REST en vol (1) | Stop et progress pour des sessions absentes localement, santé d'un serveur encore inconnu ; trames bornées par un témoin FIFO de santé connu. Pas de résurrection, progression et découverte des capteurs correctes. |
+| Polling périodique + `ready` (1) | Une barrière déclenche exactement un timeout du **vrai producteur poll**, sans raccourcir les autres horloges HA. Une session manquée est capturée par ce GET, une autre après sa capture ; `ready` demande le passage suivant tandis que SSE reste fluide. |
+
+Les délais de 5/12 s bornent une attente de barrière ou de notification, ils ne décident pas de l'interleaving. Le seul remplacement d'horloge cible un timeout du producteur poll. Les six scénarios historiques ont été renforcés, sans suppression de leur invariant.
+
+**Discrimination sur le backend antérieur :** archive temporaire de `942de6f` avec le nouveau `spec_race.py`, sélection `spec_race and not reconciliation_cap and not periodic_poll` : **20 échecs, 4 réussites, 31 désélectionnés**, sur **chacun** des deux Core. Les échecs portent sur données écrasées, ingress bloqué derrière `ready` ou refresh survivant au retrait ; aucun n'est un attribut interne manquant. Les quatre contrôles déjà verts sont les deux ordres sans conflit et les deux récupérations après échec/annulation. Les tests de borne et de réveil du nouveau producteur sont spécifiques à la solution et ne font pas partie de cette comparaison.
+
+**Suites officielles complètes :**
+
+| Commande (`TMPDIR=/tmp/opencode bash recette/lancer.sh …`) | Résultat |
+|---|---|
+| `base` | **21 Python réussis** (0,25 s), **72 JavaScript réussis**, 0 échec, 0 ignoré, 0 annulé |
+| `min` — Core 2025.6.0 | **55 réussis**, 0 xfail, 0 skip, **109 avertissements** (15,75 s) |
+| `current` — Core 2026.11.3 | **55 réussis**, 0 xfail, 0 skip, **61 avertissements** (15,17 s) |
+
+Les **29 contrôles antérieurs**, dont toutes les garanties 2A, sont conservés. Les 20 cas supplémentaires expliquent les 40/20 avertissements supplémentaires par rapport à 2A (banc HTTP/CORS), sans nouvelle famille. Voir [architecture](ARCHITECTURE.md) pour la vérification du contrat v3.2.1, les alternatives écartées, la priorité de réception locale et les limites : aucune API testée ne permet de départager absolument un événement retardé et une capture REST concurrente. Cette recette ne revendique pas une validation d'un serveur Tracearr réel, d'un dashboard navigateur ou d'une installation HACS.
+
+Compilation de `custom_components` et `recette` avec cache temporaire isolé, syntaxe JS (suite `base`), lecture JSON du manifeste et de `hacs.json`, et `git diff --check` réussis. Aucun blocage de validation locale. Livraison en attente du contre-audit indépendant ; aucune intervention en production ni action distante de publication.
+
 ## Recette visuelle légère
 
 `recette/cartes.html` monte le JS distribué, avec une source WS de carte synthétique. Les métriques sont mesurées sur les éléments réels du Shadow DOM. Sous Chromium (152.0.7977.82 pendant la validation) :

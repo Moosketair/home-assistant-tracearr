@@ -1,15 +1,17 @@
-# État de reprise — étape 2A.5, 25 novembre 2026
+# État de reprise — étape 2B.1, 25 novembre 2026
 
-**Prochaine action : contre-audit final de 2A.5, puis décision du mainteneur.** Le contre-audit de `d51ce475` a confirmé P1-A, B1 et B2 dans les scénarios testés, mais a refusé la validation globale pour un reliquat B3 (P1). Ne pas commencer 2B.1. Pour reprendre : lire [AGENTS.md](../AGENTS.md), le [cycle des générations](ARCHITECTURE.md), les [contrôles reproductibles](RECETTE.md) et [l’audit historique](AUDIT_INITIAL.md).
+**2A définitivement validée après contre-audit indépendant**, décision du mainteneur transmise avec le prompt 2B.1, sur `942de6ffa8d33b0ee10319fa39938c3f587f35aa`. Le refus antérieur sur `d51ce475` est historique et a été levé après 2A.5. **Seul P1-B est autorisé dans 2B.1**, puis arrêt en attente du contre-audit indépendant. Pour reprendre : lire [AGENTS.md](../AGENTS.md), le [cycle des générations et la réconciliation](ARCHITECTURE.md), les [contrôles reproductibles](RECETTE.md) et [l’audit historique](AUDIT_INITIAL.md).
 
 | Repère | Valeur |
 |---|---|
 | Dépôt | `Moosketair/home-assistant-tracearr`, copie de travail `/media/fat/proton_drive/dev/home-assistant-tracearr` lors de l’audit |
 | Référence fonctionnelle | `main` = tag `v0.1.16` = `443ce3859d09b67ccfd589d326d032753dc11d64` à la date de l’audit |
-| Travail local | `fix/websocket-reload-lifecycle`, issue de `a77301a` (`test/recette-fiabilite`), après `659ea79` documentaire ; SHA à contre-auditer : `git rev-parse fix/websocket-reload-lifecycle` |
+| Travail local | `fix/rest-sse-consistency`, créée depuis `942de6ffa8d33b0ee10319fa39938c3f587f35aa` (`fix/websocket-reload-lifecycle`), sans changement préexistant ; SHA de livraison : `git rev-parse fix/rest-sse-consistency` |
 | Environnement | Debian 13.2 ; suite : Python 3.13.5, Node 22.23.5 ; Core minimum et stable essayés en environnements temporaires séparés |
 | Déploiement du mainteneur | HA Container géré par Dockge Enhanced, **non utilisé** ; aucune action distante de publication dans cette phase |
 | GitHub à la date de revue | Stable vérifiée sur le bon SHA, deux workflows verts sur ce SHA, une issue musique ouverte, aucune PR ouverte |
+
+**Livraison locale 2B.1 (parent validé `942de6f`).** P1-B corrigé par superpositions de mutations limitées au refresh en cours ; SSE reste immédiat et le producteur REST traite polling et demandes `ready`. Requêtes en vol annulées/attendues au retrait. Les six défauts ont été reproduits avant correction sur chaque Core ; 20 tests discriminants échouent sur le parent, les quatre contrôles comparés restent verts. Résultat : **21 Python + 72 JS ; 55 réussites sur Core 2025.6.0 et 55 sur Core 2026.11.3**, sans xfail/skip. Capteurs HA, snapshots WS, deux entrées, reconnexion, annulation, reload et nettoyage éprouvés. Contrat amont et limites d'ordre/saturation détaillés dans [ARCHITECTURE](ARCHITECTURE.md), commandes et résultats dans [RECETTE](RECETTE.md). **Arrêt après livraison, en attente du contre-audit indépendant de 2B.1.** Aucun autre lot autorisé ; version publique v0.1.16 inchangée.
 
 **Livraison locale 2A.5 (parent `d51ce475`).** Un rollback refusé conserve sous l’entrée la génération inactive et les seuls domaines non confirmés. Avant un nouveau setup ou à la suppression définitive, Tracearr retente ce nettoyage sous le verrou HA. Le dispatcher et le contrat WS ne changent pas. Les six tests discriminants échouent sur le parent et passent après correction sur les deux Core. Les trois réserves hors périmètre sont consignées dans [RECETTE](RECETTE.md). Aucune publication.
 
