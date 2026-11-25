@@ -86,7 +86,9 @@ class EntryGeneration:
             _LOGGER.error("HA refused to unload Tracearr platforms %s", self.platforms)
 
     def _forget(self) -> None:
-        if getattr(self.entry, "runtime_data", None) is self:
+        # Retain teardown ownership even though this generation is no longer
+        # published. The next setup or definitive removal can retry the residue.
+        if not self.platforms and getattr(self.entry, "runtime_data", None) is self:
             del self.entry.runtime_data
 
     def _release_discovery(self) -> None:

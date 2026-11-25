@@ -1,6 +1,6 @@
-# État de reprise — étape 2A.3, 25 novembre 2026
+# État de reprise — étape 2A.5, 25 novembre 2026
 
-**Prochaine action : nouveau contre-audit indépendant de P1-A sur 2A.3, puis décision du mainteneur.** La phase 0 et la recette 1.1 sont validées. La validation de `20b2901` a été refusée en 2A.2. Ne pas commencer P1-B. Pour reprendre : lire [AGENTS.md](../AGENTS.md), le [cycle des générations](ARCHITECTURE.md), les [contrôles reproductibles](RECETTE.md) et [l’audit historique](AUDIT_INITIAL.md).
+**Prochaine action : contre-audit final de 2A.5, puis décision du mainteneur.** Le contre-audit de `d51ce475` a confirmé P1-A, B1 et B2 dans les scénarios testés, mais a refusé la validation globale pour un reliquat B3 (P1). Ne pas commencer 2B.1. Pour reprendre : lire [AGENTS.md](../AGENTS.md), le [cycle des générations](ARCHITECTURE.md), les [contrôles reproductibles](RECETTE.md) et [l’audit historique](AUDIT_INITIAL.md).
 
 | Repère | Valeur |
 |---|---|
@@ -10,6 +10,8 @@
 | Environnement | Debian 13.2 ; suite : Python 3.13.5, Node 22.23.5 ; Core minimum et stable essayés en environnements temporaires séparés |
 | Déploiement du mainteneur | HA Container géré par Dockge Enhanced, **non utilisé** ; aucune action distante de publication dans cette phase |
 | GitHub à la date de revue | Stable vérifiée sur le bon SHA, deux workflows verts sur ce SHA, une issue musique ouverte, aucune PR ouverte |
+
+**Livraison locale 2A.5 (parent `d51ce475`).** Un rollback refusé conserve sous l’entrée la génération inactive et les seuls domaines non confirmés. Avant un nouveau setup ou à la suppression définitive, Tracearr retente ce nettoyage sous le verrou HA. Le dispatcher et le contrat WS ne changent pas. Les six tests discriminants échouent sur le parent et passent après correction sur les deux Core. Les trois réserves hors périmètre sont consignées dans [RECETTE](RECETTE.md). Aucune publication.
 
 **Livraison locale 2A.3 (parent `20b2901`).** Le dispatcher est conservé. `EntryGeneration` centralise retrait, callbacks, plateformes réellement allouées et arrêt des producteurs. B1 : `async_remove_entry` clôt la génération si HA retire l’entrée malgré un refus d’unload. B2 : première synchro, publication, forwarding, démarrage et options partagent un rollback attendu malgré l’annulation. B3 : forwarding par plateforme et déchargement public de la plateforme partielle ; le capteur garde ses identifiants et reflète à nouveau le total WS. Les trois familles ont été reproduites sur les deux Core avant correction. **21 tests Python + 72 JS historiques réussis ; 23 réussis et les mêmes 6 xfail A2 sur chaque Core**. Voir [RECETTE](RECETTE.md) pour les injections, limites de Core en cas de refus/erreur et avertissements. Aucune publication.
 

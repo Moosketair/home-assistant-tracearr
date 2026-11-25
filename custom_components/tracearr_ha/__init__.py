@@ -5,6 +5,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -29,6 +30,15 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    # A failed setup can leave HA platforms allocated even after its source
+    # and producers have been retired. Core still holds the entry setup lock.
+    if previous := getattr(entry, "runtime_data", None):
+        await finish_cleanup(previous.close())
+        if previous.platforms:
+            raise ConfigEntryError(
+                "Tracearr platforms still loaded: " + ", ".join(sorted(previous.platforms))
+            )
+
     client = TracearrClient(async_get_clientsession(hass), entry.data[CONF_URL], entry.data[CONF_TOKEN])
     coordinator = TracearrCoordinator(hass, client)
     generation = entry.runtime_data = EntryGeneration(hass, entry, coordinator)
@@ -60,6 +70,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """HA also calls this after deleting an entry whose unload was refused."""
+    """Finalize any generation retained after an unload or setup rollback."""
     if generation := getattr(entry, "runtime_data", None):
         await finish_cleanup(generation.close())

@@ -97,6 +97,23 @@ Pour cibler les nouveaux cas : `TMPDIR=/tmp/opencode bash recette/lancer.sh min 
 
 **Borne des garanties :** la collectabilité après huit reloads réussis ne signifie pas absence de toute référence interne à Core après une panne. Sur `min`, après une exception générique de démarrage, une référence faible à l’ancien coordinateur, sans listener ni tâche, restait vivante après le setup suivant, puis devenait nulle après l’unload normal. Core enregistre son propre `async_shutdown` sur la config entry. Sur `current`, la référence était déjà nulle après récupération. Le rollback n’édite pas les callbacks privés de HA. Un refus persistant d’une plateforme peut toujours nécessiter le redémarrage demandé par HA ; les tests ne constituent pas une validation HACS ou en production.
 
+### 2A.5 — refus résiduel de déchargement pendant le rollback (B3)
+
+Sur `d51ce475`, la génération arrêtait ses producteurs mais perdait `runtime_data` alors que `sensor` restait chargé. Le prochain setup réessayait le forwarding au lieu du déchargement. L’étape 2A.5 conserve le reliquat jusqu’à confirmation HA (voir [architecture](ARCHITECTURE.md)).
+
+Les six cas de `spec_residual_platforms.py` injectent la faute **après** le forwarding réel et le début du démarrage des producteurs. Pour les cibler : `TMPDIR=/tmp/opencode bash recette/lancer.sh min -k spec_residual_platforms` (ou `current`).
+
+| Cas | Mesure en recette |
+|---|---|
+| Refus puis exception d’unload (deux cas) | 13 listeners d’entités associés à `sensor` tant que HA refuse, **0** après le premier reload qui peut le décharger. Aucun producteur ni SSE pendant `SETUP_ERROR`. Après reprise : **2 tâches / 1 connexion**, compteur HA et snapshot WS à **1**, nom et identifiants inchangés. Un seul événement pour la nouvelle session ; un ancien finaliseur ne touche pas la nouvelle génération. |
+| Refus persistant avec une seconde entrée | Trois reloads refusés, aucune publication pour l’entrée en échec. L’inventaire passe de `binary_sensor` + `sensor` à `sensor`, seule plateforme retentée ensuite. Une tentative par domaine et par reload ; la seconde entrée garde ses 2 tâches, son SSE et ses notifications. Reprise normale dès la levée du refus. |
+| Suppression définitive (deux cas) | Une tentative sur le seul domaine restant depuis `SETUP_ERROR`, qu’il accepte ou refuse encore ; aucune notification fantôme ni tâche résiduelle. Un refus permanent reste signalé, sans forcer le déchargement HA. |
+| Annulation à la barrière du nouveau nettoyage | Le nettoyage se termine sous le verrou ; une plateforme déjà libérée n’est pas réinscrite et le refus de l’autre n’est pas oublié. Reprise ultérieure sur la même entrée. |
+
+**Avant → après :** **6 échecs → 6 réussites** sur chacun des deux Core, sans skip ni nouveau xfail. Suites complètes : `base` **21 Python** (0,27 s), **72 JS** ; `min` **29 réussis, 6 xfail stricts A2, 69 avertissements** (9,14 s) ; `current` **29 réussis, 6 xfail stricts A2, 41 avertissements** (9,46 s). Les 23 succès précédents et les tests A2 sont conservés. Les avertissements supplémentaires proviennent des six ouvertures de banc HTTP/CORS ; aucun nouveau type.
+
+**Réserves reportées :** `finish_cleanup` n’a pas de durée maximale propre ; une annulation d’un unload **ordinaire** peut laisser Core en `UNLOAD_IN_PROGRESS` ; le Core 2025.6.0 peut conserver temporairement des références à des coordinateurs inactifs. Ces points n’ont pas été modifiés.
+
 ## Recette visuelle légère
 
 `recette/cartes.html` monte le JS distribué, avec une source WS de carte synthétique. Les métriques sont mesurées sur les éléments réels du Shadow DOM. Sous Chromium (152.0.7977.82 pendant la validation) :
