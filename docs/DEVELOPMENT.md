@@ -1,8 +1,10 @@
 # Développer et valider localement
 
-Lire [AGENTS.md](../AGENTS.md) pour les règles, [ARCHITECTURE](ARCHITECTURE.md) pour les frontières du code et [AUDIT_INITIAL](AUDIT_INITIAL.md) pour les résultats datés. Le projet livre directement `custom_components/tracearr_ha/` : pas de build npm, pas de `requirements.txt` de développement. Le `requirements: []` du manifeste ne fournit pas à lui seul un runtime Home Assistant.
+Lire [AGENTS.md](../AGENTS.md) pour les règles, [ARCHITECTURE](ARCHITECTURE.md) pour les frontières du code et [AUDIT_INITIAL](AUDIT_INITIAL.md) pour les résultats datés. Le projet livre directement `custom_components/tracearr_ha/`, sans build npm. Les dépendances de recette sous `recette/` sont distinctes du `requirements: []` du manifeste.
 
 ## Reproduire les contrôles du dépôt
+
+Pour exécuter les versions épinglées, la matrice de vrais Core, le simulateur REST/SSE et les reproductions strictes des P1, suivre [RECETTE](RECETTE.md). Les commandes ci-dessous restent le chemin court pour les seuls tests historiques.
 
 Depuis la racine, sur une branche de travail, avec Python 3.13 et Node 22 :
 

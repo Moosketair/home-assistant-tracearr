@@ -1,0 +1,85 @@
+# Recette locale de fiabilité
+
+Depuis la racine du dépôt, sur Debian 13.2 x86-64 :
+
+```bash
+TMPDIR=/tmp/opencode bash recette/lancer.sh base
+TMPDIR=/tmp/opencode bash recette/lancer.sh min
+TMPDIR=/tmp/opencode bash recette/lancer.sh current
+```
+
+`base` exécute les tests historiques ; `min` et `current` lancent **le backend HA réel et les simulateurs le temps des tests**. Aucun serveur à installer ou à maintenir. `current` est une cible **figée**, pas la dernière version téléchargée automatiquement.
+
+## Installation, arrêt et périmètre
+
+| Cible | Interpréteur, dépendances | Sélection |
+|---|---|---|
+| `base` | `/usr/bin/python3` (ici 3.13.5), pytest 9.2.0, aiohttp 3.14.5 ; Node 22.23.5 | `tests/` Python, syntaxe JS, `tests/test_carousel.cjs` |
+| `min` | CPython géré 3.13.18 ; HA Core 2025.6.0, aiohttp 3.12.12, `pycares==4.11.0` pour son ancien `aiodns` | `recette/spec_*.py` |
+| `current` | CPython géré 3.14.10 ; HA Core 2026.11.3, aiohttp 3.14.5 | mêmes scénarios |
+
+Prérequis : Bash, `uv` (vérifié avec 0.13.6), accès aux distributions Python et PyPI pour l’installation, compilateur C/C++ pour les dépendances natives du Core ancien, espace temporaire inscriptible (prévoir 2 Gio pour une cible à la fois), sockets loopback autorisées. Le lanceur crée un venv neuf puis y installe **toutes les versions épinglées** de `recette/requirements-{base,min,current}.txt` avec `uv pip sync`. Les en-têtes du Python géré servent à compiler `pyspeex-noise`, sans installer de paquet système. Le choix des bornes vient du minimum `2025.6.0` dans `hacs.json` et de la stable HA étudiée en phase 0. Les métadonnées officielles [2025.6.0](https://pypi.org/project/homeassistant/2025.6.0/) et [2026.11.3](https://pypi.org/project/homeassistant/2026.11.3/) exigent respectivement Python ≥3.13.2 et ≥3.14.2. Tester ces deux Core n’atteste pas toutes les versions intermédiaires.
+
+Chaque exécution a son répertoire privé `$TMPDIR/tracearr-recette.XXXXXXXX` (par défaut `/tmp`), contenant `venv/`, cache uv, éventuel Python géré, config HA et stockage d’authentification jetables. Chaque écoute TCP demande à l’OS un port libre sur **127.0.0.1**. Les contextes ferment connexions, entrées et serveurs ; `Ctrl+C` interrompt le lanceur. Le répertoire créé est supprimé à la sortie du script. En cas d’arrêt brutal non interceptable, retirer seulement le répertoire de cette exécution après arrêt du processus. Aucun service système, réseau Docker, volume ou compte HA existant n’est requis.
+
+## Ce que teste le banc
+
+- **Côté Tracearr**, `recette/simulateur.py` sert la partie consommée de [l’API publique v2 au tag v3.2.1](https://github.com/connorgallopo/Tracearr/tree/v3.2.1/apps/server/src/routes/publicV2) : `/streams` → `data` + résumé minimal, `/servers` → identités/états, `/events` → trames `event:`/`data:` avec `ready`, changements de session et santé serveur. `eventsTranslate.ts` est la référence pour les payloads, `streams.ts`/`servers.ts` pour le REST. Bearer de fixture, trois serveurs synthétiques. `users` et `history` renvoient une page vide ; le proxy renvoie un petit PNG en deux écritures. **Pas de routes HTTP de pilotage.** Les tests modifient l’état en mémoire avant de publier une trame.
+- **Pilotage** : `sim.change("started"|"updated"|"progress"|"stopped", id, …)` ; pause/reprise via `state` ; `sim.raw(None)` pour fermer les flux, `sim.raw(bytes)` pour une trame inhabituelle, `sim.errors[route] = (statut, en_têtes)` pour une panne. `sim.gates[route] = Gate()` retient le résultat déjà capturé ; attendre `entered` puis ouvrir `release`. Pour `image`, la barrière suit les huit premiers octets. Plusieurs instances du simulateur représentent plusieurs entrées HA indépendantes.
+- **Côté HA**, `recette/core.py` utilise le chargeur Core, les registres, le vrai config flow, `ConfigEntries.async_reload`/`async_remove`, les plateformes de capteurs, les middlewares HTTP et la vue `/api/websocket` d’origine. Un utilisateur éphémère s’authentifie par l’échange `auth_required` → `auth` → `auth_ok`. Les tests n’appellent pas directement `ws_subscribe`. L’application HTTP HA est hébergée par `aiohttp.test_utils.TestServer`. Seules les dépendances graphiques `frontend`/`lovelace` sont déclarées chargées sans monter leur UI ; pas de `default_config`, de découverte multicast ni d’onboarding. Les adresses simulées sont numériques ; une demande de résolution DNS HA est une erreur de banc.
+
+### Scénarios et résultats sur v0.1.16
+
+| Fichier, scénario | Observation aux deux bornes |
+|---|---|
+| `spec_websocket.py` — une entrée, un abonné, un reload | **XFAIL strict A1** : première notification reçue ; après changement de coordinateur, le `get` authentifié contient `after` mais la même socket ne reçoit aucun événement pour l’abonnement existant. |
+| Idem — deux entrées, deux sockets, deux reloads de la première | **XFAIL strict A1** : les deux abonnés manquent l’événement de la première entrée ; ils reçoivent chacun **une** notification quand la deuxième change. Les événements de cycle de vie sont drainés avant la mesure. |
+| Idem — rétention | **XFAIL strict A1** : un listener reste sur l’ancien coordinateur chargé puis remplacé ; il ne disparaît qu’au désabonnement. Cette vérification de `._listeners` est spécifique aux deux Core ciblés. |
+| Idem — désabonnement, réabonnement, suppression, absence de doublons | **Passe** : l’ancien coordinateur ne conserve plus de listeners après désabonnement, la suppression est visible ; seule la socket encore abonnée reçoit une notification pour la lecture de l’entrée restante, aucune après son désabonnement. |
+| `spec_race.py` — `start`, `stop`, `progress`, `pause`, `resume`, `sequence` | **6 XFAIL stricts A2** : un changement plus récent traité sur le vrai flux SSE est écrasé par le snapshot REST. `sequence` exerce une progression sur la seconde session puis pause/reprise de la première. Les sessions sont réparties sur plusieurs serveurs. |
+| `spec_transport.py` — contrat de transport | **Passe** : 401, 429 et délai, serveurs, pages vides, `ready`, JSON malformé/événement sans type au niveau du **client**, données de session, PNG complet reconstitué par le client de test après libération du second fragment. Ce n’est pas une validation du proxy HA A3 ni de la boucle A4. |
+| Idem — déconnexion / reconnexion | **Passe** : EOF, attente de l’indication « SSE déconnecté », nouvelle session pendant la coupure, reconnexion réelle et rattrapage par `ready` ; une seule connexion SSE au retour. |
+
+**Ordonnancement.** Pour A1, une réponse `get` sert de borne dans la file ordonnée des messages de **la même socket** ; pas de conclusion tirée d’un silence de quelques millisecondes. Pour A2, le GET `/servers` bloqué prouve que `/streams` a déjà répondu. Un témoin autour de l’itérateur réel signale le décodage du premier événement et relève l’état après traitement. Il laisse passer les données sans les remplacer. Le test libère le REST sur **réception** plutôt que d’exiger une application sous verrou avant de le libérer : un futur correctif pourrait légitimement différer l’application. Un événement de santé derrière tous les événements de session délimite ensuite la vérification finale. Les timeouts bornent les blocages, ils n’imposent pas l’interleaving.
+
+**Lecture du résultat** : `base` → 21 Python et 72 JS réussis ; **chacune** des cibles Core → **3 passés, 9 xfail** (12 cas). Les neuf xfail sont des observations sur **deux** anomalies, pas neuf nouveaux bugs. `strict=True` et `raises=` limitent le résultat attendu à l’exception métier du test : erreur d’auth, timeout, mauvais payload ou doublon doivent rester rouges. Pour voir les assertions échouer normalement, par exemple :
+
+```bash
+TMPDIR=/tmp/opencode bash recette/lancer.sh current -k subscription_survives_reload --runxfail
+TMPDIR=/tmp/opencode bash recette/lancer.sh min -k latest_stream_state --runxfail
+```
+
+Cette variante doit retourner un code non nul sur la stable. Contrôle supplémentaire effectué sur Core 2026.11.3 : sans les marqueurs (`--runxfail`), les deux fichiers P1 ont produit **9 échecs ciblés et 1 succès** ; pour les six courses, le cache final était exactement l’ancien snapshot. Après correction autorisée, un `XPASS(strict)` est aussi un échec : retirer le marqueur du cas corrigé et garder son assertion de comportement. Aucun plugin pytest-asyncio, workflow distant ni dépendance de test dans le manifeste de l’intégration.
+
+## Recette visuelle légère
+
+`recette/cartes.html` monte le JS distribué, avec une source WS de carte synthétique. Les métriques sont mesurées sur les éléments réels du Shadow DOM. Sous Chromium (152.0.7977.82 pendant la validation) :
+
+```bash
+profil=$(mktemp -d)
+chromium --headless --disable-background-networking --disable-sync --no-first-run \
+  --user-data-dir="$profil" --dump-dom "file://$PWD/recette/cartes.html"
+rm -rf -- "$profil"
+```
+
+Lire le JSON dans `<pre id="result">`. Pour une comparaison interactive, servir **uniquement les deux fichiers nécessaires**, puis ouvrir l’adresse loopback indiquée dans un navigateur avec un profil jetable :
+
+```bash
+ui=$(mktemp -d)
+mkdir -p "$ui/recette" "$ui/custom_components/tracearr_ha/frontend"
+cp recette/cartes.html "$ui/recette/"
+cp custom_components/tracearr_ha/frontend/tracearr-card.js "$ui/custom_components/tracearr_ha/frontend/"
+python3 -m http.server --bind 127.0.0.1 --directory "$ui" 0
+# Dans un autre terminal, remplacer PORT par le port affiché :
+# profil=$(mktemp -d)
+# firefox --no-remote --profile "$profil" "http://127.0.0.1:PORT/recette/cartes.html"
+# Fermer ce navigateur puis supprimer son profil jetable.
+# Arrêter le serveur par Ctrl+C et, dans son terminal :
+rm -rf -- "$ui"
+```
+
+1. Comparer les largeurs **de carte** 250/320/768/1200 px. Deux colonnes demandées donnent **1/1/2/2**. Relever l’écart de centrage court et le débordement des bords des badges longs ; les pixels exacts dépendent de la police. Sur cette page à 320 px, débordement droit mesuré : **137 px Chromium / 138 px Firefox 140.15.0esr**.
+2. Basculer groupée/individuelle, liste/carrousel ; avancer avec les flèches. Observer le compteur puis mettre en pause/reprendre : l’écoulé de la première session doit se figer/repartir. Basculer le libellé et la largeur sans recharger la page.
+3. Démonter/remonter plusieurs fois ; vérifier visuellement l’absence de panneaux dupliqués, le retour du flux et, dans les outils de développement du navigateur, le nombre de timers/écouteurs si cette partie est modifiée. La page ne constitue pas une assertion automatique sur la mémoire.
+
+**Limites.** Les preuves P1 portent sur le code publié avec un vrai backend Core et un réseau local simulé. Le banc ne valide pas d’installation HACS, de vrai dashboard HA, de lecteur physique Plex/Jellyfin/Emby, de débit Internet, de proxy inverse, de permissions multi-utilisateurs en production, ni d’iOS/Android. Il n’implémente pas l’ensemble de l’API Tracearr, ni son stockage, sa cadence de heartbeat ou ses quotas réels. La sonde frontend ne charge pas le sélecteur d’entités de HA. Pour la suite, garder ces essais rapides, puis compléter par un environnement de prépublication distinct selon les changements.

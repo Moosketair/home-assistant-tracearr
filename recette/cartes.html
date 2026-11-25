@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="fr"><meta charset="utf-8"><title>Recette locale des cartes Tracearr</title>
+<style>
+  body {font: 15px system-ui; --primary-text-color: #16232b; --accent-color: #008899}
+  ha-card {display:block} pre {white-space:pre-wrap} #host {max-width:none}
+</style>
+<h1>Carte de recette</h1>
+<label>Largeur <select id="width"><option>250</option><option selected>320</option><option>768</option><option>1200</option></select> px</label>
+<button id="type">Groupée / individuelle</button> <button id="layout">Liste / carrousel</button> <button id="pause">Pause / reprise</button>
+<button id="label">Badge court / long</button> <button id="mount">Démonter / remonter</button>
+<div id="host"></div><pre id="result"></pre>
+<script src="../custom_components/tracearr_ha/frontend/tracearr-card.js"></script>
+<script>
+  const el = id => document.getElementById(id);
+  const host = el("host"), sizes = [250, 320, 768, 1200], reports = [];
+  let card, mode = "carousel", individual = false, longLabel = false, listener, paused = false;
+  const entry = {id:"fixture", connected:true, servers:[], streams:[1,2,3].map(i => ({
+    id:String(i), server_id:"fixture", server_name:"Test", server_type:"plex", username:"Fixture",
+    state:"playing", media_title:`Film ${i}`, duration_ms:120000, progress_ms:10000, bitrate:1000
+  }))};
+  function configure() {
+    card?.setConfig({mode:individual ? "list" : mode, carousel_visible:2, carousel_transition:"none", show_title:false,
+      header_show_video:true, header_show_bandwidth:true, header_metric_settings:{
+        streams:{align:"left"}, bandwidth:{align:"center", label:longLabel ?
+          "Consommation distante des utilisateurs sur le serveur du séjour" : "Débit"}, video:{align:"right"}
+      }});
+  }
+  function attach() {
+    card = host.appendChild(document.createElement(individual ? "tracearr-stream-card" : "tracearr-streams-card"));
+    configure();
+    card.hass = {connection:{subscribeMessage:async fn => {
+      listener = fn; fn({entries:[entry]}); return () => {if (listener === fn) listener = null;};
+    }}, states:{}};
+  }
+  function measure(width) {
+    host.style.width = `${width}px`;
+    const rect = q => card.shadowRoot.querySelector(q).getBoundingClientRect();
+    const root = rect(".root"), metrics = rect(".head-metrics"), center = rect(".align-center");
+    const badges = [...card.shadowRoot.querySelectorAll(".metric")].map(b => b.getBoundingClientRect());
+    return {width, mode:individual ? "individual" : mode, longLabel,
+      visible:!individual && mode === "carousel" ? Math.round(rect(".streams").width / rect(".stream").width) : 1,
+      centerOffsetPx:+(center.x+center.width/2-metrics.x-metrics.width/2).toFixed(2),
+      overflowRightPx:Math.max(0, ...badges.map(b => Math.round(b.right-root.right))),
+      overflowLeftPx:Math.max(0, ...badges.map(b => Math.round(root.left-b.left)))};
+  }
+  function display() {
+    el("result").textContent = JSON.stringify({matrix:reports, current:card ? measure(+el("width").value) : "démontée"}, null, 2);
+  }
+  attach();
+  for (longLabel of [false,true]) {configure(); for (const w of sizes) reports.push(measure(w));}
+  longLabel = false; configure(); display();
+  el("width").onchange = display;
+  el("type").onclick = () => {card?.remove(); individual = !individual; attach(); display();};
+  el("layout").onclick = () => {mode = mode === "list" ? "carousel" : "list"; configure(); display();};
+  el("label").onclick = () => {longLabel = !longLabel; configure(); display();};
+  el("pause").onclick = () => {
+    paused = !paused; entry.streams[0].state = paused ? "paused" : "playing";
+    listener?.({entries:[entry]}); display();
+  };
+  el("mount").onclick = () => {if (card) {card.remove(); card=null;} else attach(); display();};
+</script></html>
