@@ -2,7 +2,7 @@
 
 **Statut : TERMINÉ pour le périmètre local.** Aucun défaut significatif du candidat reproduit. Prépublication bêta recommandée après autorisation explicite et contrôles de publication sur le SHA retenu ; installation réelle via HACS/Marketplace à vérifier ensuite par le mainteneur.
 
-La stable publique reste `v0.1.17` (`3587f832532b4e0285699c76df6d30110ac619ad`). Le mainteneur a clôturé 6A.1, 6B.1 et 6B.2 sans nouvel audit indépendant. Base validée : `bb1ef7f32a5d16560a4792d22223e71e14d93368`. Branche locale : `release/v0.1.18`. Notes et retour arrière : [CHANGELOG](../CHANGELOG.md#0118-beta1--candidat-local-non-publié).
+La stable publique reste `v0.1.17` (`3587f832532b4e0285699c76df6d30110ac619ad`). Le mainteneur a clôturé 6A.1, 6B.1 et 6B.2 sans nouvel audit indépendant. Base validée : `bb1ef7f32a5d16560a4792d22223e71e14d93368`. Branche de recette : `release/v0.1.18`. Notes et retour arrière : [CHANGELOG](../CHANGELOG.md#0118-beta1--préversion-de-test).
 
 ## Mise à niveau locale
 

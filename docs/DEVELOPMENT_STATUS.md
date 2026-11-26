@@ -1,10 +1,12 @@
-# État de reprise — présentation GitHub 6D.2
+# État de reprise — prépublication 6D.3
+
+**Décision 6D.3.** Le mainteneur valide 6A, 6B, 6D.1 et 6D.2 et autorise la [préversion `v0.1.18-beta.1`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.18-beta.1) pour ses essais via HACS. Candidat de départ : `f42edbbc39a371646f98cde955de9b5d24f8403e` ; seules les mentions de publication et les notes changent après ce SHA. Le [contrôle GitHub du tag](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml?query=branch%3Av0.1.18-beta.1) doit porter sur le commit effectivement tagué. `v0.1.17` reste la stable recommandée ; aucune fusion dans `main` ni promotion de `v0.1.18` n’est autorisée.
 
 **6D.1 définitivement validé par le mainteneur** sur `57fac6abd52d8b0661788b7c729eada7a20e333c`. **6D.2 livré localement** sur `release/v0.1.18` : [README](../README.md) réorganisé, deux captures de recette fictives réutilisées et détails de compatibilité Tracearr regroupés dans le [guide de configuration](CONFIGURATION.md#compatibilité-tracearr). Aucun changement distribué, de version ou de périmètre 6C.
 
 **Contrôles 6D.2 :** liens et ancres locaux, structure Markdown, lecture des deux exemples YAML déplacés, inspection visuelle des captures et absence de métadonnées texte/EXIF, cohérence avec le CHANGELOG et `git diff --check`. Aucun test fonctionnel relancé.
 
-**6A et 6B clôturés par le mainteneur**, sans contre-audit indépendant supplémentaire. Base commune validée : `bb1ef7f32a5d16560a4792d22223e71e14d93368` (`feature/lovelace-grid-sizing`). Le candidat local `v0.1.18-beta.1` est préparé sur `release/v0.1.18` (`21af98e8d1b3f70851f5c26e45f89f6832a73698`). [Recette 6D.1 terminée localement](RECETTE_6D1.md) sur Core 2026.11.3 : mise à niveau simulée depuis `v0.1.17` et persistance dans le vrai Lovelace validées. HACS/Marketplace reste à éprouver après une éventuelle prépublication ; aucun accord de publication.
+**6A et 6B clôturés par le mainteneur**, sans contre-audit indépendant supplémentaire. Base commune validée : `bb1ef7f32a5d16560a4792d22223e71e14d93368` (`feature/lovelace-grid-sizing`). Le candidat a été préparé sur `release/v0.1.18` (`21af98e8d1b3f70851f5c26e45f89f6832a73698`). [Recette 6D.1 terminée localement](RECETTE_6D1.md) sur Core 2026.11.3 : mise à niveau simulée depuis `v0.1.17` et persistance dans le vrai Lovelace validées. Le circuit HACS/Marketplace réel reste à éprouver par le mainteneur.
 
 **6B.2 validé par le mainteneur**, depuis `75b6960b4d152c4a71e731dd249bd677b59ea966`. Hauteur automatique dans Sections, bandeau seul sur une ligne quand il tient, finitions du style Technique et suppression du suffixe source visible. Voir [mesures et captures](RECETTE.md#6b2--dimensionnement-lovelace-et-finitions).
 
@@ -75,6 +77,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** arrêt après la livraison locale 6D.2. Attendre l’autorisation explicite de prépublier `v0.1.18-beta.1`. Le lot 6C reste dans la [feuille de route](ROADMAP.md) et nécessite une autorisation distincte.
+**Suite :** arrêt après la prépublication et la vérification de son SHA. Attendre les essais personnels du mainteneur et une autorisation explicite avant toute publication stable. Le lot 6C reste dans la [feuille de route](ROADMAP.md) et nécessite une autorisation distincte.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.

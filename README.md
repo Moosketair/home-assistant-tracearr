@@ -6,7 +6,7 @@
 
 **Voyez qui regarde quoi sur Plex, Jellyfin et Emby, directement dans Home Assistant.** Tracearr HA utilise les données de Tracearr pour alimenter des capteurs et deux cartes Lovelace personnalisables : une vue d’ensemble des lectures et une carte centrée sur une seule lecture.
 
-**Stable disponible via HACS : [`v0.1.17`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.17).** Le [candidat `v0.1.18-beta.1`](CHANGELOG.md#0118-beta1--candidat-local-non-publié) est validé localement, mais pas encore publié ni installable via HACS.
+**Stable recommandée via HACS : [`v0.1.17`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.17).** La [préversion `v0.1.18-beta.1`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.18-beta.1) est destinée aux essais volontaires. Voir [comment l’installer ou revenir à la stable](CHANGELOG.md#0118-beta1--préversion-de-test).
 
 [Voir les cartes](#aperçu-des-cartes) · [Installer](#installation-via-hacs) · [Configurer les cartes](docs/CONFIGURATION.md) · [Historique](CHANGELOG.md)
 
@@ -28,7 +28,7 @@
 - **Mise en page et affichage.** Taille pilotée par les réglages natifs de *Sections*, mode compact, fond cinéma flouté, couleurs par type de serveur, affiches, avatars, titres et épisodes. Affichez la progression, le temps restant ou une estimation de fin.
 - **Bandeau au choix.** Combinez statistiques Tracearr et entités Home Assistant, avec ordre, alignement et couleurs configurables. Filtrez l’affichage des débits à partir de vos [règles LAN/WAN](docs/CONFIGURATION.md#débits-locaux-et-distants).
 
-### Dans le candidat `v0.1.18-beta.1`
+### Nouveautés de la préversion `v0.1.18-beta.1`
 
 Les panneaux de lecture proposent cinq styles de badges techniques : **Classique** (rendu historique par défaut), **Premium** (fond teinté et bordure colorée), **Cinéma** (couleur pleine), **Minimaliste** (trait latéral) et **Technique** (précisions sur les formats). L’éditeur permet de prévisualiser le résultat, de choisir une disposition compacte ou séparée et de régler les couleurs, l’ordre et la visibilité des catégories. Selon les données disponibles, affichez la destination seule ou la comparaison source → destination.
 
@@ -41,9 +41,9 @@ Les panneaux de lecture proposent cinq styles de badges techniques : **Classique
 
 </details>
 
-Le candidat garde aussi le temps restant visible à gauche pendant la pause et affiche **En pause** à droite. Les badges du bandeau peuvent avoir une couleur normale propre, distincte de leur couleur à zéro. Dans *Sections*, les cartes s’ajustent à leur contenu par défaut : un bandeau seul tient sur une ligne native si son contenu le permet. Les tailles explicitement enregistrées restent prioritaires.
+La préversion garde aussi le temps restant visible à gauche pendant la pause et affiche **En pause** à droite. Les badges du bandeau peuvent avoir une couleur normale propre, distincte de leur couleur à zéro. Dans *Sections*, les cartes s’ajustent à leur contenu par défaut : un bandeau seul tient sur une ligne native si son contenu le permet. Les tailles explicitement enregistrées restent prioritaires.
 
-[Réglages des badges techniques](docs/CONFIGURATION.md#badges-techniques-des-panneaux-de-lecture) · [Notes du candidat et retour à la stable](CHANGELOG.md#0118-beta1--candidat-local-non-publié)
+[Réglages des badges techniques](docs/CONFIGURATION.md#badges-techniques-des-panneaux-de-lecture) · [Notes de la préversion et retour à la stable](CHANGELOG.md#0118-beta1--préversion-de-test)
 
 ## Installation via HACS
 
@@ -75,7 +75,7 @@ Pour une mise à jour normale, conservez l’entrée et les cartes existantes. A
 ## Documentation et dépannage
 
 - [Guide de configuration](docs/CONFIGURATION.md) : éditeur visuel, [exemples YAML](docs/CONFIGURATION.md#exemples-de-cartes-lovelace), badges et filtres.
-- [Historique des versions](CHANGELOG.md) : [nouveautés de la stable `v0.1.17`](CHANGELOG.md#0117--2026-11-26), notes du candidat et versions précédentes. [Versions publiées sur GitHub](https://github.com/Moosketair/home-assistant-tracearr/releases).
+- [Historique des versions](CHANGELOG.md) : [nouveautés de la stable `v0.1.17`](CHANGELOG.md#0117--2026-11-26), notes de la bêta et versions précédentes. [Versions publiées sur GitHub](https://github.com/Moosketair/home-assistant-tracearr/releases).
 - [Maintenance](docs/MAINTENANCE.md) : distribution HACS, icônes et marque.
 
 <details>

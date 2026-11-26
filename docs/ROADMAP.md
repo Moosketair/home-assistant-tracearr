@@ -10,7 +10,7 @@ Les phases 0 et 1.1 sont validées. **2A** est définitivement validée sur `942
 
 ## Ordre proposé après validation
 
-**3.1 clôturée** après le contre-audit 3.2 (validé avec réserve non bloquante) sur `fcd3c83`. **3B.1 validée** par le mainteneur : A7/A9 corrigées, A8/A13/A14 rectifiées dans les guides ou l’historique. **A10 corrigée en 3B.2** selon la décision du mainteneur : avertissement et gel par source sans données fiables, reprise uniquement sur un snapshot effectivement intégré. Ces corrections restent à confirmer au lot 4 ; voir [l’état de reprise](DEVELOPMENT_STATUS.md#état-des-14-anomalies-à-lentrée-du-lot-4).
+**3.1 clôturée** après le contre-audit 3.2 (validé avec réserve non bloquante) sur `fcd3c83`. **3B.1 validée** par le mainteneur : A7/A9 corrigées, A8/A13/A14 rectifiées dans les guides ou l’historique. **A10 corrigée en 3B.2** selon la décision du mainteneur : avertissement et gel par source sans données fiables, reprise uniquement sur un snapshot effectivement intégré. Voir [le bilan après clôture du lot 4.1](DEVELOPMENT_STATUS.md#état-des-14-anomalies-après-clôture-du-lot-41).
 
 **4.1 :** douze anomalies validées par le mainteneur (A1–A8, A11–A14) ; refus de validation pour les défauts résiduels A9/A10. **4.1.1 :** correctifs locaux livrés, verdict indépendant attendu sur ces deux points. Le versionnement et l’invalidation du cache JS sont réservés à 4.2.
 
@@ -28,7 +28,7 @@ La priorité d’un lot n’est pas une promesse de publication. Garder les issu
 
 ### Lot 6A — Affichage en pause et couleurs des badges
 
-**6A.1 livré localement, non publié.** En pause, conserver le temps restant à gauche ; afficher le message orange « En pause » à droite à la place de l’heure de fin, même si celle-ci est masquée. Recalculer l’heure de fin à la reprise et préserver les options de masquage existantes.
+**6A.1 validé et inclus dans `v0.1.18-beta.1`.** En pause, conserver le temps restant à gauche ; afficher le message orange « En pause » à droite à la place de l’heure de fin, même si celle-ci est masquée. Recalculer l’heure de fin à la reprise et préserver les options de masquage existantes.
 
 Les badges du bandeau général ont une couleur normale configurable par badge, indépendamment de leur couleur à zéro. Sans nouveau réglage, l’apparence des configurations existantes est préservée. Voir [la configuration](CONFIGURATION.md) et [la recette 6A.1](RECETTE.md#6a1--pause-et-couleurs-des-badges).
 
@@ -71,7 +71,7 @@ Voir [les réglages et limites du contrat](CONFIGURATION.md#badges-techniques-de
 
 **6B.2 — Dimensionnement Lovelace et finitions.** Les cinq styles de 6B.1 sont conservés. En Sections, utiliser la hauteur automatique par défaut ; un en-tête seul qui tient occupe une ligne native, et le contenu plus grand s’ajuste sans forcer de multiples de lignes. Les tailles enregistrées restent prioritaires. Le style Technique reçoit des descriptions compactes de formats, sans inventer de propriétés de lecture. Quand la sortie est inconnue, plus de mention « source » visible : l’infobulle et le libellé accessible portent la précision. Aucun réglage supplémentaire, aucune préparation de publication ni ouverture de 6C.
 
-**Clôture de 6A et 6B.** Le mainteneur confirme 6A.1, 6B.1 et 6B.2 sur la base commune `bb1ef7f`, sans nouvel audit indépendant. La [recette commune 6D.1](RECETTE_6D1.md) et la préparation locale de `v0.1.18-beta.1` sont autorisées, pas sa publication.
+**Clôture de 6A et 6B.** Le mainteneur confirme 6A.1, 6B.1 et 6B.2 sur la base commune `bb1ef7f`, sans nouvel audit indépendant. Après validation de la [recette commune 6D.1](RECETTE_6D1.md) et de la présentation 6D.2, la prépublication de `v0.1.18-beta.1` est autorisée en 6D.3 pour ses essais personnels. Aucune promotion stable n’est autorisée.
 
 ### Lot 6C — Lectures musicales
 
