@@ -1,4 +1,4 @@
-# État de reprise — étape 2E.1, 26 novembre 2026
+# État de reprise — 2E validée et point de départ 3.1, 26 novembre 2026
 
 **2A définitivement validée** sur `942de6ffa8d33b0ee10319fa39938c3f587f35aa`. **2B définitivement clôturée** : verdict indépendant 2B.4 **VALIDÉ** sur `f918150fd8fc6fa6f44d309aac3d4387d063d83b`, confirmé par le mainteneur. Les deux régressions relevées par 2B.2 sont corrigées ; les limites d’ordre faute de révision commune REST/SSE sont acceptées. Résultats indépendants : 21 Python, 72 JS, 61 sur chacun des Core 2025.6.0 et 2026.11.3, aucun échec, skip ou xfail. Aucun nouvel audit 2B requis.
 
@@ -6,7 +6,7 @@
 
 **2D définitivement clôturée** : le mainteneur valide 2D.1 sur `28bef59afbceffe6364c3e508037af6cf935d08d` (`fix/lan-wan-consistency`), sans contre-audit supplémentaire. A6 corrigé dans les deux cartes, sans changement backend ni modification de la priorité LAN/WAN.
 
-**2E.1 livrée localement** : A11 (badges coupés ou superposés) et A12 (clavier du carrousel lié au drag souris) reproduits puis corrigés. Pas de changement d’options, de contrat WS ou de version. Voir [RECETTE](RECETTE.md) pour les vérifications réexécutées et leurs limites, et [ROADMAP](ROADMAP.md) pour les reports. Arrêt à 2E.1 ; lot 3 et audit indépendant non engagés.
+**2E définitivement clôturée** sur `b9c5880fe6ed2f2ad6f1b23acb4a5a7c3261e4dd` (`fix/frontend-responsive`), sans contre-audit supplémentaire, par décision du mainteneur. Référence 2E.1 : syntaxe JS valide, 75 tests Node réussis et 78 mesures par exécution sous Chromium et Firefox, en clair et en sombre (largeurs de carte 250, 320, 768, 1200 px). Aucun débordement ni chevauchement après correction, clavier du carrousel corrigé, cohérence LAN/WAN préservée, backend inchangé. Ces résultats sont repris de [RECETTE](RECETTE.md), pas rejoués pour la clôture.
 
 | Repère | Valeur |
 |---|---|
