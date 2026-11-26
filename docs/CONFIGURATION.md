@@ -4,6 +4,20 @@ Retour au [README](../README.md) · [Historique des versions](../CHANGELOG.md)
 
 Ce guide rassemble les réglages détaillés. Les nouveautés et les anciennes versions sont documentées dans `CHANGELOG.md` ; les options ci-dessous décrivent l'usage courant.
 
+### Ressource Lovelace en mode YAML
+
+En mode stockage, redémarrez Home Assistant après le remplacement de l’intégration : la ressource existante est actualisée automatiquement. En mode YAML, conservez une seule déclaration et adaptez `?v=` à la version du manifeste installé. Pour le candidat local `v0.1.17-beta.1` :
+
+```yaml
+lovelace:
+  resource_mode: yaml
+  resources:
+    - url: /tracearr_ha/tracearr-card.js?v=0.1.17-beta.1
+      type: module
+```
+
+Sur les anciens Core qui n’ont pas `resource_mode`, utilisez le `mode: yaml` déjà en place plutôt que d’ajouter cette clé. Rechargez le dashboard après la mise à jour de la ressource ; ne recréez ni l’entrée Tracearr ni les cartes.
+
 ### Réglages du carrousel et de la présentation
 
 Le carrousel se pilote au **cliquer-glisser**, comme sur une interface tactile, en plus des flèches masquables. Sa barre de défilement horizontale est **toujours invisible**. Le cadre extérieur suit désormais le thème natif Home Assistant ; les panneaux de lecture disposent de leur propre fond (léger contraste ou transparent). La couleur de progression et des badges se règle avec une seule palette.

@@ -1,4 +1,6 @@
-# État de reprise — livraison locale 4.1.3
+# État de reprise — recette locale 4.2
+
+**Lot 4.1 définitivement clôturé.** Verdict indépendant 4.1.4 **VALIDÉ** sur `41403f51b665a7e839fe7474ed7edd274fb04b0d`, confirmé par le mainteneur : **14 anomalies sur 14 validées**, dont A9. Les réserves déjà documentées sont acceptées. Le mainteneur a autorisé le lot 4.2 uniquement : candidat local et recette, sans publication.
 
 **2A définitivement validée** sur `942de6ffa8d33b0ee10319fa39938c3f587f35aa`. **2B définitivement clôturée** : verdict indépendant 2B.4 **VALIDÉ** sur `f918150fd8fc6fa6f44d309aac3d4387d063d83b`, confirmé par le mainteneur. Les deux régressions relevées par 2B.2 sont corrigées ; les limites d’ordre faute de révision commune REST/SSE sont acceptées. Résultats indépendants : 21 Python, 72 JS, 61 sur chacun des Core 2025.6.0 et 2026.11.3, aucun échec, skip ou xfail. Aucun nouvel audit 2B requis.
 
@@ -14,13 +16,13 @@
 
 **3B.2 livré localement** sur `f2db1a5dded2a2a2bbc41c6d08646bcaf974a0e7`. La décision sur le gel et la reprise des cartes est inchangée (voir les [preuves 3B.2](RECETTE.md#3b2--indisponibilité-des-lectures-a10)).
 
-**Audit indépendant 4.1 : REFUS DE VALIDATION** sur ce SHA pour deux défauts résiduels, traités en 4.1.1 (voir les [preuves](RECETTE.md#411--corrections-ciblées-a9-et-a10)). **Le contre-audit 4.1.2** sur `b8908c2aacc6d22b6708af7e9c9c12014c6dbd1d` confirme ces deux correctifs et valide définitivement **A10**, portant à **13** les anomalies validées. Il relève une course résiduelle A9 lors d’une suppression déjà engagée. **4.1.3 livré localement** : vérification finale et écriture sous le verrou d’entrée HA, hors requêtes REST ; **seule A9 reste à contre-vérifier**. Voir la [recette 4.1.3](RECETTE.md#413--course-entre-réauthentification-et-suppression-a9).
+**Historique 4.1.** L’audit initial avait refusé la validation pour A9/A10 ; 4.1.2 a validé A10 sur `b8908c2aacc6d22b6708af7e9c9c12014c6dbd1d` et isolé une dernière course A9. Corrigée en 4.1.3, celle-ci a été validée en 4.1.4. Voir la [recette 4.1.3](RECETTE.md#413--course-entre-réauthentification-et-suppression-a9).
 
 | Repère | Valeur |
 |---|---|
 | Dépôt | `Moosketair/home-assistant-tracearr`, copie de travail `/media/fat/proton_drive/dev/home-assistant-tracearr` lors de l’audit |
 | Référence fonctionnelle | `main` = tag `v0.1.16` = `443ce3859d09b67ccfd589d326d032753dc11d64` à la date de l’audit |
-| Travail local | `fix/consolidation-final`, 4.1.3 poursuivie au SHA audité `b8908c2` ; SHA de livraison : `git rev-parse fix/consolidation-final` |
+| Travail local | `release/v0.1.17`, issue du SHA 4.1.4 validé ; candidat `v0.1.17-beta.1` (`0.1.17-beta.1` dans HA) |
 | Environnement | 4.1.3 : Debian, CPython 3.13.5 hors HA, banc isolé Core 2025.6.0 (3.13.18) et 2026.11.3 (3.14.10) ; aucun HA de production. |
 | Déploiement du mainteneur | HA Container géré par Dockge Enhanced, **non utilisé** ; aucune action distante de publication dans cette phase |
 | GitHub à la date de revue | Stable vérifiée sur le bon SHA, deux workflows verts sur ce SHA, une issue musique ouverte, aucune PR ouverte |
@@ -37,7 +39,7 @@
 
 **Changement 2A.1.** Un abonné WS écoute désormais le domaine. Un relais par entrée alimente ce signal à partir des notifications existantes ; retrait et remplacement d’entrée sont visibles même sans trafic d’une autre entrée. Le code des producteurs REST/SSE, les entités, le JS et les configurations restent ceux de la stable. Le contre-audit doit notamment vérifier les notifications aux frontières du reload, le rejet des sources retirées et la libération des listeners sur déconnexion. Les trois xfail A1 sont devenus des tests ordinaires et six scénarios ont été ajoutés. Résultat final : **21 Python et 72 JS historiques réussis ; 12 réussis et 6 xfail stricts A2 sur chaque Core**, sans échec inattendu.
 
-## État des 14 anomalies à l’entrée du lot 4
+## État des 14 anomalies après clôture du lot 4.1
 
 | Anomalie | État | Preuve ou décision |
 |---|---|---|
@@ -49,7 +51,7 @@
 | A6 — débit périmé après changement des règles réseau | Corrigée et validée | 2D, cohérence des deux cartes sans reload. |
 | A7 — JSON refusant `unknown` | Corrigée et validée | 3B.1 puis 4.1 ; aucune migration. |
 | A8 — compatibilité REST annoncée trop largement | Corrigée en documentation et validée | 4.1 : `/streams` et `/servers` requis ; Tracearr 2.6.0 exclu, sans revendication de test runtime sur 2.7.0. |
-| A9 — clé révoquée non remplaçable en place | Course résiduelle corrigée en 4.1.3, à contre-vérifier | Aucun enregistrement sur snapshot inexploitable, flow interrompu ou suppression concurrente ; si l’entrée subsiste après un unload refusé, la nouvelle clé validée est sauvegardée pour le prochain redémarrage. |
+| A9 — clé révoquée non remplaçable en place | Corrigée et définitivement validée | 4.1.4 : aucun enregistrement sur snapshot inexploitable, flow interrompu ou suppression concurrente ; si l’entrée subsiste après un unload refusé, la nouvelle clé validée est sauvegardée pour le prochain redémarrage. |
 | A10 — lecture périmée encore présentée comme active | Corrigée et définitivement validée | 4.1.2 : données SSE récentes, WS multi-entrées et états périmés préservés ; aucun changement en 4.1.3. |
 | A11 — débordement de badges | Corrigée et validée | 2E, matrice de largeurs, thèmes et moteurs. |
 | A12 — clavier dépendant du glissement souris | Corrigée et validée | 2E, flèches clavier en focus indépendantes du drag. |
@@ -58,6 +60,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite : contre-vérification indépendante d’A9 sur le SHA livré.** 4.2 reste hors de ce lot, notamment le versionnement et l’invalidation du cache JS. Au stade du candidat de recette, obtenir HACS et hassfest sur son SHA et vérifier installation/mise à niveau HACS, vrai dashboard, réauthentification FR/EN et coupures dans un HA jetable. Safari, longue durée, lecteurs physiques Plex/Jellyfin/Emby et proxy réel n’ont pas été éprouvés. Ne pas engager 6A/6B/6C.
+**Suite :** essais personnels du mainteneur après la [recette 4.2](RECETTE_42.md), puis décision explicite avant toute publication ou évolution 6A/6B/6C.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.

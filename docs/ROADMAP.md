@@ -18,7 +18,7 @@ Les phases 0 et 1.1 sont validées. **2A** est définitivement validée sur `942
 
 | Ordre | Lot proposé | Critère de sortie avant livraison |
 |---|---|---|
-| 4 | **Validation globale** : matrice Core minimum/stable, non-régression avec fixtures Plex/Jellyfin/Emby, installation/mise à niveau HACS et essai sur un vrai dashboard HA isolé. | Vérifier HACS et hassfest sur le SHA candidat ; vérifier les flows, options, ressources et cartes réels, dont A10 en panne complète et en reprise. |
+| 4 | **Validation globale** : 4.1 définitivement clôturé (14/14), puis [candidat et dashboard isolé 4.2](RECETTE_42.md). | Les essais personnels du mainteneur et son accord explicite précèdent toute publication. Une mise à niveau locale ne vaut pas un test du circuit HACS. |
 | Ultérieur | **Coût des dashboards** : étudier si nécessaire le trafic WS et les performances longue durée ; A5 est clôturée en 3.1. | Comparer abonnés, octets, temps de rendu et mémoire avant d’envisager d’autres optimisations. Pas de refonte globale sans mesures et tests d’équivalence. |
 | 6A | [**Affichage en pause et couleurs des badges du bandeau**](#lot-6a--affichage-en-pause-et-couleurs-des-badges) | Conserver les options de masquage et l’apparence des anciennes configurations par défaut. |
 | 6B | [**Badges techniques personnalisables**](#lot-6b--badges-techniques-personnalisables) : identité visuelle propre à Tracearr HA pour les panneaux de lecture. | Cinq styles avec aperçu dans l’éditeur ; rendu compact, lisible en thèmes clair et sombre ; style classique conservé par défaut. |

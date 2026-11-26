@@ -13,7 +13,7 @@ Tracearr HA figure dans le catalogue HACS depuis la fusion de [hacs/default#1330
 5. **Vérifier après publication** que le tag et la Release désignent le bon SHA. C'est le tag (et non seulement le champ « Target » de la Release) qui détermine le code téléchargé par HACS.
 6. HACS peut mettre un peu de temps à proposer la nouvelle version après la synchronisation des Releases. Redémarrer HA après installation et actualiser la page pour recharger le JS.
 
-Pour une **préversion**, utiliser une branche et un manifeste distincts (ex. `0.1.15b1`), créer le tag sur le bon commit, publier une Release cochée **Pre-release**, puis vérifier le tag avant installation. Les préversions ne remplacent pas automatiquement les Releases stables pour les utilisateurs ne les ayant pas activées.
+Pour une **préversion**, utiliser une branche et un manifeste distincts. Les anciennes préversions utilisaient `0.1.14bN` ; préférer désormais SemVer (ex. `0.1.17-beta.1`) : vérifier l’ordre stable précédente < bêta < finale avec le comparateur de versions HA/Marketplace. Seulement après autorisation, créer le tag sur le bon commit, publier une Release cochée **Pre-release**, puis vérifier le tag avant installation. Les préversions ne remplacent pas automatiquement les Releases stables pour les utilisateurs ne les ayant pas activées.
 
 ### Commandes de vérification locale
 

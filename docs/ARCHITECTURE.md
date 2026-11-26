@@ -1,4 +1,4 @@
-# Architecture — base v0.1.16 et corrections locales 4.1.3
+# Architecture — candidat local v0.1.17-beta.1
 
 ```text
 Plex / Jellyfin / Emby → Tracearr → API publique v2 (REST + SSE)

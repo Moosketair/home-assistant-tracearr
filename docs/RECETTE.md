@@ -1,5 +1,7 @@
 # Recette locale de fiabilité
 
+Pour l’installation et le véritable dashboard Home Assistant : [recette 4.2](RECETTE_42.md). Le banc ci-dessous reste celui des validations historiques du backend.
+
 Depuis la racine du dépôt, sur Debian 13.2 x86-64 :
 
 ```bash

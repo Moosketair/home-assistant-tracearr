@@ -36,7 +36,7 @@ Consultez le [journal complet des versions](CHANGELOG.md) pour retrouver toutes 
 
 L'intégration conserve les réglages des cartes et les entrées de configuration Home Assistant lors des mises à jour normales. Après une mise à jour, rechargez aussi le navigateur avec `Ctrl + F5` (ou actualisez la page sur mobile).
 
-**Carte non proposée dans Lovelace ?** Vérifiez dans **Paramètres → Tableaux de bord → Ressources** qu'il n'existe qu'une seule ressource Module JavaScript pour `/tracearr_ha/tracearr-card.js?v=0.1.16`. En mode YAML, la ressource se configure manuellement.
+**Carte non proposée dans Lovelace ?** Vérifiez dans **Paramètres → Tableaux de bord → Ressources** qu'il n'existe qu'une seule ressource Module JavaScript pour `/tracearr_ha/tracearr-card.js`, avec `?v=` suivi de la version installée (`?v=0.1.16` pour la stable publique). En mode YAML, [mettez à jour la ressource manuellement](docs/CONFIGURATION.md#ressource-lovelace-en-mode-yaml).
 
 ## Ce que propose Tracearr HA
 

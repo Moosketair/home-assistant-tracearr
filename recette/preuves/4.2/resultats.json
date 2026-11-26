@@ -1,0 +1,53 @@
+{
+  "stable": {
+    "url": "http://127.0.0.1:18424/tracearr_ha/tracearr-card.js?v=0.1.16",
+    "status": 200,
+    "sha256": "0c2dafa7eeae5f3b028ec36c4a31570714360ac1f298224f71b9d14938b2c7f5"
+  },
+  "mise_a_niveau": {
+    "url": "http://127.0.0.1:18424/tracearr_ha/tracearr-card.js?v=0.1.17-beta.1",
+    "status": 200,
+    "sha256": "845937e2f9d61ed47b1444287e0dc0d04475ae8e2331418ed4864b3b2499ac24",
+    "console_errors": [],
+    "badge_layout": [
+      {
+        "width": 470,
+        "inside": true,
+        "overlap": false,
+        "offset": 0
+      },
+      {
+        "width": 384,
+        "inside": true,
+        "overlap": false,
+        "offset": -35.25799560546875
+      }
+    ],
+    "playback": "pause, progression, animation continue, centrage, panne, reprise",
+    "editors": "saved, reopened, restored",
+    "reauth": {
+      "flow": [
+        "reauth_confirm",
+        "invalid_auth",
+        "reauth_successful"
+      ],
+      "titles": {
+        "fr": "Remplacer la clé API Tracearr",
+        "en": "Replace the Tracearr API key"
+      },
+      "same_entry": true
+    }
+  },
+  "installation_neuve": {
+    "url": "http://127.0.0.1:18424/tracearr_ha/tracearr-card.js?v=0.1.17-beta.1",
+    "status": 200,
+    "sha256": "845937e2f9d61ed47b1444287e0dc0d04475ae8e2331418ed4864b3b2499ac24",
+    "console_errors": []
+  },
+  "yaml": {
+    "url": "http://127.0.0.1:18424/tracearr_ha/tracearr-card.js?v=0.1.17-beta.1",
+    "status": 200,
+    "sha256": "845937e2f9d61ed47b1444287e0dc0d04475ae8e2331418ed4864b3b2499ac24",
+    "console_errors": []
+  }
+}
