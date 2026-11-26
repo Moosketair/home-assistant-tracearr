@@ -1,4 +1,6 @@
-# État de reprise — promotion stable 5C.1
+# État de reprise — 6A.1 livré localement
+
+**6A.1 terminé localement**, branche `feature/pause-and-badge-colors` depuis la stable `3587f832532b4e0285699c76df6d30110ac619ad`. Pause et couleurs des badges du bandeau validées sur le [banc frontend](RECETTE.md#6a1--pause-et-couleurs-des-badges). Réserve 3.2 examinée et maintenue faute de signal fiable. Ni changement de version ni publication. Arrêt avant 6B/6C.
 
 **Lot 4.1 définitivement clôturé.** Verdict indépendant 4.1.4 **VALIDÉ** sur `41403f51b665a7e839fe7474ed7edd274fb04b0d`, confirmé par le mainteneur : **14 anomalies sur 14 validées**, dont A9. Les réserves déjà documentées sont acceptées.
 
@@ -63,6 +65,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** arrêt à la publication de `v0.1.17`. Les lots 6A/6B/6C restent dans la [feuille de route](ROADMAP.md) et nécessitent une autorisation distincte.
+**Suite :** arrêt après la livraison locale de 6A.1. Les lots 6B et 6C restent dans la [feuille de route](ROADMAP.md) et nécessitent une autorisation distincte.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.

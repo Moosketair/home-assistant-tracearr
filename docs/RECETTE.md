@@ -347,3 +347,15 @@ Pour la preuve avant correction de 2E.1, servir une deuxième copie isolée de c
 3. Démonter/remonter plusieurs fois ; vérifier visuellement l’absence de panneaux dupliqués et le retour du flux. Utiliser `?lifecycle` pour décompter les états, les timers, l’observateur et les abonnements de carte, et `?blink` pour mesurer le cycle natif et les mises à jour. Ces sondes ne remplacent pas un profilage de RAM.
 
 **Limites.** Les preuves P1 portent sur le code publié avec un vrai backend Core et un réseau local simulé. Le banc ne valide pas d’installation HACS, de vrai dashboard HA, de lecteur physique Plex/Jellyfin/Emby, de débit Internet, de proxy inverse, de permissions multi-utilisateurs en production, ni d’iOS/Android. Il n’implémente pas l’ensemble de l’API Tracearr, ni son stockage, sa cadence de heartbeat ou ses quotas réels. La sonde frontend ne charge pas le sélecteur d’entités de HA. Pour la suite, garder ces essais rapides, puis compléter par un environnement de prépublication distinct selon les changements.
+
+## 6A.1 — Pause et couleurs des badges
+
+**Base `3587f832` :** trois assertions Node discriminantes pour la pause et une pour la palette individuelle échouent avant correction. La sonde `?pause-colors` en clair échoue sur les trois dispositions sous Chromium et Firefox : reste absent en pause, palettes individuelles ignorées et commandes absentes de l’éditeur.
+
+**Candidat, Debian 13.2 / Node 22.23.5 :** `node --check custom_components/tracearr_ha/frontend/tracearr-card.js`, `node --test tests/test_carousel.cjs` (83 réussis, aucun saut ni échec), `git diff --check`. Horloges monotone et civile contrôlées dans Node pour vérifier le gel et le recalcul de l’heure de fin à la reprise.
+
+**Navigateur :** servir le dépôt en HTTP sur loopback et ouvrir `recette/cartes.html?pause-colors`. Attendre le JSON `ok:true`. Chromium 152.0.7977.82 et Firefox 140.15.0esr, profils jetables, clair et sombre : 12 mesures DOM par combinaison (250, 320, 768, 1200 px × liste, carrousel et individuelle), transitions de lecture/pause/péremption/reprise, couleurs et phase d’animation, écriture et relecture de l’événement `config-changed` pour les deux types de carte. Les sondes `?responsive` (78 mesures par combinaison), `?blink` et `?outage` passent aussi dans les quatre combinaisons.
+
+**Captures :** `?pause-colors-preview&visual`, à 340 px de largeur de carte ; la carte individuelle masque l’heure de fin. [Chromium clair](../recette/preuves/6a.1/pause-badges-chromium-clair.png) · [Firefox sombre](../recette/preuves/6a.1/pause-badges-firefox-sombre.png).
+
+Backend inchangé : validations Core, vrai dashboard HA et installation HACS reprises comme références de la stable ([état de reprise](DEVELOPMENT_STATUS.md), [recette 4.2](RECETTE_42.md)), pas rejouées sur ce candidat. Le banc ne vérifie pas la persistance storage dans un vrai HA ni un déploiement YAML ; il vérifie la relecture par les composants frontend et la compatibilité des options. Aucune intervention sur la production.

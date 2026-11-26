@@ -28,11 +28,11 @@ La priorité d’un lot n’est pas une promesse de publication. Garder les issu
 
 ### Lot 6A — Affichage en pause et couleurs des badges
 
-Préparation documentaire uniquement. En pause, conserver le temps restant à gauche ; afficher le message orange « En pause » à droite à la place de l’heure de fin. Recalculer l’heure de fin à la reprise et préserver les options de masquage existantes.
+**6A.1 livré localement, non publié.** En pause, conserver le temps restant à gauche ; afficher le message orange « En pause » à droite à la place de l’heure de fin, même si celle-ci est masquée. Recalculer l’heure de fin à la reprise et préserver les options de masquage existantes.
 
-Pour les badges du bandeau général, prévoir une couleur normale configurable par badge, indépendamment de sa couleur spécifique à la valeur zéro. Sans nouveau réglage, préserver l’apparence des configurations existantes.
+Les badges du bandeau général ont une couleur normale configurable par badge, indépendamment de leur couleur à zéro. Sans nouveau réglage, l’apparence des configurations existantes est préservée. Voir [la configuration](CONFIGURATION.md) et [la recette 6A.1](RECETTE.md#6a1--pause-et-couleurs-des-badges).
 
-**Réserve 3.2 à examiner en 6A :** une session entièrement absente d’un snapshot puis revenue avec une position source ancienne peut présenter un recul temporaire du compteur. Les sessions simplement filtrées ne sont pas concernées. Étudier, si nécessaire, une conservation temporaire et bornée des états récemment supprimés, sans réintroduire la rétention mémoire corrigée en 3.1. Réserve acceptée, non corrigée en 3B.1.
+**Réserve 3.2 examinée en 6A.1 et conservée :** une session entièrement absente d’un snapshot puis revenue avec une position source ancienne peut présenter un recul temporaire du compteur. Les sessions simplement filtrées ne sont pas concernées. Même avec une conservation bornée, un snapshot sans motif de retrait ni révision de la position ne distingue pas un échantillon ancien d’un véritable seek après réapparition. La purge immédiate est conservée ; aucun retour arrière n’est masqué par une nouvelle heuristique.
 
 ### Lot 6B — Badges techniques personnalisables
 

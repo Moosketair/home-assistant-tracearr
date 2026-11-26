@@ -2,6 +2,11 @@
 
 Les changements sont classés par version publique. Les préversions et les anciennes notes restent consultables ci-dessous. Les [GitHub Releases](https://github.com/Moosketair/home-assistant-tracearr/releases) permettent de télécharger une version précise.
 
+## Non publié
+
+- Les deux cartes gardent le temps restant à gauche et affichent « En pause » à droite à la place de l’heure de fin, recalculée à la reprise.
+- La couleur normale des badges du bandeau peut être réglée badge par badge, indépendamment de la couleur à zéro, avec retour possible à la palette d’origine.
+
 ## 0.1.17 — 2026-11-26
 
 - Les cartes reçoivent à nouveau les mises à jour WebSocket après le rechargement d’une entrée. Le flux SSE tolère les trames atypiques et la récupération REST prend le relais si le flux cesse de fonctionner.

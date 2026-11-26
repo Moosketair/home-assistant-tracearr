@@ -540,6 +540,128 @@
       theme:matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light", width:320,
       stale,sseOnly,restOnly,frozen,pause,isolated,pending,anchor,staleBadge,resumed,stopped,empty,cleanup};
   }
+  async function probePauseColors(preview) {
+    card.remove();
+    const rows = [], editors = [];
+    const theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    const config = {
+      show_progress:true,show_remaining:true,show_end_time:true,show_avatar:false,show_poster:false,
+      header_show_bandwidth:true,carousel_autoplay:false,carousel_visible:2,
+      header_metric_settings:{
+        streams:{align:"left",normal_custom_color:"#d8f6ba",blink_positive:true,zero_color_mode:"custom",zero_custom_color:"#333344"},
+        bandwidth:{align:"center",normal_custom_color:"#403a82"},
+      },
+      header_entity_badges:[{id:"requests",entity:"counter.requests",label:"Demandes",align:"right",
+        normal_custom_color:"#efcb87",zero_color_mode:"custom",zero_custom_color:"#505b67"}],
+    };
+    const layouts = [["streams","list"],["streams","carousel"],["stream","list"]];
+    for (const [type, mode] of preview ? layouts.slice(1) : layouts) {
+      let now = 0, push;
+      const node = host.appendChild(document.createElement(`tracearr-${type}-card`));
+      node._now = () => now;
+      node.setConfig({...config,mode,title:type === "stream" ? "Lecture individuelle" : "Lectures en cours",
+        show_end_time:type !== "stream" || !preview});
+      const connection = {subscribeMessage:async fn => {push=fn; return () => {};}};
+      const setCount = state => {node.hass = {connection,states:{"counter.requests":{state}}};};
+      setCount("2");
+      const streams = entry.streams.slice(0,2).map(s => ({...s}));
+      const publish = (stale=false) => push({entries:[{...entry,streams,streams_stale:stale}]});
+      const find = q => node.shadowRoot.querySelector(q);
+      const color = key => find(`[data-badge="${key}"]`)?.style.getPropertyValue("--pill-bg");
+      const request = "entity:0:requests:counter.requests";
+      const readTimes = () => [...node.shadowRoot.querySelectorAll(".stream")].map(panel =>
+        [panel.querySelector(".time-remaining")?.textContent,panel.querySelector(".fill").style.width]);
+      const normal = () => color("streams") === "#d8f6ba" && color("bandwidth") === "#403a82" && color(request) === "#efcb87";
+      streams.forEach(s => {s.state = preview ? "paused" : "playing";});
+      publish();
+      if (preview) {
+        host.style.width = "340px";
+        host.style.display = "grid";
+        host.style.gap = "16px";
+        continue;
+      }
+      const playing = find(".time-end")?.textContent.startsWith("Fin à ") && normal();
+      const badge = find('[data-badge="streams"]'), pulse = badge.getAnimations()[0], track = find(".carousel");
+      await frame();
+      const phase = pulse?.currentTime;
+      now = 2000;
+      streams.forEach(s => {s.state = "paused";});
+      publish();
+      const paused = readTimes();
+      for (const width of sizes) {
+        host.style.width = `${width}px`;
+        await frame();
+        const inside = (inner, outer) => inner.left >= outer.left - 1 && inner.right <= outer.right + 1;
+        const times = [...node.shadowRoot.querySelectorAll(".times")].every(row => {
+          const left = row.querySelector(".time-left")?.getBoundingClientRect();
+          const right = row.querySelector(".time-paused")?.getBoundingClientRect();
+          const rect = row.getBoundingClientRect();
+          return left && right && row.querySelector(".time-remaining") && !row.querySelector(".time-end") &&
+            Math.abs(right.right - rect.right) <= 1 && inside(left, rect) && inside(right, rect) &&
+            (left.bottom <= right.top + 1 || left.right <= right.left + 1);
+        });
+        const header = find(".head-metrics").getBoundingClientRect();
+        const badges = [...node.shadowRoot.querySelectorAll(".metric")].every(b => inside(b.getBoundingClientRect(),header));
+        rows.push({type,mode,width,ok:times && badges,times,badges});
+      }
+      now += 6000;
+      node._updateProgress();
+      const frozen = paused.every(([time,width]) => time === "-1:48" && parseFloat(width) === 10) &&
+        JSON.stringify(paused) === JSON.stringify(readTimes());
+      const continuity = pulse && pulse === badge.getAnimations()[0] && pulse.currentTime > phase &&
+        badge === find('[data-badge="streams"]') && track === find(".carousel");
+      setCount("0");
+      const zero = color(request) === "#505b67";
+      setCount("3");
+      const positive = normal();
+      publish(true);
+      const stale = !!find(".time-paused") && find(".time-end")?.textContent === "Non actualisé" &&
+        !find(".time-end[data-id]") && !!find(".availability-status")?.textContent;
+      streams.forEach(s => {s.state = "playing";});
+      publish();
+      const resumed = !find(".time-paused") && find(".time-end[data-id]")?.textContent.startsWith("Fin à ");
+      rows.push({type,mode,ok:!!(playing && frozen && continuity && zero && positive && stale && resumed),
+        playing,frozen,continuity,zero,positive,stale,resumed});
+      node.remove();
+    }
+    if (!preview) for (const [type] of [layouts[0],layouts[2]]) {
+      const editor = host.appendChild(document.createElement("tracearr-card-editor"));
+      const find = q => editor.shadowRoot.querySelector(q);
+      let saved;
+      editor.addEventListener("config-changed",event => {saved = JSON.parse(JSON.stringify(event.detail.config));});
+      editor.setConfig({...config,type:`custom:tracearr-${type}-card`,grid_options:{columns:6}});
+      const change = (q,value) => {
+        const field = find(q);
+        field.value = value;
+        field.dispatchEvent(new Event("change",{bubbles:true}));
+      };
+      const metric = '[data-metric-setting="normal_custom_color"][data-metric-key="streams"]';
+      const entity = '[data-badge-setting="normal_custom_color"][data-badge-index="0"]';
+      if (!find(`input${metric}`) || !find(`input${entity}`)) {
+        editors.push({type,ok:false,controlsMissing:true});
+        editor.remove();
+        continue;
+      }
+      change(`input${metric}`,"#123456");
+      change(`input${entity}`,"#654321");
+      editor.setConfig(saved);
+      const reread = find(`input${metric}`).value === "#123456" && find(`input${entity}`).value === "#654321";
+      change(`select${metric}`,"inherit");
+      change(`select${entity}`,"inherit");
+      const reset = !("normal_custom_color" in saved.header_metric_settings.streams) &&
+        !("normal_custom_color" in saved.header_entity_badges[0]) &&
+        saved.header_metric_settings.streams.zero_custom_color === "#333344" &&
+        saved.header_entity_badges[0].zero_custom_color === "#505b67" && saved.grid_options.columns === 6;
+      editor.setConfig(saved);
+      const inherited = find(`input${metric}`).disabled && find(`input${entity}`).disabled;
+      change(`select${entity}`,"custom");
+      const enabled = !find(`input${entity}`).disabled &&
+        saved.header_entity_badges[0].normal_custom_color === find(`input${entity}`).value;
+      editors.push({type,ok:reread && reset && inherited && enabled,reread,reset,inherited,enabled});
+      editor.remove();
+    }
+    return {ok:rows.every(row => row.ok) && editors.every(row => row.ok),theme,rows,editors};
+  }
   async function measureMatrix() {
     for (const label of [false,true]) {
       longLabel = label; configure();
@@ -567,8 +689,9 @@
     el("result").textContent = JSON.stringify({ok:cases.every(row => row.ok),
       theme:matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light", cases}, null, 2);
   }
-  if (["outage","outage-preview","responsive","lifecycle","blink"].some(param => params.has(param))) {
-    const probe = params.has("outage") || params.has("outage-preview") ? () => probeOutage(params.has("outage-preview")) :
+  if (["pause-colors","pause-colors-preview","outage","outage-preview","responsive","lifecycle","blink"].some(param => params.has(param))) {
+    const probe = params.has("pause-colors") || params.has("pause-colors-preview") ? () => probePauseColors(params.has("pause-colors-preview")) :
+      params.has("outage") || params.has("outage-preview") ? () => probeOutage(params.has("outage-preview")) :
       params.has("responsive") ? probeResponsive : params.has("lifecycle") ? probeLifecycle : probeBlink;
     probe().then(report => { el("result").textContent = JSON.stringify(report, null, 2); })
       .catch(error => { el("result").textContent = JSON.stringify({ok:false,error:String(error),stack:error.stack}); });
