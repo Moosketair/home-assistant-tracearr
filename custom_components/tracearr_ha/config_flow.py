@@ -445,7 +445,7 @@ class TracearrOptionsFlow(config_entries.OptionsFlow):
                 data = json.loads(user_input[CONF_NETWORK_LOCATIONS])
                 if not isinstance(data,dict) or any(
                     not isinstance(key,str) or not isinstance(value,str) or
-                    value not in ("local", "remote") or not key.strip()
+                    value not in ("local", "remote", "unknown") or not key.strip()
                     for key,value in data.items()
                 ):
                     raise ValueError("Invalid network mapping")

@@ -1,12 +1,85 @@
 """A6 publication: option-only snapshots preserve live sessions and HA totals."""
 import asyncio
 from copy import deepcopy
+import json
+
+import pytest
 
 from homeassistant.helpers import entity_registry as er
 
 from core import DOMAIN, core, observed
 from simulateur import Tracearr
 from spec_race import held
+
+
+def test_network_json_round_trip_explicit_unknown():
+    async def run():
+        async with Tracearr().serve() as sim, core() as b:
+            sim.change("started", "tv", device="tv")
+            entry = await b.add(sim)
+            plex, jellyfin, _ = [row["server_id"] for row in sim.servers]
+            key = f"{plex}:device:tv"
+            original = {f"server:{plex}": "remote", f"server:{jellyfin}": "local"}
+            other_options = {"aliases": {"fixture": "Recette"}, "avatars": {},
+                             "future_option": {"keep": True}}
+            entries = b.hass.config_entries
+            assert entries.async_update_entry(entry, options={**other_options, "network_locations": original})
+            options = entries.options
+
+            async def open_step(*steps):
+                form = await options.async_init(entry.entry_id)
+                for step in steps:
+                    assert form["type"] == "menu"
+                    form = await options.async_configure(form["flow_id"], {"next_step_id": step})
+                assert form["type"] == "form"
+                return form
+
+            async def submit(form, data):
+                return await options.async_configure(form["flow_id"], data)
+
+            table = await open_step("devices_table", "devices_plex")
+            label = next(label for label in table["data_schema"]({}) if "tv (appareil)" in label)
+            assert table["data_schema"]({})[label] == "remote"
+            assert (await submit(table, {label: "unknown"}))["type"] == "create_entry"
+            saved = {**original, key: "unknown"}
+            assert entry.options == {**other_options, "network_locations": saved}
+
+            editor = await open_step("advanced", "network_json")
+            prefilled = editor["data_schema"]({})["network_locations"]
+            assert json.loads(prefilled) == saved
+            assert (await submit(editor, {"network_locations": prefilled}))["type"] == "create_entry"
+            table = await open_step("devices_table", "devices_plex")
+            assert table["data_schema"]({})[label] == "unknown"
+            options.async_abort(table["flow_id"])
+            assert entry.options == {**other_options, "network_locations": saved}
+
+            editor = await open_step("advanced", "network_json")
+            assert (await submit(editor, {"network_locations": json.dumps(original)}))["type"] == "create_entry"
+            table = await open_step("devices_table", "devices_plex")
+            assert table["data_schema"]({})[label] == "remote"
+            options.async_abort(table["flow_id"])
+            assert entry.options == {**other_options, "network_locations": original}
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("value", ['[]', '{"":"local"}', '{"device:tv":null}', '{"device:tv":"other"}'])
+def test_network_json_still_rejects_invalid_mapping(value):
+    async def run():
+        async with Tracearr().serve() as sim, core() as b:
+            entry = await b.add(sim)
+            options = b.hass.config_entries.options
+            menu = await options.async_init(entry.entry_id)
+            fid = menu["flow_id"]
+            await options.async_configure(fid, {"next_step_id": "advanced"})
+            await options.async_configure(fid, {"next_step_id": "network_json"})
+            before = entry.options
+            result = await options.async_configure(fid, {"network_locations": value})
+            assert result["errors"] == {"base": "invalid_json"}
+            assert entry.options == before
+            options.async_abort(fid)
+
+    asyncio.run(run())
 
 
 def test_network_options_publish_without_refresh_and_survive_rest_sse():

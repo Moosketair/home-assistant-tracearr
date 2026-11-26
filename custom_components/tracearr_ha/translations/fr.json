@@ -77,7 +77,7 @@
       },
       "network_json": {
         "title": "Règles de localisation avancées",
-        "description": "Exemple de règles : device:Apple TV = local ; player:Plex Web = remote.",
+        "description": "Valeurs : local, remote ou unknown. Utilisez unknown pour laisser explicitement un appareil non classé ; supprimez sa clé pour appliquer les règles de repli.",
         "data": {
           "network_locations": "Appareils locaux et distants (JSON)"
         }

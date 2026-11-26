@@ -77,7 +77,7 @@
       },
       "network_json": {
         "title": "Advanced network rules",
-        "description": "Example rules: device:Apple TV = local; player:Plex Web = remote.",
+        "description": "Values: local, remote or unknown. Use unknown to explicitly leave a device unclassified; delete its key to let fallback rules apply.",
         "data": {
           "network_locations": "Device locations (JSON)"
         }
