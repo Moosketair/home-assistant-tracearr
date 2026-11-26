@@ -2,7 +2,7 @@
 
 Les changements sont classés par version publique. Les préversions et les anciennes notes restent consultables ci-dessous. Les [GitHub Releases](https://github.com/Moosketair/home-assistant-tracearr/releases) permettent de télécharger une version précise.
 
-## 0.1.17b1 — Candidat local v0.1.17-beta.1 (non publié)
+## 0.1.17-beta.1 — Candidat local (non publié)
 
 - Les débits de l’en-tête et des panneaux se mettent à jour ensemble après modification des règles LAN/WAN, sans recharger la page ni déplacer le carrousel.
 - Les badges de l’en-tête restent lisibles sur les cartes étroites. Le groupe central reste aussi près du milieu que le permettent ses voisins ; les libellés longs reviennent à la ligne sans être coupés.
@@ -15,7 +15,7 @@ Les changements sont classés par version publique. Les préversions et les anci
 - Si Tracearr ne peut plus actualiser les lectures, les deux cartes signalent les données périmées et figent les temps. Elles reprennent depuis le prochain snapshot fiable, sans affecter les autres instances.
 - Une réponse REST inexploitable ne valide plus une nouvelle clé et ne remplace plus les dernières données valides ni les lectures déjà reçues par SSE.
 - Une entrée en cours de suppression n’enregistre plus de nouvelle clé ni ne déclenche de rechargement tardif. Si un déchargement a échoué sans supprimer l’entrée, le formulaire indique qu’un redémarrage est nécessaire pour appliquer la clé enregistrée.
-- Après mise à niveau et redémarrage, la ressource Lovelace enregistrée en mode stockage est mise à jour sur place. En mode YAML, remplacer manuellement la clé de cache par `?v=0.1.17b1` pour ce candidat. Les réglages des cartes ne changent pas.
+- Après mise à niveau et redémarrage, la ressource Lovelace enregistrée en mode stockage est mise à jour sur place. En mode YAML, remplacer manuellement la clé de cache par `?v=0.1.17-beta.1` pour ce candidat. Les réglages des cartes ne changent pas.
 
 ## 0.1.16 — 2026-11-05
 
