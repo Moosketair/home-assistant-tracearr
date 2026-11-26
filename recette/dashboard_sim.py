@@ -23,6 +23,22 @@ def application(key=KEY):
         sim.change("started", "wan", server=1, username="bob", media_title="Voyage fictif",
                    bitrate=2500, progress_ms=30000, duration_ms=900000, poster_url=None)
 
+    def grid_playback(count):
+        for sid in list(sim.streams):
+            sim.change("stopped", sid)
+        if count:
+            sim.change(
+                "started", "lan", username="alice", media_title="Orbite de recette", poster_url=None,
+                bitrate=8000, resolution="4K", source_video_width=3840, source_video_height=2160,
+                source_video_codec="hevc", stream_video_codec="h264", stream_video_details={"width": 1920, "height": 1080},
+                source_video_details={"dynamicRange": "HDR10+"}, source_audio_codec="truehd", source_audio_channels=8,
+                transcode_info={"sourceContainer": "mkv", "streamContainer": "mp4"},
+                is_transcode=True, video_decision="transcode",
+            )
+        for i in range(1, count):
+            sim.change("started", f"other-{i}", server=1, username="bob", resolution="1080p",
+                       source_video_codec="av1", media_title=f"Lecture fictive {i}", poster_url=None)
+
     async def action(request):
         # Do not accept control requests from a web page or a rebinding host.
         if request.host != f"127.0.0.1:{PORT}" or request.headers.get("Origin"):
@@ -30,6 +46,11 @@ def application(key=KEY):
         name = request.match_info["action"]
         if name == "reset":
             reset()
+        elif name in {"grid-empty", "grid-one", "grid-three"}:
+            grid_playback({"grid-empty": 0, "grid-one": 1, "grid-three": 3}[name])
+        elif name == "grid-recover":
+            sim.errors.clear()
+            sim.raw(None)
         elif name in {"pause", "play"}:
             sim.change("updated", "lan", state="paused" if name == "pause" else "playing",
                        progress_ms=23000)

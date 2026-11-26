@@ -1,6 +1,8 @@
-# État de reprise — 6B.1 livré localement
+# État de reprise — 6B.2 livré localement
 
-**6B.1 livré localement** sur `feature/technical-badge-styles` depuis `b526cdf9b8285a151e59e16ceca74150d81ef16f`. Badges techniques et aperçu partagés, cinq styles, dispositions compacte/séparée, visibilité, ordre, couleurs et présentation du transcodage. Voir [recette 6B.1 et captures](RECETTE.md#6b1--badges-techniques). Aucun changement du backend ou de la version ; validation graphique du mainteneur attendue. Ni publication ni travail sur 6C.
+**6B.2 livré localement** sur `feature/lovelace-grid-sizing` depuis `75b6960b4d152c4a71e731dd249bd677b59ea966`. Hauteur automatique dans Sections, bandeau seul sur une ligne quand il tient, finitions du style Technique et suppression du suffixe source visible. Voir [mesures et captures](RECETTE.md#6b2--dimensionnement-lovelace-et-finitions). Aucun changement du backend ou de la version. Ni préparation de publication ni travail sur 6C.
+
+**6B.1 examiné par le mainteneur**, branche `feature/technical-badge-styles` depuis `b526cdf9b8285a151e59e16ceca74150d81ef16f`. Les [cinq styles, dispositions, couleurs et l’organisation de l’éditeur](RECETTE.md#6b1--badges-techniques) sont conservés.
 
 **6A.1 définitivement validé par le mainteneur** sur `b526cdf9`, branche `feature/pause-and-badge-colors` depuis la stable `3587f832532b4e0285699c76df6d30110ac619ad`. Pause et couleurs du bandeau éprouvées sur le [banc frontend](RECETTE.md#6a1--pause-et-couleurs-des-badges). Réserve 3.2 inchangée. Persistance Lovelace et recette HA à vérifier lors de la validation commune 6A/6B.
 
@@ -67,6 +69,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** arrêt après la livraison locale de 6B.1. Attendre la validation graphique du mainteneur avant toute préparation de publication. Le lot 6C reste dans la [feuille de route](ROADMAP.md) et nécessite une autorisation distincte.
+**Suite :** arrêt après la livraison locale de 6B.2. Aucune préparation de publication sans autorisation. Le lot 6C reste dans la [feuille de route](ROADMAP.md) et nécessite une autorisation distincte.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.

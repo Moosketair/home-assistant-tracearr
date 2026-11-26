@@ -65,9 +65,11 @@ Les cinq styles seront proposés dans l’éditeur graphique :
 
 Le rendu doit être réalisé en HTML/CSS, sans fichier image, sans logo officiel et sans téléchargement de ressources graphiques externes. Les couleurs et les formes doivent permettre de reconnaître rapidement les caractéristiques du média tout en maintenant un design homogène entre formats. L’affichage doit rester compact et s’adapter à la largeur disponible, avec un contraste et une lisibilité suffisants en thèmes clair et sombre.
 
-N’afficher que les formats réellement identifiables ; les inconnus restent neutres. Proposer **Destination uniquement** et **Source → destination** pour les valeurs fiables ; si la destination manque, indiquer que la valeur affichée est celle de la source. Sans choix explicite, préserver la sémantique historique ; Classique sans personnalisation conserve aussi la présentation historique. Moteur commun aux deux cartes et à l’aperçu, réutilisable en 6C sans ouvrir ce lot. Aucun changement backend ni de version.
+N’afficher que les formats réellement identifiables ; les inconnus restent neutres. Proposer **Destination uniquement** et **Source → destination** pour les valeurs fiables ; si la destination manque, garder la valeur source sans flèche. Sans choix explicite, préserver la sémantique historique ; Classique sans personnalisation conserve aussi la présentation historique. Moteur commun aux deux cartes et à l’aperçu, réutilisable en 6C sans ouvrir ce lot. Aucun changement backend ni de version.
 
 Voir [les réglages et limites du contrat](CONFIGURATION.md#badges-techniques-des-panneaux-de-lecture) et [la recette 6B.1](RECETTE.md#6b1--badges-techniques). Validation graphique du mainteneur requise avant toute préparation de publication ; persistance Lovelace et recette HA prévues en validation commune 6A/6B.
+
+**6B.2 — Dimensionnement Lovelace et finitions.** Les cinq styles de 6B.1 sont conservés. En Sections, utiliser la hauteur automatique par défaut ; un en-tête seul qui tient occupe une ligne native, et le contenu plus grand s’ajuste sans forcer de multiples de lignes. Les tailles enregistrées restent prioritaires. Le style Technique reçoit des descriptions compactes de formats, sans inventer de propriétés de lecture. Quand la sortie est inconnue, plus de mention « source » visible : l’infobulle et le libellé accessible portent la précision. Aucun réglage supplémentaire, aucune préparation de publication ni ouverture de 6C.
 
 ### Lot 6C — Lectures musicales
 
