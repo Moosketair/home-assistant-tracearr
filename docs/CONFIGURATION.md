@@ -90,11 +90,11 @@ show_codecs: true
 ```yaml
 type: custom:tracearr-stream-card
 selection: account
-selected_account: plex:alice
+selected_account: "00000000-0000-4000-8000-000000000001:alice"
 show_poster: true
 ```
 
-Les mêmes réglages sont accessibles depuis **l'éditeur graphique Lovelace**.
+Remplacez l’identifiant serveur fictif par le `server_id` Tracearr du compte : `selected_account` attend `server_id:username`, pas `type:username`. `plex:alice` reste utilisable comme clé pour les alias et règles, mais ne sélectionne pas le compte dans cet exemple. Pour éviter de saisir l’identifiant à la main, choisissez **Lecture d’un utilisateur** puis le compte dans **l’éditeur graphique Lovelace → Choix des lectures et filtres**.
 
 ### Redimensionnement et personnalisation
 
@@ -180,9 +180,11 @@ Les règles peuvent utiliser `identifiantServeur:utilisateur`, `plex:utilisateur
 
 Les règles de la carte ont priorité sur celles de l’intégration. À chaque niveau, une règle d’appareil, de lecteur ou de compte propre au serveur prime sur le défaut `server:identifiantServeur`, qui prime sur une règle générique. Dans les options de l’intégration, l’action groupée **Tous les appareils** remplace les choix individuels des appareils détectés sur ce serveur. Le filtre ne masque aucune lecture et ne change pas le capteur HA de débit total ni les compteurs de sessions.
 
+Dans les **options de l’intégration → Options avancées → Règles LAN/WAN (JSON)**, la valeur `"unknown"` force un appareil à rester non classé. Supprimer la clé de l’appareil laisse les règles de repli s’appliquer, par exemple le défaut du serveur. Ce formulaire JSON n’est pas le YAML de la carte.
+
 ### Comportement sans lecture
 
-Dans **Comportement sans lecture**, choisissez entre **Afficher un message**, **En-tête uniquement** ou **Masquer complètement la carte**. Le champ `empty_message` personnalise le texte lorsque personne ne regarde ; si Tracearr est déconnecté, le message « Tracearr indisponible » reste prioritaire.
+Dans **Comportement sans lecture**, choisissez entre **Afficher un message**, **En-tête uniquement** ou **Masquer complètement la carte**. En mode **Afficher un message**, `empty_message` personnalise le texte en l’absence de lecture visible ; si la connexion REST est indisponible, « Tracearr indisponible » prend alors sa place. Lorsqu’une lecture est encore en cache, la carte peut continuer à l’afficher et à estimer sa progression même si les deux connexions sont coupées.
 
 ```yaml
 empty_mode: header_only  # message, header_only, hide

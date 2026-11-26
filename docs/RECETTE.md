@@ -248,6 +248,25 @@ Les **78 mesures par moteur et par mode clair/sombre** réussissent après corre
 
 Les validations officielles 0 à 2E restent acquises ; seules les non-régressions ciblées ci-dessus sont rejouées. Pas d’essai longue durée, de vrai dashboard HA, de Safari, de tactile physique ni de lecteur réel. Le mainteneur peut confirmer le ressenti du clignotement sur son dashboard lors d’une validation ultérieure ; aucune publication n’est engagée.
 
+**Clôture 3.2 (résultats réutilisés, pas rejoués).** Sur `fcd3c836e7e3a6b5f9c787c03979a7a400d7a95a`, le contre-audit indépendant confirme nettoyage, remontages stables, continuité des animations, progression/pause/carrousel, diagnostic et fermeture SSE avec poursuite du REST. Verdict **VALIDÉ AVEC RÉSERVE NON BLOQUANTE**, accepté par le mainteneur. Le recul temporaire du compteur à la réapparition d’une session entièrement absente du snapshot (et non simplement filtrée) est conservé dans la [roadmap 6A](ROADMAP.md#lot-6a--affichage-en-pause-et-couleurs-des-badges).
+
+### 3B.1 — consolidation finale
+
+**A7 avant/après.** Avec le code de `fcd3c83`, traverser la table native puis soumettre le JSON prérempli renvoyait un formulaire d’erreur au lieu de sauvegarder (1 échec discriminant sur chaque Core, 4 rejets invalides déjà verts). Sur le candidat, le round-trip conserve `unknown` et les autres options, et la suppression volontaire de la clé restaure le défaut du serveur. La publication WS après changement d’options reste couverte par la recette 2D.
+
+**A9 avant/après.** Sur le backend de `fcd3c83`, 0 flow de réauthentification au lieu de 1 après un 401 au premier refresh d’une entrée enregistrée ou un 403 REST en cours d’usage (2 échecs par Core ; onboarding invalide et panne 503 sans réauthentification déjà verts). Après correction, HA ouvre un seul flow ; champ mot de passe sans valeur par défaut, clé refusée ou indisponibilité ne modifient pas l’entrée. La clé acceptée est vérifiée sur les deux routes avant reload ; mêmes entrée, entité enregistrée, URL et options, mêmes consommateurs WS, anciens producteurs terminés, REST/SSE rétablis. Aucune clé factice trouvée dans les snapshots et journaux capturés. Un refus REST n’invalide pas à lui seul le SSE déjà confirmé. Si l’entrée est supprimée pendant la validation réseau, la réponse tardive ne sauvegarde rien et ne recharge rien.
+
+**A10 reste ouverte.** Sonde Node ponctuelle sur les deux éléments du banc : avec un film conservé et `connected=false`, `sse_connected=false`, le panneau reste affiché sans message et l’horloge prédit 5 → 8 s en 3 s, tick actif. À vide, le message n’apparaît que dans le mode `message` ; `hide` masque la carte et `header_only` n’affiche pas le message. La recette REST 503 + SSE encore ouvert confirme qu’une panne REST seule ne signifie pas que les données sont périmées. Pas de recette sur durée réelle de panne : arbitrer la sémantique avant publication.
+
+| Vérification | Résultat et portée |
+|---|---|
+| Deux venv du banc, dépendances épinglées `requirements-{min,current}.txt` ; `pytest -p no:cacheprovider -c recette/pytest.ini -q recette -k 'spec_reauth or spec_network_options or poll_error or ready_error or reload_failure or rest_and_options or internal_sse_failure or disconnect_ready'` | 17 réussites par Core 2025.6.0 / CPython 3.13.18 et Core 2026.11.3 / CPython 3.14.10 ; 85 désélectionnés. REST/SSE factices sur loopback, vrais flows et WS HA ; avertissements du banc et des dépendances. |
+| `pytest -p no:cacheprovider -q tests -k 'bulk_options or model'` | 10 réussies, 12 désélectionnées ; CPython 3.13.5, pytest 9.2.0. |
+| Node 22.23.5, test existant `durable account/server targeting` et sonde A10 | 1 test et 1 sonde réussis. A13 : le moteur et l’éditeur utilisent déjà `server_id:username`, exemple YAML corrigé sans changer le code. Pas de nouveau rendu dans les navigateurs. |
+| A8, contrat Tracearr ; A14, `file` et `sha256sum` ; catalogues HA et syntaxe | Contrat des tags 2.6.0/2.7.0 issu de l’[audit initial](AUDIT_INITIAL.md#compatibilité-et-vérifications-officielles) et prérequis confirmés dans le code local. PNG 1254 × 1254 de contenu identique ; aucun essai de rendu HACS. 65 chemins et leurs placeholders identiques entre `strings.json`, `en.json` et `fr.json`. Compilation Python et syntaxe JS réussies. |
+
+Les preuves des lots 0 à 3.2 restent acquises. Pas de campagne globale, d’installation HACS ni d’essai sur un vrai dashboard ; voir la [préparation du lot 4](DEVELOPMENT_STATUS.md#état-des-14-anomalies-à-lentrée-du-lot-4).
+
 ## Recette visuelle légère
 
 `recette/cartes.html` monte le JS distribué, avec une source WS de carte synthétique. Les métriques sont mesurées sur les éléments réels du Shadow DOM. Sous Chromium (152.0.7977.82 pendant la validation) :

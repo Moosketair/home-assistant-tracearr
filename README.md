@@ -91,7 +91,7 @@ Tous les paramètres principaux sont disponibles dans l'éditeur graphique. Pour
 
 ## Compatibilité et limites
 
-- Home Assistant **2025.6+** ; Tracearr avec **API publique v2** (SSE à partir de Tracearr 2.7.0, sinon interrogation périodique).
+- Home Assistant **2025.6+**. Tracearr doit fournir les routes de l’API publique v2 **`/streams` et `/servers`**. Tracearr **2.6.0** ne fournit pas `/servers` et n’est pas compatible, même sans SSE ; **2.7.0** expose les deux routes REST et `/events`. Si `/events` est indisponible, l’intégration continue à interroger les deux routes REST.
 - Navigateurs récents Chromium, Firefox et Safari.
 - L'API publique utilisée ne permet pas de détecter automatiquement si un flux est local ou distant : les correspondances doivent être configurées manuellement.
 - L'arrêt à distance d'une lecture n'est pas implémenté.
@@ -100,6 +100,7 @@ Tous les paramètres principaux sont disponibles dans l'éditeur graphique. Pour
 ## Dépannage rapide
 
 - **Aucun capteur :** contrôlez l'URL, la clé API et **Paramètres → Système → Journaux**.
+- **Clé API refusée sur une intégration déjà configurée :** utilisez la demande de réauthentification de Home Assistant pour saisir une nouvelle clé. Ne supprimez pas l’intégration : ses entités et réglages sont conservés.
 - **Carte manquante ou ancienne interface :** vérifiez l'unique ressource JavaScript ci-dessus, redémarrez Home Assistant et rechargez le cache du navigateur.
 - **Affiche absente :** vérifiez que Tracearr fournit `poster_url` et consultez les erreurs réseau/journaux. Le fond cinéma reste sombre sans affiche.
 - **Carrousel immobile :** vérifiez le nombre de flux visibles, la lecture automatique, les préférences d'animation et la pause au survol.

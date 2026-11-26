@@ -1,21 +1,23 @@
-# État de reprise — livraison locale 3.1, 26 novembre 2026
+# État de reprise — livraison locale 3B.1, 26 novembre 2026
 
 **2A définitivement validée** sur `942de6ffa8d33b0ee10319fa39938c3f587f35aa`. **2B définitivement clôturée** : verdict indépendant 2B.4 **VALIDÉ** sur `f918150fd8fc6fa6f44d309aac3d4387d063d83b`, confirmé par le mainteneur. Les deux régressions relevées par 2B.2 sont corrigées ; les limites d’ordre faute de révision commune REST/SSE sont acceptées. Résultats indépendants : 21 Python, 72 JS, 61 sur chacun des Core 2025.6.0 et 2026.11.3, aucun échec, skip ou xfail. Aucun nouvel audit 2B requis.
 
-**2C définitivement clôturée** sur `8e63524a972e739d4ad0c92527e8ed2d962526bc` (`fix/sse-image-robustness`) : le contre-audit 2C.2 a conclu **VALIDÉ AVEC RÉSERVES NON BLOQUANTES**, verdict accepté par le mainteneur. Réserves acceptées : exception interne SSE non journalisée, préexistante, à examiner dans le lot 3 ; arrondi du timeout aiohttp accepté ; aucune incompatibilité concrète démontrée avec une éventuelle compression imposée par un proxy inverse.
+**2C définitivement clôturée** sur `8e63524a972e739d4ad0c92527e8ed2d962526bc` (`fix/sse-image-robustness`) : le contre-audit 2C.2 a conclu **VALIDÉ AVEC RÉSERVES NON BLOQUANTES**, verdict accepté par le mainteneur. L’exception interne SSE non journalisée a depuis été traitée en 3.1. Restent l’arrondi accepté du timeout aiohttp et l’absence d’incompatibilité concrète démontrée avec une éventuelle compression imposée par un proxy inverse.
 
 **2D définitivement clôturée** : le mainteneur valide 2D.1 sur `28bef59afbceffe6364c3e508037af6cf935d08d` (`fix/lan-wan-consistency`), sans contre-audit supplémentaire. A6 corrigé dans les deux cartes, sans changement backend ni modification de la priorité LAN/WAN.
 
 **2E définitivement clôturée** sur `b9c5880fe6ed2f2ad6f1b23acb4a5a7c3261e4dd` (`fix/frontend-responsive`), sans contre-audit supplémentaire, par décision du mainteneur. Référence 2E.1 : syntaxe JS valide, 75 tests Node réussis et 78 mesures par exécution sous Chromium et Firefox, en clair et en sombre (largeurs de carte 250, 320, 768, 1200 px). Aucun débordement ni chevauchement après correction, clavier du carrousel corrigé, cohérence LAN/WAN préservée, backend inchangé. Ces résultats sont repris de [RECETTE](RECETTE.md), pas rejoués pour la clôture.
 
-**3.1 livré localement** à partir du SHA 2E validé. A5 : les horloges, signatures et tentatives ne survivent plus aux sessions auxquelles elles appartiennent ; les ressources de la carte suivent son montage. Les badges conservent leur animation lors des actualisations. La réserve 2C.2 sur les exceptions internes SSE est traitée sans relancer le flux en boucle ni changer la récupération REST. Voir [RECETTE](RECETTE.md) pour les preuves ciblées et leurs limites. Les lots 6A, 6B et 6C restent uniquement documentés dans [ROADMAP](ROADMAP.md). Aucun audit indépendant ni lot suivant engagé.
+**3.1 définitivement clôturée** sur `fcd3c836e7e3a6b5f9c787c03979a7a400d7a95a` (`fix/frontend-lifecycle-performance`). Le contre-audit 3.2 **VALIDÉ AVEC RÉSERVE NON BLOQUANTE** confirme le nettoyage des horloges et des ressources, l’absence d’accumulation au remontage, la continuité du clignotement et la préservation de la progression, de la pause et du carrousel. Il confirme aussi le diagnostic des exceptions internes SSE, la fermeture du flux et la poursuite du polling REST. Réserve acceptée : si une session disparaît entièrement d’un snapshot puis revient avec une position source ancienne, le compteur peut reculer temporairement. Une session simplement filtrée n’est pas concernée. Examen futur en [6A](ROADMAP.md#lot-6a--affichage-en-pause-et-couleurs-des-badges) ; aucun changement en 3B.1.
+
+**3B.1 livré localement, en attente de validation globale.** A7 et A9 sont corrigées, A8/A13/A14 rectifiées dans la documentation. A10 reste ouverte : la dernière lecture connue peut sembler avancer pendant une panne complète. L’impact sur la fiabilité du dashboard justifie un arbitrage avant publication, pas un report silencieux. Voir les [preuves 3B.1](RECETTE.md#3b1--consolidation-finale).
 
 | Repère | Valeur |
 |---|---|
 | Dépôt | `Moosketair/home-assistant-tracearr`, copie de travail `/media/fat/proton_drive/dev/home-assistant-tracearr` lors de l’audit |
 | Référence fonctionnelle | `main` = tag `v0.1.16` = `443ce3859d09b67ccfd589d326d032753dc11d64` à la date de l’audit |
-| Travail local | `fix/frontend-lifecycle-performance`, créée depuis le SHA 2E validé en reprenant la documentation 6B déjà approuvée ; SHA de livraison : `git rev-parse fix/frontend-lifecycle-performance` |
-| Environnement | 3.1 : Debian, Node 22.23.5, Chromium 152, Firefox 140 ESR ; tests Python/API et Core ciblés sur 2025.6.0 et 2026.11.3. |
+| Travail local | `fix/consolidation-final`, créée au SHA 3.1 validé ; SHA de livraison : `git rev-parse fix/consolidation-final` |
+| Environnement | 3B.1 : Debian, Node 22.23.5, CPython 3.13.5, banc isolé Core 2025.6.0 et 2026.11.3 ; aucun HA de production. |
 | Déploiement du mainteneur | HA Container géré par Dockge Enhanced, **non utilisé** ; aucune action distante de publication dans cette phase |
 | GitHub à la date de revue | Stable vérifiée sur le bon SHA, deux workflows verts sur ce SHA, une issue musique ouverte, aucune PR ouverte |
 
@@ -31,6 +33,27 @@
 
 **Changement 2A.1.** Un abonné WS écoute désormais le domaine. Un relais par entrée alimente ce signal à partir des notifications existantes ; retrait et remplacement d’entrée sont visibles même sans trafic d’une autre entrée. Le code des producteurs REST/SSE, les entités, le JS et les configurations restent ceux de la stable. Le contre-audit doit notamment vérifier les notifications aux frontières du reload, le rejet des sources retirées et la libération des listeners sur déconnexion. Les trois xfail A1 sont devenus des tests ordinaires et six scénarios ont été ajoutés. Résultat final : **21 Python et 72 JS historiques réussis ; 12 réussis et 6 xfail stricts A2 sur chaque Core**, sans échec inattendu.
 
-**Ce qui reste à établir.** Installation HACS/HA complète, comportement avec de vraies sessions des trois serveurs, performances longue durée, mobile tactile, Safari et intégration aux thèmes de dashboards HA (le banc autonome couvre clair et sombre). La compatibilité pré-SSE annoncée n’est pas générale : `/servers` est obligatoire et absent de Tracearr 2.6.0. Les options historiques ne doivent pas être réécrites pour résoudre les problèmes de lecture ou d’édition.
+## État des 14 anomalies à l’entrée du lot 4
+
+| Anomalie | État | Preuve ou décision |
+|---|---|---|
+| A1 — abonnement WS perdu au reload | Corrigée et validée | 2A, socket existante et remplacement de génération. |
+| A2 — écrasement d’une mutation SSE par REST | Corrigée et validée | 2B, contre-audit 2B.4 ; limites d’ordre et de saturation dans [ARCHITECTURE](ARCHITECTURE.md). |
+| A3 — réponse image tronquée | Corrigée et validée | 2C, lecture bornée jusqu’à EOF. |
+| A4 — tâche SSE arrêtée par une trame atypique | Corrigée et validée | 2C, filtrage ; diagnostic des pannes internes résiduelles validé en 3.1. |
+| A5 — rétention des ressources et horloges | Corrigée et validée | 3.2, réserve non bloquante sur disparition puis retour d’une session. |
+| A6 — débit périmé après changement des règles réseau | Corrigée et validée | 2D, cohérence des deux cartes sans reload. |
+| A7 — JSON refusant `unknown` | Corrigée en 3B.1, à valider | Aller-retour des options sur les deux Core ; aucune migration. |
+| A8 — compatibilité REST annoncée trop largement | Corrigée en documentation, à valider | `/streams` et `/servers` requis ; Tracearr 2.6.0 exclu, sans revendication de test runtime sur 2.7.0. |
+| A9 — clé révoquée non remplaçable en place | Corrigée en 3B.1, à valider | Réauthentification sur la même entrée vérifiée sur les deux Core ; interface réelle à vérifier. |
+| A10 — lecture périmée encore présentée comme active | Ouverte, potentiellement bloquante pour la publication | Panne complète confirmée ; arbitrer l’indication de péremption, le gel/reprise et les modes à vide, sans assimiler REST indisponible à SSE coupé. |
+| A11 — débordement de badges | Corrigée et validée | 2E, matrice de largeurs, thèmes et moteurs. |
+| A12 — clavier dépendant du glissement souris | Corrigée et validée | 2E, flèches clavier en focus indépendantes du drag. |
+| A13 — exemple de compte individuel trompeur | Corrigée en documentation, à valider | Le moteur et le sélecteur utilisaient déjà `server_id:username` ; aucune réécriture YAML. |
+| A14 — dimensions d’icône historiques inexactes | Corrigée en documentation, à valider | Deux PNG identiques de 1254 × 1254 ; aucun défaut HACS établi ni changement de marque. |
+
+Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
+
+**Suite recommandée, sur autorisation : lot 4 sur un SHA identifié.** Rejouer la non-régression, obtenir HACS et hassfest sur ce SHA et faire une installation puis une mise à niveau HACS dans un HA jetable. Sur un vrai dashboard HA hors production : tester ressources storage/YAML, Sections, les deux cartes et leur éditeur, sauvegarde et relecture des options existantes, réauthentification FR/EN, sessions et coupures simulées, thèmes et clavier/tactile. Vérifier l’affichage réel de l’icône sans le confondre avec la validation HACS. Safari, longue durée, lecteurs physiques Plex/Jellyfin/Emby et proxy réel n’ont pas été éprouvés. Le lot 4 peut commencer sans correction d’A10, mais la décision d’acceptation ou de correction doit précéder la publication. Ne pas engager 6A/6B/6C.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.

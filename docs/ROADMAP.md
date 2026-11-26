@@ -10,12 +10,13 @@ Les phases 0 et 1.1 sont validées. **2A** est définitivement validée sur `942
 
 ## Ordre proposé après validation
 
+**3.1 clôturée** après le contre-audit 3.2 (validé avec réserve non bloquante) sur `fcd3c83`. **3B.1 livré localement** : A7 et A9 corrigées, A8/A13/A14 rectifiées dans les guides ou l’historique. A10 seule reste ouverte parmi les 14 anomalies ; voir [l’état de reprise](DEVELOPMENT_STATUS.md#état-des-14-anomalies-à-lentrée-du-lot-4).
+
 | Ordre | Lot proposé | Critère de sortie avant livraison |
 |---|---|---|
-| 1 | **Options et compatibilité** (A7, A8, A13) : aller-retour JSON et précisions sur la version de Tracearr et la clé de compte ; ni défaut de géométrie ni interaction visuelle. | `unknown` explicite conservé ; anciens YAML toujours lisibles sans migration obligatoire. A6 est déjà clôturée en 2D. |
-| 2 | **Autres propositions de l’audit** (A9, A10) : réauthentification et présentation des données périmées, qui exige une décision sur les états de disponibilité et le gel de l’horloge. | Accord de périmètre avant modification ; pas de changement de sémantique implicite dans un lot visuel. |
-| 3 | **Contenir le coût des dashboards** : la rétention A5, le cycle de vie des cartes et la phase des badges sont corrigés localement en 3.1. Restent l’étude éventuelle du trafic WS et les performances longue durée. | Comparer abonnés, octets, temps de rendu et mémoire longue durée avant d’envisager d’autres optimisations. Tactile et vrais thèmes HA restent à éprouver. |
-| 4 | **Consolider validation et maintenance** : matrice Core minimum/stable, fixtures anonymes Plex/Jellyfin/Emby, smoke HA et navigateur dans la CI selon coût, traduction progressive, précision sur les dimensions de l’icône (A14, documentation historique sans panne avérée). | Contrats de ressource, flows, options et entités testés sans production ; contrôles reproductibles sur le SHA candidat. Pas de réécriture globale du JS proposée sans mesures et tests d’équivalence. |
+| 4 | **Validation globale** : matrice Core minimum/stable, non-régression avec fixtures Plex/Jellyfin/Emby, installation/mise à niveau HACS et essai sur un vrai dashboard HA isolé. | Vérifier HACS et hassfest sur le SHA candidat ; vérifier les flows, options, ressources et cartes réels. Trancher A10 avant toute publication. |
+| À arbitrer | **A10 — données périmées** : convenir de l’indication « dernière lecture connue », des règles de gel et de reprise et du comportement à vide (`hide`, `header_only`, message). | Ne pas marquer périmé un flux encore alimenté par SSE sur une panne REST seule ; vérifier le mode REST seul sain, la panne des deux transports et la reprise. Accord requis avant modification de comportement. |
+| Ultérieur | **Coût des dashboards** : étudier si nécessaire le trafic WS et les performances longue durée ; A5 est clôturée en 3.1. | Comparer abonnés, octets, temps de rendu et mémoire avant d’envisager d’autres optimisations. Pas de refonte globale sans mesures et tests d’équivalence. |
 | 6A | [**Affichage en pause et couleurs des badges du bandeau**](#lot-6a--affichage-en-pause-et-couleurs-des-badges) | Conserver les options de masquage et l’apparence des anciennes configurations par défaut. |
 | 6B | [**Badges techniques personnalisables**](#lot-6b--badges-techniques-personnalisables) : identité visuelle propre à Tracearr HA pour les panneaux de lecture. | Cinq styles avec aperçu dans l’éditeur ; rendu compact, lisible en thèmes clair et sombre ; style classique conservé par défaut. |
 | 6C | [**Lectures musicales**](#lot-6c--lectures-musicales), [demande #2](https://github.com/Moosketair/home-assistant-tracearr/issues/2). | Définir le repli si les métadonnées manquent et préserver la compatibilité des cartes et des lectures vidéo. Confirmation du périmètre avant développement. |
@@ -27,6 +28,8 @@ La priorité d’un lot n’est pas une promesse de publication. Garder les issu
 Préparation documentaire uniquement. En pause, conserver le temps restant à gauche ; afficher le message orange « En pause » à droite à la place de l’heure de fin. Recalculer l’heure de fin à la reprise et préserver les options de masquage existantes.
 
 Pour les badges du bandeau général, prévoir une couleur normale configurable par badge, indépendamment de sa couleur spécifique à la valeur zéro. Sans nouveau réglage, préserver l’apparence des configurations existantes.
+
+**Réserve 3.2 à examiner en 6A :** une session entièrement absente d’un snapshot puis revenue avec une position source ancienne peut présenter un recul temporaire du compteur. Les sessions simplement filtrées ne sont pas concernées. Étudier, si nécessaire, une conservation temporaire et bornée des états récemment supprimés, sans réintroduire la rétention mémoire corrigée en 3.1. Réserve acceptée, non corrigée en 3B.1.
 
 ### Lot 6B — Badges techniques personnalisables
 

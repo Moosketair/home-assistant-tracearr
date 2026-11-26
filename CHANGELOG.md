@@ -10,6 +10,8 @@ Les changements sont classés par version publique. Les préversions et les anci
 - Les cartes libèrent les horloges des lectures terminées et les ressources inutilisées, notamment au démontage.
 - Le clignotement des badges ne repart plus de zéro lors des mises à jour de valeurs ou de sessions.
 - Une panne interne inattendue du flux SSE est journalisée sans données sensibles ; le rafraîchissement REST continue.
+- L’éditeur JSON LAN/WAN conserve les exceptions « Non classé » déjà enregistrées.
+- Après refus de la clé API par les routes REST, Home Assistant permet de la remplacer sans recréer l’intégration ni perdre ses entités et options.
 
 ## 0.1.16 — 2026-11-05
 
@@ -80,7 +82,7 @@ Les changements sont classés par version publique. Les préversions et les anci
 
 ## 0.1.11 Alpha (2026-11-04)
 
-- Remplacement de l’icône locale de l’intégration par la variante minimaliste validée : maison cyan, bouton lecture et barre de progression, en 256 et 512 pixels.
+- Remplacement de l’icône locale de l’intégration par la variante minimaliste validée : maison cyan, bouton lecture et barre de progression. Précision : les deux fichiers livrés (`icon.png` et `icon@2x.png`) sont identiques et mesurent 1254 × 1254 pixels.
 - Pas de reprise du logo officiel Tracearr ni du logo protégé Home Assistant.
 - Documentation du problème connu HACS : absence d’icône dans les listes HACS malgré son affichage dans les intégrations Home Assistant.
 - Mise à jour de la version et du chargement des ressources. Aucun changement fonctionnel à l’API ni aux cartes.
