@@ -1,4 +1,4 @@
-/* Tracearr HA Lovelace cards 0.1.16 - no external frontend dependencies. */
+/* Tracearr HA Lovelace cards 0.1.17b1 - no external frontend dependencies. */
 (() => {
   "use strict";
   if (customElements.get("tracearr-streams-card")) return;

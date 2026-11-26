@@ -1,10 +1,14 @@
 """Regression checks for the HA LovelaceData mode rename, without HA installed."""
 import ast
 import asyncio
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
 FRONTEND = Path(__file__).resolve().parents[1] / 'custom_components/tracearr_ha/frontend.py'
+VERSION = json.loads(FRONTEND.with_name('manifest.json').read_text())['version']
+MODULE = '/tracearr_ha/tracearr-card.js'
+RESOURCE = {'res_type': 'module', 'url': f'{MODULE}?v={VERSION}'}
 
 
 def load_register_function():
@@ -61,17 +65,29 @@ def test_storage_mode_2026_has_no_mode_attr():
     resources = Resources()
     hass = SimpleNamespace(data={'lovelace': SimpleNamespace(resource_mode='storage', resources=resources)}, http=Http())
     asyncio.run(load_register_function()(hass))
-    assert resources.created == [{'res_type': 'module', 'url': '/tracearr_ha/tracearr-card.js?v=0.1.16'}]
+    assert resources.created == [RESOURCE]
     assert len(hass.http.paths) == 1
     assert len(hass.http.views) == 1
 
 
 def test_legacy_mode_and_existing_resource_updated():
-    resources = Resources([{'id': 'old', 'res_type': 'module', 'url': '/tracearr_ha/tracearr-card.js?v=0.1.0'}])
+    resources = Resources([{'id': 'old', 'res_type': 'module', 'url': f'{MODULE}?v=0.1.16'}])
     hass = SimpleNamespace(data={'lovelace': SimpleNamespace(mode='storage', resources=resources)}, http=Http())
     asyncio.run(load_register_function()(hass))
     assert resources.created == []
-    assert resources.updated == [('old', {'res_type': 'module', 'url': '/tracearr_ha/tracearr-card.js?v=0.1.16'})]
+    assert resources.updated == [('old', RESOURCE)]
+
+
+def test_current_resource_unchanged():
+    resources = Resources([{'id': 'current', **RESOURCE}])
+    hass = SimpleNamespace(data={'lovelace': SimpleNamespace(resource_mode='storage', resources=resources)}, http=Http())
+    asyncio.run(load_register_function()(hass))
+    assert not resources.created and not resources.updated
+
+
+def test_manifest_version_matches_distributed_js():
+    banner = (FRONTEND.parent / 'frontend' / 'tracearr-card.js').read_text().splitlines()[0]
+    assert banner.startswith(f'/* Tracearr HA Lovelace cards {VERSION} - ')
 
 
 def test_yaml_mode_does_not_edit_resources():
