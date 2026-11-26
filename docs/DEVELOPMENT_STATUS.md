@@ -1,10 +1,12 @@
-# État de reprise — 6B.2 livré localement
+# État de reprise — préparation locale 6D.1
 
-**6B.2 livré localement** sur `feature/lovelace-grid-sizing` depuis `75b6960b4d152c4a71e731dd249bd677b59ea966`. Hauteur automatique dans Sections, bandeau seul sur une ligne quand il tient, finitions du style Technique et suppression du suffixe source visible. Voir [mesures et captures](RECETTE.md#6b2--dimensionnement-lovelace-et-finitions). Aucun changement du backend ou de la version. Ni préparation de publication ni travail sur 6C.
+**6A et 6B clôturés par le mainteneur**, sans contre-audit indépendant supplémentaire. Base commune validée : `bb1ef7f32a5d16560a4792d22223e71e14d93368` (`feature/lovelace-grid-sizing`). Le candidat local `v0.1.18-beta.1` est préparé sur `release/v0.1.18` (`21af98e8d1b3f70851f5c26e45f89f6832a73698`). [Recette 6D.1 terminée localement](RECETTE_6D1.md) sur Core 2026.11.3 : mise à niveau simulée depuis `v0.1.17` et persistance dans le vrai Lovelace validées. HACS/Marketplace reste à éprouver après une éventuelle prépublication ; aucun accord de publication.
 
-**6B.1 examiné par le mainteneur**, branche `feature/technical-badge-styles` depuis `b526cdf9b8285a151e59e16ceca74150d81ef16f`. Les [cinq styles, dispositions, couleurs et l’organisation de l’éditeur](RECETTE.md#6b1--badges-techniques) sont conservés.
+**6B.2 validé par le mainteneur**, depuis `75b6960b4d152c4a71e731dd249bd677b59ea966`. Hauteur automatique dans Sections, bandeau seul sur une ligne quand il tient, finitions du style Technique et suppression du suffixe source visible. Voir [mesures et captures](RECETTE.md#6b2--dimensionnement-lovelace-et-finitions).
 
-**6A.1 définitivement validé par le mainteneur** sur `b526cdf9`, branche `feature/pause-and-badge-colors` depuis la stable `3587f832532b4e0285699c76df6d30110ac619ad`. Pause et couleurs du bandeau éprouvées sur le [banc frontend](RECETTE.md#6a1--pause-et-couleurs-des-badges). Réserve 3.2 inchangée. Persistance Lovelace et recette HA à vérifier lors de la validation commune 6A/6B.
+**6B.1 validé par le mainteneur**, branche `feature/technical-badge-styles` depuis `b526cdf9b8285a151e59e16ceca74150d81ef16f`. Voir [les cinq styles, dispositions, couleurs et l’organisation de l’éditeur](RECETTE.md#6b1--badges-techniques).
+
+**6A.1 définitivement validé par le mainteneur** sur `b526cdf9`, branche `feature/pause-and-badge-colors` depuis la stable `3587f832532b4e0285699c76df6d30110ac619ad`. Pause et couleurs du bandeau éprouvées sur le [banc frontend](RECETTE.md#6a1--pause-et-couleurs-des-badges). Réserve 3.2 inchangée.
 
 **Lot 4.1 définitivement clôturé.** Verdict indépendant 4.1.4 **VALIDÉ** sur `41403f51b665a7e839fe7474ed7edd274fb04b0d`, confirmé par le mainteneur : **14 anomalies sur 14 validées**, dont A9. Les réserves déjà documentées sont acceptées.
 
@@ -69,6 +71,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** arrêt après la livraison locale de 6B.2. Aucune préparation de publication sans autorisation. Le lot 6C reste dans la [feuille de route](ROADMAP.md) et nécessite une autorisation distincte.
+**Suite :** arrêt après la livraison locale 6D.1. Aucune action de publication sans autorisation explicite. Le lot 6C reste dans la [feuille de route](ROADMAP.md) et nécessite une autorisation distincte.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.

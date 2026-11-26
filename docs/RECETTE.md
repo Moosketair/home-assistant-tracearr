@@ -398,3 +398,7 @@ Sur la carte auto sans titre, **56 → 337,08 → 679,39 → 56 px** pour 0 → 
 **Frontend ciblé :** Node 22.23.5, **92 tests réussis**, syntaxe JS et `git diff --check` valides. `recette/cartes.html?technical-finish` : 9 cas par navigateur/thème sous Chromium 152 et Firefox 140.15 ESR, carte à 250, 320 et 768 px, plus aperçu anglais. Aucun recouvrement ou débordement ; contraste minimal **8,39:1** sur ces échantillons. Descriptions réelles ou statiques selon disponibilité, absence de suffixe source visible et d’une flèche fictive, distinction conservée dans le libellé accessible. Les sondes `?pause-colors`, `?blink`, `?lan-wan`, `?responsive` et `?lifecycle` passent dans les deux moteurs et thèmes. Les 480 cas de 6B.1 et les validations Python/Core antérieures sont réutilisés, pas relancés intégralement.
 
 **Captures du vrai tableau de bord Sections**, frontend 20250531.2 : [avant](../recette/preuves/6b.2/sections-avant.png) · [après](../recette/preuves/6b.2/sections-apres.png) · [lectures actives](../recette/preuves/6b.2/sections-lectures.png).
+
+## 6D.1 — Recette commune et candidat bêta
+
+Voir le [rapport 6D.1](RECETTE_6D1.md) pour la mise à niveau locale depuis `v0.1.17`, les essais Lovelace et la distinction entre contrôles exécutés et preuves réutilisées.

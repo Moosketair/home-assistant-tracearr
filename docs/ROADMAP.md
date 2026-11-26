@@ -67,9 +67,11 @@ Le rendu doit être réalisé en HTML/CSS, sans fichier image, sans logo officie
 
 N’afficher que les formats réellement identifiables ; les inconnus restent neutres. Proposer **Destination uniquement** et **Source → destination** pour les valeurs fiables ; si la destination manque, garder la valeur source sans flèche. Sans choix explicite, préserver la sémantique historique ; Classique sans personnalisation conserve aussi la présentation historique. Moteur commun aux deux cartes et à l’aperçu, réutilisable en 6C sans ouvrir ce lot. Aucun changement backend ni de version.
 
-Voir [les réglages et limites du contrat](CONFIGURATION.md#badges-techniques-des-panneaux-de-lecture) et [la recette 6B.1](RECETTE.md#6b1--badges-techniques). Validation graphique du mainteneur requise avant toute préparation de publication ; persistance Lovelace et recette HA prévues en validation commune 6A/6B.
+Voir [les réglages et limites du contrat](CONFIGURATION.md#badges-techniques-des-panneaux-de-lecture) et [la recette 6B.1](RECETTE.md#6b1--badges-techniques).
 
 **6B.2 — Dimensionnement Lovelace et finitions.** Les cinq styles de 6B.1 sont conservés. En Sections, utiliser la hauteur automatique par défaut ; un en-tête seul qui tient occupe une ligne native, et le contenu plus grand s’ajuste sans forcer de multiples de lignes. Les tailles enregistrées restent prioritaires. Le style Technique reçoit des descriptions compactes de formats, sans inventer de propriétés de lecture. Quand la sortie est inconnue, plus de mention « source » visible : l’infobulle et le libellé accessible portent la précision. Aucun réglage supplémentaire, aucune préparation de publication ni ouverture de 6C.
+
+**Clôture de 6A et 6B.** Le mainteneur confirme 6A.1, 6B.1 et 6B.2 sur la base commune `bb1ef7f`, sans nouvel audit indépendant. La [recette commune 6D.1](RECETTE_6D1.md) et la préparation locale de `v0.1.18-beta.1` sont autorisées, pas sa publication.
 
 ### Lot 6C — Lectures musicales
 
