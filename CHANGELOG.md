@@ -13,6 +13,7 @@ Les changements sont classés par version publique. Les préversions et les anci
 - L’éditeur JSON LAN/WAN conserve les exceptions « Non classé » déjà enregistrées.
 - Après refus de la clé API par les routes REST, Home Assistant permet de la remplacer sans recréer l’intégration ni perdre ses entités et options.
 - Si Tracearr ne peut plus actualiser les lectures, les deux cartes signalent les données périmées et figent les temps. Elles reprennent depuis le prochain snapshot fiable, sans affecter les autres instances.
+- Une réponse REST inexploitable ne valide plus une nouvelle clé et ne remplace plus les dernières données valides ni les lectures déjà reçues par SSE.
 
 ## 0.1.16 — 2026-11-05
 

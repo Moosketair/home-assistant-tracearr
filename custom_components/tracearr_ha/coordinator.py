@@ -13,7 +13,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import TracearrAuthError, TracearrClient, TracearrRateLimited, TracearrUnavailable
-from .model import stats, stream_mutation
+from .model import snapshot_rows, stats, stream_mutation
 
 _LOGGER = logging.getLogger(__name__)
 _MAX_MUTATIONS = 4096
@@ -98,27 +98,26 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
                 # servers GET must not override that potentially newer response.
                 self._stream_changes = _RefreshChanges()
                 try:
+                    response = await self.client.streams()
+                    self._server_changes = _RefreshChanges()
+                    server_response = await self.client.servers()
                     try:
-                        response = await self.client.streams()
-                        self._server_changes = _RefreshChanges()
-                        server_response = await self.client.servers()
-                    except ValueError:
-                        raise TracearrUnavailable("Invalid Tracearr JSON snapshot") from None
-                    stream_rows, server_rows = response.get("data"), server_response.get("data")
-                    if not isinstance(stream_rows, list) or not isinstance(server_rows, list):
-                        raise TracearrUnavailable("Invalid Tracearr snapshot envelope")
-                    if any(not isinstance(s, dict) or not isinstance(s.get("id"), str) or not s["id"]
-                           for s in stream_rows):
-                        raise TracearrUnavailable("Invalid Tracearr stream identity")
-                    streams = {s["id"]: s for s in stream_rows}
-                    servers = {s["server_id"]: s for s in server_rows if isinstance(s, dict) and isinstance(s.get("server_id"), str)}
-                    # No await from reconciliation through HA's publication.
-                    self.streams = self._stream_changes.merge(streams, self.streams)
-                    self.servers = self._server_changes.merge(servers, self.servers)
-                    self._streams_reconciled = not self._stream_changes.overflow
+                        streams = snapshot_rows(response)
+                        servers = snapshot_rows(server_response, servers=True)
+                    except ValueError as exc:
+                        raise TracearrUnavailable(str(exc)) from None
+                    streams = self._stream_changes.merge(streams, self.streams)
+                    servers = self._server_changes.merge(servers, self.servers)
+                    reconciled = not self._stream_changes.overflow
+                    last_sync = time.time()
+                    # Prepare the published data (including stats) before
+                    # committing either cache. No await in this section.
+                    data = self._snapshot(streams, servers, True, reconciled, last_sync)
+                    self.streams, self.servers = streams, servers
+                    self._streams_reconciled = reconciled
                     self.connected = True
-                    self.last_sync = time.time()
-                    return self.snapshot()
+                    self.last_sync = last_sync
+                    return data
                 finally:
                     self._stream_changes = self._server_changes = None
         except (TracearrUnavailable, TracearrAuthError) as exc:
@@ -133,14 +132,17 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
             self._refresh_tasks.discard(task)
 
     def snapshot(self) -> dict:
+        return self._snapshot(self.streams, self.servers, self.connected, self._streams_reconciled, self.last_sync)
+
+    def _snapshot(self, streams, servers, connected, reconciled, last_sync) -> dict:
         return {
-            "streams": list(self.streams.values()),
-            "servers": list(self.servers.values()),
-            "stats": stats(self.streams),
-            "connected": self.connected,
+            "streams": list(streams.values()),
+            "servers": list(servers.values()),
+            "stats": stats(streams),
+            "connected": connected,
             "sse_connected": self.sse_connected,
-            "streams_stale": not self.sse_connected and (not self.connected or not self._streams_reconciled),
-            "last_sync": self.last_sync,
+            "streams_stale": not self.sse_connected and (not connected or not reconciled),
+            "last_sync": last_sync,
         }
 
     def _emit(self) -> None:

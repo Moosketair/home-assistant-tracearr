@@ -2,6 +2,8 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 path = Path(__file__).resolve().parents[1] / "custom_components/tracearr_ha/model.py"
 spec = importlib.util.spec_from_file_location("tracearr_model", path)
 model = importlib.util.module_from_spec(spec)
@@ -39,3 +41,27 @@ def test_seek_back_and_media_change():
     assert streams["same-session"]["progress_ms"] == 20000  # real seek backward
     model.apply_event(streams, {"type": "stream.updated", "data": {**a, "progress_ms": 0, "media_id": "movie-b"}})
     assert streams["same-session"]["progress_ms"] == 0  # new media resets progress
+
+
+def test_snapshot_rows_preserve_optional_values_and_empty_collection():
+    row = {"id": "a", "bitrate": None, "duration_ms": None,
+           "library_id": None, "genres": None, "future_metadata": {"nullable": None}}
+    rows = model.snapshot_rows({"data": [row]})
+    assert rows == {"a": row}
+    assert model.stats(rows)["bandwidth_mbps"] == 0
+    assert model.snapshot_rows({"data": []}, servers=True) == {}
+    assert model.snapshot_rows({"data": [{"server_id": "s", "reason": None}]}, servers=True) == {
+        "s": {"server_id": "s", "reason": None},
+    }
+
+
+@pytest.mark.parametrize("rows", [
+    [{"id": "a", "bitrate": False}],
+    [{"id": "a", "progress_ms": "42"}],
+    [{"id": "a", "is_transcode": "false"}],
+    [{"id": "a", "duration_ms": {}}],
+    [{"id": "a"}, {"id": "a"}],
+])
+def test_snapshot_rows_reject_invalid_essential_values(rows):
+    with pytest.raises(ValueError, match="^Invalid Tracearr streams row$"):
+        model.snapshot_rows({"data": rows})

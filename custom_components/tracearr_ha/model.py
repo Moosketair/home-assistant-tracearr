@@ -13,17 +13,41 @@ def _valid_measurement(value: Any) -> bool:
 
 
 def _valid_stream_fields(fields: dict) -> bool:
-    """Validate consumed SSE fields without requiring a complete REST row."""
+    """Validate fields consumed by the cache, stats and playback views."""
     return (
         ("progress_ms" not in fields or _valid_measurement(fields["progress_ms"]))
         and (fields.get("bitrate") is None or _valid_measurement(fields["bitrate"]))
+        and (fields.get("duration_ms") is None or _valid_measurement(fields["duration_ms"]))
         and ("is_transcode" not in fields or isinstance(fields["is_transcode"], bool))
         and ("state" not in fields or isinstance(fields["state"], str) and bool(fields["state"]))
         and all(fields.get(key) is None or isinstance(fields[key], str) for key in (
             "server_id", "media_id", "rating_key", "media_title", "video_decision",
-            "audio_decision", "poster_url", "user_avatar_url",
+            "audio_decision", "poster_url", "user_avatar_url", "username", "server_name",
         ))
     )
+
+
+def _valid_server_fields(fields: dict) -> bool:
+    return all(fields.get(key) is None or isinstance(fields[key], str) for key in (
+        "server_name", "server_type", "status", "reason",
+    ))
+
+
+def snapshot_rows(response: dict, *, servers: bool = False) -> dict[str, dict]:
+    """Validate and index one REST collection without altering its rows."""
+    resource, key, valid = ("servers", "server_id", _valid_server_fields) if servers else (
+        "streams", "id", _valid_stream_fields,
+    )
+    data = response.get("data")
+    if not isinstance(data, list):
+        raise ValueError(f"Invalid Tracearr {resource} envelope")
+    rows = {}
+    for row in data:
+        if (not isinstance(row, dict) or not isinstance(identity := row.get(key), str)
+                or not identity or identity in rows or not valid(row)):
+            raise ValueError(f"Invalid Tracearr {resource} row")
+        rows[identity] = row
+    return rows
 
 
 def transcode_kind(stream: dict) -> str:

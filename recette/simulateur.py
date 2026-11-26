@@ -39,6 +39,7 @@ class Tracearr:
         self.no_clients = asyncio.Event()
         self.no_clients.set()
         self.errors = {}
+        self.responses = {}
         self.gates = {}
 
     def session(self, sid, server=0, **fields):
@@ -106,7 +107,9 @@ class Tracearr:
                 await gate.wait()
             await response.write_eof(PNG[8:])
             return response
-        if resource == "servers":
+        if resource in self.responses:
+            result = deepcopy(self.responses[resource])
+        elif resource == "servers":
             result = {"data": deepcopy(self.servers), "tracearr_version": "3.2.1"}
         elif resource == "streams":
             result = {"data": deepcopy(list(self.streams.values())), "summary": {"total": len(self.streams)}}

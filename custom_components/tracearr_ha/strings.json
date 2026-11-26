@@ -24,7 +24,8 @@
     "abort": {
       "already_configured": "This Tracearr instance is already configured",
       "reauth_successful": "The Tracearr API key was updated",
-      "reauth_entry_removed": "The Tracearr integration entry was removed"
+      "reauth_entry_removed": "The Tracearr integration entry was removed",
+      "reauth_interrupted": "The Tracearr integration changed while the key was being checked. No key was saved."
     }
   },
   "options": {

@@ -11,6 +11,7 @@ from homeassistant.helpers import selector
 
 from .api import TracearrAuthError, TracearrClient, TracearrError
 from .const import CONF_ALIASES, CONF_AVATARS, CONF_NETWORK_LOCATIONS, CONF_TOKEN, CONF_URL, DOMAIN
+from .model import snapshot_rows
 
 
 def clean_url(value: str) -> str:
@@ -56,20 +57,31 @@ class TracearrConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not token:
                 errors["base"] = "invalid_auth"
             else:
-                client = TracearrClient(async_get_clientsession(self.hass), entry.data[CONF_URL], token)
+                previous_data = entry.data
+                client = TracearrClient(async_get_clientsession(self.hass), previous_data[CONF_URL], token)
                 try:
-                    await client.streams()
-                    await client.servers()
+                    streams = await client.streams()
+                    servers = await client.servers()
+                    snapshot_rows(streams)
+                    snapshot_rows(servers, servers=True)
                 except TracearrAuthError:
                     errors["base"] = "invalid_auth"
                 except (TracearrError, ValueError):
                     errors["base"] = "cannot_connect"
-                else:
+
+                entries = self.hass.config_entries
+                if entries.async_get_entry(entry.entry_id) is not entry:
+                    return self.async_abort(reason="reauth_entry_removed")
+                # On both Core versions a concurrent reload aborts the flow,
+                # but does not stop a step already awaiting network I/O.
+                if entry.data is not previous_data or not any(
+                    flow["flow_id"] == self.flow_id
+                    for flow in entry.async_get_active_flows(self.hass, {"reauth"})
+                ):
+                    return self.async_abort(reason="reauth_interrupted")
+                if not errors:
                     # Options already have a live-update listener. Schedule one
                     # reload explicitly for this credential change only.
-                    entries = self.hass.config_entries
-                    if entries.async_get_entry(entry.entry_id) is not entry:
-                        return self.async_abort(reason="reauth_entry_removed")
                     entries.async_update_entry(entry, data={**entry.data, CONF_TOKEN: token})
                     entries.async_schedule_reload(entry.entry_id)
                     return self.async_abort(reason="reauth_successful")

@@ -281,6 +281,23 @@ Les preuves des lots 0 à 3.2 restent acquises. Pas de campagne globale, d’ins
 
 Les validations antérieures restent acquises ; la campagne globale n’a pas été relancée. Le banc ne vérifie ni l’installation HACS ni le shell d’un vrai dashboard HA. La détection dépend des échecs/confirmations des producteurs, pas du silence SSE ; aucun nouvel indicateur pour une perte du WebSocket HA lui-même, qui reste distincte d’une panne Tracearr.
 
+### 4.1.1 — corrections ciblées A9 et A10
+
+**Référence.** Audit 4.1 sur `f2db1a5dded2a2a2bbc41c6d08646bcaf974a0e7` : refus de validation pour A9/A10 ; douze anomalies restent validées (A1–A8, A11–A14). Résultats communiqués par l’audit, non rejoués : 22 Python, 81 JS, 106 par Core, aucun skip/xfail et hassfest local réussi.
+
+**Avant, sur les deux Core.** Une sonde sur le parent confirme le quadruplet A9 après `/servers` HTTP 200 `{}` : `reauth_successful`, clé écrite, `SETUP_RETRY`, zéro entrée sur le WS. Le test A10 reproduit `unknown_error` sur `tracearr_ha/get` pour deux entrées lorsque le débit du snapshot de reprise est textuel. Un second test reproduit l’échec avec un indicateur de transcodage textuel alors qu’une progression SSE valide est arrivée entre les deux GET. Le reload concurrent pouvait annoncer le succès d’un flow que HA avait déjà annulé. Comparaison avec les deux specs mises à jour : 5 échecs discriminants, 2 contrôles verts et le refus SSE seul désélectionné, par Core.
+
+**Après.** Les enveloppes des deux routes et les lignes indispensables utilisent le même validateur dans le formulaire et le coordinateur. Pas d’écriture de clé ni de reload sur HTTP 200 inexploitable. Une tentative valide préserve l’ID de l’entrée, les options et le nom personnalisé de l’entité. Suppression et reload concurrents empêchent l’écriture tardive ; refus SSE seul sans réauthentification ; aucune clé factice dans les messages WS ou les journaux capturés. Le succès annonce une clé vérifiée et enregistrée, non l’achèvement du reload.
+
+Sur rejet REST, le cache valide, `last_sync` et les statistiques restent cohérents ; `connected=false` et échec HA, `streams_stale=true` si le SSE est coupé, mais `false` s’il reste confirmé. `get` et l’abonnement déjà ouvert renvoient les deux entrées et la progression de la seconde ; son capteur suit le passage à 4 Mbit/s. La progression SSE concurrente et `bitrate:null` restent publiés. Une réponse valide restaure l’état et les capteurs, puis `data:[]` retire la dernière session et remet le compteur à zéro. Aucun masquage d’entrée dans le WS.
+
+| Contrôle exécuté | Résultat |
+|---|---|
+| `pytest -p no:cacheprovider -q tests/test_api.py tests/test_model.py tests/test_translations.py` | 17 réussites sur CPython 3.13.5, pytest 9.2.0. Parité des 66 chemins et de leurs paramètres vérifiée dans `strings.json`, `en.json` et `fr.json`. |
+| `pytest -p no:cacheprovider -c recette/pytest.ini -q recette -k 'spec_snapshot_validation or spec_reauth or spec_transport or spec_race or spec_websocket or spec_network_options or bad_sse_frame'` | 78 réussites, 32 désélectionnées par Core, sans skip ni xfail. Core 2025.6.0 / CPython 3.13.18 et Core 2026.11.3 / CPython 3.14.10, venv épinglés et réseau loopback factice ; avertissements du banc/dépendances. |
+
+Le contrat publié Tracearr v3.2.1 de `/streams` et `/servers` a été relu ; aucun service Tracearr réel, dashboard, HACS, hassfest candidat, ni campagne JS/navigateur rejoués (frontend inchangé). 4.2 et le contre-audit ne font pas partie de cette livraison.
+
 ## Recette visuelle légère
 
 `recette/cartes.html` monte le JS distribué, avec une source WS de carte synthétique. Les métriques sont mesurées sur les éléments réels du Shadow DOM. Sous Chromium (152.0.7977.82 pendant la validation) :

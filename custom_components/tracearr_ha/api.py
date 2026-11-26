@@ -18,31 +18,36 @@ _EVENT_CHUNK_BYTES = 16 * 1024
 _MAX_JSON_DEPTH = 64
 
 
-def _event_float(raw: str) -> float:
+def _wire_float(raw: str) -> float:
     number = float(raw)
     if not math.isfinite(number):
-        raise ValueError("Non-finite SSE number")
+        raise ValueError("Non-finite JSON number")
     return number
 
 
-def _event_int(raw: str) -> int:
+def _wire_int(raw: str) -> int:
     number = int(raw)
     if not -(2**63) <= number < 2**63:
-        raise ValueError("Out-of-range SSE integer")
+        raise ValueError("Out-of-range JSON integer")
     return number
+
+
+def _load_wire_json(text: str) -> Any:
+    """Decode values that can be published by HA's WebSocket encoder."""
+    value = json.loads(text, parse_float=_wire_float, parse_constant=_wire_float,
+                       parse_int=_wire_int)
+    _check_json_tree(value, 0)
+    return value
 
 
 def _decode_event(lines: list[str], name: str | None) -> dict | None:
     try:
-        event = json.loads("\n".join(lines), parse_float=_event_float, parse_constant=_event_float,
-                           parse_int=_event_int)
+        event = _load_wire_json("\n".join(lines))
         if not isinstance(event, dict) or not isinstance(event.get("data"), dict):
             return None
         kind = event.setdefault("type", name)
         if not isinstance(kind, str) or not kind:
             return None
-        # Keep rows serializable by Home Assistant's WebSocket encoder.
-        _check_json_tree(event, 0)
         return event
     except (ValueError, RecursionError):
         return None
@@ -50,7 +55,7 @@ def _decode_event(lines: list[str], name: str | None) -> dict | None:
 
 def _check_json_tree(value: Any, depth: int) -> None:
     if depth > _MAX_JSON_DEPTH:
-        raise ValueError("SSE JSON nested too deeply")
+        raise ValueError("JSON nested too deeply")
     if isinstance(value, str):
         value.encode("utf-8")  # Reject escaped lone surrogates.
     elif isinstance(value, dict):
@@ -163,7 +168,13 @@ class TracearrClient:
                 timeout=ClientTimeout(total=15), allow_redirects=False,
             ) as resp:
                 self._check(resp)
-                result = await resp.json(content_type=None)
+                if resource in ("streams", "servers"):
+                    try:
+                        result = await resp.json(content_type=None, loads=_load_wire_json)
+                    except (ValueError, RecursionError):
+                        raise TracearrUnavailable("Invalid Tracearr JSON snapshot") from None
+                else:
+                    result = await resp.json(content_type=None)
                 if not isinstance(result, dict):
                     raise TracearrUnavailable("Unexpected Tracearr response")
                 return result

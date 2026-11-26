@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import entity_registry as er
 import voluptuous as vol
 
-from core import DOMAIN, core
+from core import DOMAIN, core, observed
 from simulateur import KEY, Gate, Tracearr
 
 NEW_KEY = "trr_pub_replacement_fixture"
@@ -34,8 +34,7 @@ def test_key_replacement_in_place(loaded, caplog):
             await b.hass.async_block_till_done()
             registry = er.async_get(b.hass)
             entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_total")
-            entity = registry.async_get(entity_id)
-            assert entity is not None
+            entity = registry.async_update_entity(entity_id, name="Total personnalisé")
 
             await ws.call("tracearr_ha/subscribe")
             sub = ws.seq
@@ -77,6 +76,25 @@ def test_key_replacement_in_place(loaded, caplog):
                 assert rejected["errors"] == {"base": error}
                 assert entry.data == before
                 sim.errors.clear()
+
+            for route, payload in [
+                ("servers", {}),
+                ("streams", {}),
+                ("streams", {"data": [sim.session("bad", bitrate="inexploitable")]}),
+                ("servers", {"data": [{"server_id": []}]}),
+                ("servers", {"data": [{"server_id": "bad", "server_name": ["inexploitable"]}]}),
+            ]:
+                sim.responses[route] = payload
+                rejected = await entries.flow.async_configure(fid, {"token": NEW_KEY})
+                assert (rejected["type"], rejected.get("errors")) == ("form", {"base": "cannot_connect"})
+                assert entry.data == before and entry.options == options
+                if loaded:
+                    await b.hass.async_block_till_done()
+                    assert entry.state == ConfigEntryState.LOADED and b.coord(entry) is old
+                    row, = (await ws.call("tracearr_ha/get"))["entries"]
+                    assert row["id"] == entry.entry_id and row["streams"][0]["id"] == "tv"
+                    assert await ws.snapshots(sub) == []
+                sim.responses.clear()
 
             result = await entries.flow.async_configure(fid, {"token": f" {NEW_KEY} "})
             assert (result["type"], result["reason"]) == ("abort", "reauth_successful")
@@ -124,6 +142,59 @@ def test_removing_entry_during_reauth_validation_does_not_write_or_reload():
             assert entry.data["token"] == KEY
             assert entries.async_entries(DOMAIN) == []
             assert b.hass.data[DOMAIN] == {}
+
+    asyncio.run(run())
+
+
+def test_reload_aborts_reauth_before_late_validation_can_write():
+    async def run():
+        async with Tracearr().serve() as sim, core() as b:
+            entries = b.hass.config_entries
+            entry = await b.add(sim)
+            old = b.coord(entry)
+            sim.key = NEW_KEY
+            await old.async_refresh()
+            await b.hass.async_block_till_done()
+            active, = reauth_flows(b, entry)
+            gate = sim.gates["servers"] = Gate()
+            pending = asyncio.create_task(entries.flow.async_configure(active["flow_id"], {"token": NEW_KEY}))
+            try:
+                await asyncio.wait_for(gate.entered.wait(), 5)
+                del sim.gates["servers"]
+                sim.key = KEY
+                assert await entries.async_reload(entry.entry_id)
+                replacement = await b.ready(entry)
+                assert replacement is not old and not reauth_flows(b, entry)
+            finally:
+                gate.release.set()
+            try:
+                result = await asyncio.wait_for(pending, 5)
+                assert (result["type"], result["reason"]) == ("abort", "reauth_interrupted")
+            finally:
+                await b.hass.async_block_till_done()
+            assert entry.data["token"] == KEY
+            assert entry.state == ConfigEntryState.LOADED and b.coord(entry) is replacement
+
+    asyncio.run(run())
+
+
+def test_sse_only_auth_refusal_keeps_rest_without_reauth(caplog):
+    async def run():
+        async with Tracearr().serve() as sim, core() as b, b.connect() as ws:
+            entry = await b.add(sim)
+            coord = b.coord(entry)
+            sim.errors["events"] = (403, {})
+            sim.raw(None)
+            await observed(coord, lambda: not coord.sse_connected)
+            # Observe the actual rejected reconnect on the simulated HTTP server.
+            async with asyncio.timeout(10):
+                while "Tracearr key rejected" not in caplog.text:
+                    await asyncio.sleep(0.05)
+            sim.change("started", "rest")
+            await coord.async_refresh()
+            row, = (await ws.call("tracearr_ha/get"))["entries"]
+            assert row["connected"] and not row["sse_connected"] and not row["streams_stale"]
+            assert row["stats"]["total"] == 1 and not reauth_flows(b, entry)
 
     asyncio.run(run())
 

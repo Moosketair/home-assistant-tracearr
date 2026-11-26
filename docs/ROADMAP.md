@@ -12,6 +12,8 @@ Les phases 0 et 1.1 sont validées. **2A** est définitivement validée sur `942
 
 **3.1 clôturée** après le contre-audit 3.2 (validé avec réserve non bloquante) sur `fcd3c83`. **3B.1 validée** par le mainteneur : A7/A9 corrigées, A8/A13/A14 rectifiées dans les guides ou l’historique. **A10 corrigée en 3B.2** selon la décision du mainteneur : avertissement et gel par source sans données fiables, reprise uniquement sur un snapshot effectivement intégré. Ces corrections restent à confirmer au lot 4 ; voir [l’état de reprise](DEVELOPMENT_STATUS.md#état-des-14-anomalies-à-lentrée-du-lot-4).
 
+**4.1 :** douze anomalies validées par le mainteneur (A1–A8, A11–A14) ; refus de validation pour les défauts résiduels A9/A10. **4.1.1 :** correctifs locaux livrés, verdict indépendant attendu sur ces deux points. Le versionnement et l’invalidation du cache JS sont réservés à 4.2.
+
 | Ordre | Lot proposé | Critère de sortie avant livraison |
 |---|---|---|
 | 4 | **Validation globale** : matrice Core minimum/stable, non-régression avec fixtures Plex/Jellyfin/Emby, installation/mise à niveau HACS et essai sur un vrai dashboard HA isolé. | Vérifier HACS et hassfest sur le SHA candidat ; vérifier les flows, options, ressources et cartes réels, dont A10 en panne complète et en reprise. |

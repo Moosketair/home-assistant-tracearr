@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from aiohttp import ClientSession, web
+import pytest
 
 path = Path(__file__).resolve().parents[1] / "custom_components/tracearr_ha/api.py"
 spec = importlib.util.spec_from_file_location("tracearr_api", path)
@@ -73,5 +74,38 @@ def test_sse_delimiters_split_utf8_and_unterminated_eof():
             {"type": "stream.started", "data": {"id": "é"}},
             {"type": "ready", "data": {}},
         ]
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("encoded", [
+    "{",
+    '{"data":[{"id":"a","extra":NaN}]}',
+    '{"data":[{"id":"a","extra":9223372036854775808}]}',
+    r'{"data":[{"id":"a","extra":"\ud800"}]}',
+    '{"data":' + "[" * 65 + "0" + "]" * 65 + "}",
+])
+def test_rest_snapshot_rejects_unsendable_json(encoded):
+    async def scenario():
+        class Response:
+            status = 200
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                pass
+
+            async def json(self, *, content_type, loads=json.loads):
+                return loads(encoded)
+
+        class Session:
+            def get(self, *args, **kwargs):
+                return Response()
+
+        client = api.TracearrClient(Session(), "http://127.0.0.1", "fixture")
+        for endpoint in (client.streams, client.servers):
+            with pytest.raises(api.TracearrUnavailable, match="^Invalid Tracearr JSON snapshot$"):
+                await endpoint()
 
     asyncio.run(scenario())
