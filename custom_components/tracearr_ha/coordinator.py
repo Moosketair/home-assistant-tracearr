@@ -188,7 +188,10 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
                         retry = 5
                     elif event.get("type") == "server.health":
                         payload = event.get("data", {})
-                        if isinstance(payload, dict) and isinstance(payload.get("server_id"), str):
+                        if (isinstance(payload, dict) and isinstance(payload.get("server_id"), str)
+                                and payload["server_id"] and isinstance(payload.get("status"), str)
+                                and payload["status"]
+                                and (payload.get("reason") is None or isinstance(payload["reason"], str))):
                             fields = {k: payload[k] for k in ("status", "reason") if k in payload}
                             if self._server_changes is not None:
                                 self._server_changes.record(payload["server_id"], fields)

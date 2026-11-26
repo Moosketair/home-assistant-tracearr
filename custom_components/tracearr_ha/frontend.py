@@ -62,10 +62,14 @@ class TracearrArtworkView(HomeAssistantView):
         uri = item.get("poster_url" if kind == "poster" else "user_avatar_url")
         if not isinstance(uri, str) or not uri:
             return web.Response(status=404)
-        parsed = urlsplit(uri)
+        try:
+            parsed = urlsplit(uri)
+        except ValueError:
+            return web.Response(status=404)
         origin = urlsplit(coord.client.base_url)
         # Prevent SSRF: fetch only Tracearr's own image-proxy endpoint.
-        if parsed.scheme and (parsed.scheme, parsed.netloc) != (origin.scheme, origin.netloc):
+        if (parsed.scheme or parsed.netloc) and (
+                parsed.scheme or origin.scheme, parsed.netloc) != (origin.scheme, origin.netloc):
             return web.Response(status=404)
         if parsed.path != "/api/v1/images/proxy":
             return web.Response(status=404)
@@ -73,17 +77,30 @@ class TracearrArtworkView(HomeAssistantView):
         try:
             # Tracearr's normal API client advertises JSON; the artwork proxy
             # needs image content negotiation instead.
-            headers = {**coord.client.headers, "Accept": "image/avif,image/webp,image/*,*/*;q=0.8"}
+            headers = {**coord.client.headers,
+                       "Accept": "image/avif,image/webp,image/*,*/*;q=0.8",
+                       "Accept-Encoding": "identity"}
             async with coord.client.session.get(url, headers=headers,
-                    timeout=ClientTimeout(total=20), allow_redirects=False) as response:
+                    timeout=ClientTimeout(total=20), allow_redirects=False,
+                    auto_decompress=False) as response:
                 if response.status != 200:
                     _LOGGER.debug("Tracearr artwork returned HTTP %s", response.status)
                     return web.Response(status=502 if response.status >= 500 else 404)
                 if response.content_length and response.content_length > MAX_ARTWORK_BYTES:
                     return web.Response(status=413)
-                data = await response.content.read(MAX_ARTWORK_BYTES + 1)
-                if len(data) > MAX_ARTWORK_BYTES:
-                    return web.Response(status=413)
+                # Do not let transparent decompression allocate unbounded
+                # output before the per-request byte count can see it.
+                if response.headers.get("Content-Encoding", "identity").strip().lower() != "identity":
+                    return web.Response(status=502)
+                # A read(n) can return a short fragment long before EOF.
+                # Buffer only within the limit, and never publish a prefix.
+                body = bytearray()
+                while chunk := await response.content.read(min(64 * 1024, MAX_ARTWORK_BYTES - len(body) + 1)):
+                    if len(body) + len(chunk) > MAX_ARTWORK_BYTES:
+                        return web.Response(status=413)
+                    body.extend(chunk)
+                if not body:
+                    return web.Response(status=502)
                 content_type = response.headers.get("Content-Type", "")
                 safe_type = content_type.split(";", 1)[0].strip().lower()
                 if safe_type in ("image/jpg", "image/pjpeg"):
@@ -91,19 +108,19 @@ class TracearrArtworkView(HomeAssistantView):
                 if safe_type == "application/octet-stream":
                     # Some image backends omit the MIME type; accept only
                     # recognized image signatures, never HTML/JSON/SVG.
-                    if data.startswith(b"\xff\xd8\xff"):
+                    if body.startswith(b"\xff\xd8\xff"):
                         safe_type = "image/jpeg"
-                    elif data.startswith(b"\x89PNG\r\n\x1a\n"):
+                    elif body.startswith(b"\x89PNG\r\n\x1a\n"):
                         safe_type = "image/png"
-                    elif data.startswith((b"GIF87a", b"GIF89a")):
+                    elif body.startswith((b"GIF87a", b"GIF89a")):
                         safe_type = "image/gif"
-                    elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+                    elif body[:4] == b"RIFF" and body[8:12] == b"WEBP":
                         safe_type = "image/webp"
-                    elif data[4:8] == b"ftyp" and b"avif" in data[8:32]:
+                    elif body[4:8] == b"ftyp" and b"avif" in body[8:32]:
                         safe_type = "image/avif"
                 if safe_type not in ("image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"):
                     return web.Response(status=415)
-                return web.Response(body=data, content_type=safe_type,
+                return web.Response(body=body, content_type=safe_type,
                                     headers={"Cache-Control": "private, max-age=60", "X-Content-Type-Options": "nosniff"})
         except (ClientError, TimeoutError) as exc:
             _LOGGER.debug("Tracearr artwork request failed: %s", type(exc).__name__)

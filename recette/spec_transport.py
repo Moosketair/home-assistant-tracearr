@@ -27,7 +27,6 @@ def test_api_contract_and_fragments():
             async with aclosing(client.events()) as events:
                 assert (await anext(events))["type"] == "ready"
                 sim.raw(b": ping\n\ndata: {broken}\n\ndata: {}\n\n")
-                assert await anext(events) == {"type": None}
                 sim.change("started", "wire")
                 assert (await anext(events))["data"] == (await client.streams())["data"][0]
             gate = sim.gates["image"] = Gate()

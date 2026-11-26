@@ -6,12 +6,110 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 from collections.abc import AsyncIterator
 from typing import Any
 
 from aiohttp import ClientError, ClientResponse, ClientSession, ClientTimeout
 
 API_PREFIX = "/api/v2/public"
+_MAX_EVENT_BYTES = 256 * 1024
+_EVENT_CHUNK_BYTES = 16 * 1024
+_MAX_JSON_DEPTH = 64
+
+
+def _event_float(raw: str) -> float:
+    number = float(raw)
+    if not math.isfinite(number):
+        raise ValueError("Non-finite SSE number")
+    return number
+
+
+def _event_int(raw: str) -> int:
+    number = int(raw)
+    if not -(2**63) <= number < 2**63:
+        raise ValueError("Out-of-range SSE integer")
+    return number
+
+
+def _decode_event(lines: list[str], name: str | None) -> dict | None:
+    try:
+        event = json.loads("\n".join(lines), parse_float=_event_float, parse_constant=_event_float,
+                           parse_int=_event_int)
+        if not isinstance(event, dict) or not isinstance(event.get("data"), dict):
+            return None
+        kind = event.setdefault("type", name)
+        if not isinstance(kind, str) or not kind:
+            return None
+        # Keep rows serializable by Home Assistant's WebSocket encoder.
+        _check_json_tree(event, 0)
+        return event
+    except (ValueError, RecursionError):
+        return None
+
+
+def _check_json_tree(value: Any, depth: int) -> None:
+    if depth > _MAX_JSON_DEPTH:
+        raise ValueError("SSE JSON nested too deeply")
+    if isinstance(value, str):
+        value.encode("utf-8")  # Reject escaped lone surrogates.
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            key.encode("utf-8")
+            _check_json_tree(item, depth + 1)
+    elif isinstance(value, list):
+        for item in value:
+            _check_json_tree(item, depth + 1)
+
+
+async def _sse_frames(content) -> AsyncIterator[dict]:
+    """Read bounded frames; skip damaged blocks up to their next empty line."""
+    name = None
+    lines: list[str] = []
+    line = bytearray()
+    size = 0
+    discard = False
+    nonempty = False
+    trailing_cr = False
+    async for chunk in content.iter_chunked(_EVENT_CHUNK_BYTES):
+        if trailing_cr and chunk.startswith(b"\n"):
+            chunk = chunk[1:]
+        trailing_cr = chunk.endswith(b"\r")
+        parts = chunk.replace(b"\r\n", b"\n").replace(b"\r", b"\n").split(b"\n")
+        for index, part in enumerate(parts):
+            nonempty = nonempty or bool(part)
+            if not discard:
+                size += len(part)
+                if size > _MAX_EVENT_BYTES:
+                    discard = True
+                    line.clear()
+                    lines.clear()
+                    name = None
+                else:
+                    line.extend(part)
+            if index == len(parts) - 1:
+                break  # Partial line, completed only by a later delimiter.
+            if not nonempty:
+                event = _decode_event(lines, name) if not discard and lines else None
+                name, size, discard = None, 0, False
+                lines.clear()
+                if event is not None:
+                    yield event
+            elif not discard:
+                size += 1  # Count each line ending as one byte.
+                try:
+                    field = line.decode("utf-8")
+                except UnicodeDecodeError:
+                    discard = True
+                    lines.clear()
+                    name = None
+                else:
+                    if field.startswith("event:"):
+                        name = field[6:].strip()
+                    elif field.startswith("data:"):
+                        lines.append(field[5:].removeprefix(" "))
+            line.clear()
+            nonempty = False
 
 
 class TracearrError(Exception):
@@ -102,26 +200,7 @@ class TracearrClient:
                 allow_redirects=False,
             ) as response:
                 self._check(response)
-                event_name = None
-                data_lines: list[str] = []
-                async for raw in response.content:
-                    line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
-                    if not line:
-                        if data_lines:
-                            try:
-                                event = json.loads("\n".join(data_lines))
-                                if isinstance(event, dict):
-                                    event.setdefault("type", event_name)
-                                    yield event
-                            except (ValueError, TypeError):
-                                pass
-                        data_lines = []
-                        event_name = None
-                    elif line.startswith(":"):
-                        continue
-                    elif line.startswith("event:"):
-                        event_name = line[6:].strip()
-                    elif line.startswith("data:"):
-                        data_lines.append(line[5:].lstrip(" "))
+                async for event in _sse_frames(response.content):
+                    yield event
         except (asyncio.TimeoutError, ClientError) as exc:
             raise TracearrUnavailable("Tracearr event connection lost") from exc

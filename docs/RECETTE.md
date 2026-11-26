@@ -172,7 +172,19 @@ La barrière HTTP capture les données avant les mutations ; les témoins de not
 | `min` — Core 2025.6.0 | **61 réussis**, 0 skip, 0 xfail, **121 avertissements** (19,84 s) |
 | `current` — Core 2026.11.3 | **61 réussis**, 0 skip, 0 xfail, **67 avertissements** (20,24 s) |
 
-Les avertissements supplémentaires proviennent des six ouvertures de banc HTTP/CORS. Les limites d'ordre de l'amont et de la superposition bornée décrites dans [ARCHITECTURE](ARCHITECTURE.md) restent inchangées. Rien n'a été publié ; attendre le contre-audit ciblé **2B.4**, sans commencer 2C.
+Les avertissements supplémentaires proviennent des six ouvertures de banc HTTP/CORS. Le contre-audit indépendant **2B.4** a ensuite validé `f918150fd8fc6fa6f44d309aac3d4387d063d83b` ; le mainteneur a accepté les limites d’ordre documentées et clôturé 2B.
+
+### 2C.1 — trames SSE invalides et images fragmentées
+
+Pour isoler les 27 nouveaux essais : `TMPDIR=/tmp/opencode bash recette/lancer.sh min -k spec_robustness` (ou `current`). Les mêmes essais sur une archive de `f918150` donnent **19 échecs / 8 succès** sur Core 2025.6.0 et **18 échecs / 9 succès** sur Core 2026.11.3 (la très longue ligne invalide seule est déjà ignorée au Core récent). Les cas encore verts sur le parent servent de contrôles.
+
+| Contrôle | Preuve sur le candidat |
+|---|---|
+| SSE, 16 variantes | Trames invalides, incomplètes, inconnues ou hors bornes suivies d’une progression valide multiligne avec `bitrate: null`. Un seul événement WS métier, cache et stats intacts hors progression, même connexion SSE et état REST, tâches annulées au déchargement. Le test Python de découpage ajoute CR/CRLF séparés, UTF-8 coupé entre deux blocs et fin de flux sans séparateur. |
+| Proxy HA, 10 réponses HTTP | Octets identiques avec et sans `Content-Length`, y compris lorsque la signature d’image est fragmentée, et à 8 000 000 octets ; 413 au-delà (taille annoncée ou octets lus). Pas de corps partiel sur rupture, délai dépassé (délai abrégé par le test) ou encodage HTTP refusé ; MIME interdit et redirection rejetés. La session HTTP partagée reste utilisable. |
+| Accès au proxy, sur vrai Core | Signature HA jetable acceptée, requête non signée et signature expirée refusées ; image d’une session absente ou arrêtée, type de route invalide, autre origine et autre chemin ne déclenchent aucune requête Tracearr. |
+
+Suites complètes : **22 Python, 72 JavaScript, 88 sur Core 2025.6.0, 88 sur Core 2026.11.3**, sans échec, skip ni xfail. Les avertissements HTTP/CORS de Core restent présents (175 et 96). Syntaxe JS, compilation Python, lecture JSON du manifeste et de `hacs.json`, et `git diff --check` réussis. Serveur Tracearr simulé sur loopback ; aucun essai HACS, navigateur HA, proxy inverse ou déploiement dans ce lot.
 
 ## Recette visuelle légère
 

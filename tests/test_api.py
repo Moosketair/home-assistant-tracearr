@@ -52,3 +52,26 @@ def test_local_api_and_sse():
             await runner.cleanup()
 
     asyncio.run(scenario())
+
+
+def test_sse_delimiters_split_utf8_and_unterminated_eof():
+    class Stream:
+        async def iter_chunked(self, _size):
+            for chunk in (
+                b": comment\r",
+                b'\n\r\nevent: stream.started\r',
+                b'\ndata: {"data":{"id":"\xc3',
+                b'\xa9"}}\r',
+                b'\n\r',
+                b'\nevent: ready\rdata: {"data":{}}\r\r',
+                b'event: ready\ndata: {"data":{}}\n',
+            ):
+                yield chunk
+
+    async def scenario():
+        assert [event async for event in api._sse_frames(Stream())] == [
+            {"type": "stream.started", "data": {"id": "é"}},
+            {"type": "ready", "data": {}},
+        ]
+
+    asyncio.run(scenario())
