@@ -4,97 +4,93 @@
 [![HACS](https://img.shields.io/badge/HACS-Catalogue%20officiel-41BDF5)](https://github.com/hacs/default/pull/13306)
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
 
-**Surveillez les lectures Plex, Jellyfin et Emby dans Home Assistant avec les données de Tracearr.** L'intégration comprend des capteurs, une connexion temps réel et deux cartes Lovelace personnalisables (lectures groupées ou lecture individuelle).
+**Voyez qui regarde quoi sur Plex, Jellyfin et Emby, directement dans Home Assistant.** Tracearr HA utilise les données de Tracearr pour alimenter des capteurs et deux cartes Lovelace personnalisables : une vue d’ensemble des lectures et une carte centrée sur une seule lecture.
 
-**Version stable : 0.1.17** · Disponible via le catalogue officiel HACS. Le projet reste communautaire et évolutif ; testez les capteurs avant de les utiliser pour des automatismes critiques.
+**Stable disponible via HACS : [`v0.1.17`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.17).** Le [candidat `v0.1.18-beta.1`](CHANGELOG.md#0118-beta1--candidat-local-non-publié) est validé localement, mais pas encore publié ni installable via HACS.
 
-Le candidat local [0.1.18-beta.1](CHANGELOG.md#0118-beta1--candidat-local-non-publié) n’est pas disponible via HACS.
+[Voir les cartes](#aperçu-des-cartes) · [Installer](#installation-via-hacs) · [Configurer les cartes](docs/CONFIGURATION.md) · [Historique](CHANGELOG.md)
 
-## Nouveautés de la 0.1.17
+## Aperçu des cartes
 
-- Connexions et affichage des lectures plus fiables, y compris après rechargement et panne de Tracearr.
-- Remplacement de la clé API directement dans Home Assistant sans recréer l’intégration.
-- Chargement des images, cohérence des débits LAN/WAN et lisibilité des badges améliorés.
+![Tableau de bord Home Assistant : liste de deux lectures, carrousel et carte individuelle](recette/preuves/4.2/sections.png)
 
-Consultez le [journal complet des versions](CHANGELOG.md) pour retrouver toutes les améliorations et corrections précédentes.
+*Aperçu du rendu classique dans Home Assistant, avec des données fictives.*
 
-## Installation avec HACS
+| Carte | Usage |
+| --- | --- |
+| **Lectures groupées** — `custom:tracearr-streams-card` | Les lectures en cours dans une liste ou un carrousel, avec filtres. Navigation tactile, au clavier et à la souris ; flèches, transitions et défilement automatique facultatifs. |
+| **Lecture individuelle** — `custom:tracearr-stream-card` | Une seule lecture : la plus récente, ou une lecture ciblée par compte, serveur ou session. |
 
-1. Dans **HACS**, recherchez **Tracearr HA** puis cliquez sur **Télécharger**.
-2. **Redémarrez Home Assistant** après l'installation ou la mise à jour.
-3. Ouvrez **Paramètres → Appareils et services → Ajouter une intégration → Tracearr HA**.
-4. Renseignez l'adresse de votre serveur Tracearr et la clé API publique `trr_pub_...` obtenue dans **Tracearr → Paramètres → Données et API → API**.
-5. Dans votre tableau de bord, utilisez **Modifier → Ajouter une carte**, puis recherchez **Tracearr**.
+## Fonctionnalités et personnalisation
 
-L'intégration conserve les réglages des cartes et les entrées de configuration Home Assistant lors des mises à jour normales. Après une mise à jour, rechargez aussi le navigateur avec `Ctrl + F5` (ou actualisez la page sur mobile).
+- **Suivi en direct.** Les lectures se mettent à jour en temps réel lorsque le flux d’événements SSE est disponible. Sinon, une récupération périodique prend le relais ; si les données restent périmées, les cartes le signalent.
+- **Capteurs Home Assistant.** Nombre de flux, lectures directes ou transcodées, types de transcodage, débit estimé et disponibilité des serveurs. Testez les capteurs avant de les utiliser dans des automatismes critiques.
+- **Mise en page et affichage.** Taille pilotée par les réglages natifs de *Sections*, mode compact, fond cinéma flouté, couleurs par type de serveur, affiches, avatars, titres et épisodes. Affichez la progression, le temps restant ou une estimation de fin.
+- **Bandeau au choix.** Combinez statistiques Tracearr et entités Home Assistant, avec ordre, alignement et couleurs configurables. Filtrez l’affichage des débits à partir de vos [règles LAN/WAN](docs/CONFIGURATION.md#débits-locaux-et-distants).
 
-**Carte non proposée dans Lovelace ?** Vérifiez dans **Paramètres → Tableaux de bord → Ressources** qu'il n'existe qu'une seule ressource Module JavaScript pour `/tracearr_ha/tracearr-card.js`, avec `?v=` suivi de la version installée (`?v=0.1.17` pour cette stable). En mode YAML, [mettez à jour la ressource manuellement](docs/CONFIGURATION.md#ressource-lovelace-en-mode-yaml).
+### Dans le candidat `v0.1.18-beta.1`
 
-## Ce que propose Tracearr HA
+Les panneaux de lecture proposent cinq styles de badges techniques : **Classique** (rendu historique par défaut), **Premium** (fond teinté et bordure colorée), **Cinéma** (couleur pleine), **Minimaliste** (trait latéral) et **Technique** (précisions sur les formats). L’éditeur permet de prévisualiser le résultat, de choisir une disposition compacte ou séparée et de régler les couleurs, l’ordre et la visibilité des catégories. Selon les données disponibles, affichez la destination seule ou la comparaison source → destination.
 
-- **Suivi en direct** des lectures, avec synchronisation SSE et interrogation REST de secours.
-- **Capteurs** : flux en cours, lectures directes, types de transcodages, débit estimé et disponibilité des serveurs.
-- **Deux cartes** : `custom:tracearr-streams-card` (liste ou carrousel) et `custom:tracearr-stream-card` (une lecture).
-- **Carrousel** : défilement automatique facultatif, effets de transition, flèches, navigation tactile, au clavier et à la souris.
-- **Personnalisation** : titres et épisodes, jaquettes, avatars, progression, durée restante, heure de fin estimée, badges, couleurs par serveur et mode compact.
-- **Appareils locaux/distants** : classement manuel par utilisateur ou appareil, avec filtrage des débits.
-- **Affichage natif Home Assistant** : dimensions pilotées par la mise en page *Sections*, sans imposer une taille de carte.
+<details>
+<summary>Comparer les cinq styles (thème sombre)</summary>
 
-## Exemples rapides
+![Les cinq styles de badges techniques sur le même film de démonstration](recette/preuves/6b.1/styles-firefox-sombre.png)
 
-**Lectures groupées avec fond flouté et badges :**
+*Comparaison issue du banc de recette, avec un compte et un film fictifs.*
 
-```yaml
-type: custom:tracearr-streams-card
-mode: list
-stream_surface: blur
-stream_blur: 26
-stream_overlay: 72
-stream_accent_style: rounded
-show_header: true
-header_show_streams: true
-header_show_transcodes_total: true
-header_metric_settings:
-  streams:
-    align: left
-  transcodes_total:
-    align: right
-```
+</details>
 
-**Une lecture individuelle (dernière session active) :**
+Le candidat garde aussi le temps restant visible à gauche pendant la pause et affiche **En pause** à droite. Les badges du bandeau peuvent avoir une couleur normale propre, distincte de leur couleur à zéro. Dans *Sections*, les cartes s’ajustent à leur contenu par défaut : un bandeau seul tient sur une ligne native si son contenu le permet. Les tailles explicitement enregistrées restent prioritaires.
 
-```yaml
-type: custom:tracearr-stream-card
-selection: recent
-show_poster: true
-poster_size: 110
-show_end_time: true
-```
+[Réglages des badges techniques](docs/CONFIGURATION.md#badges-techniques-des-panneaux-de-lecture) · [Notes du candidat et retour à la stable](CHANGELOG.md#0118-beta1--candidat-local-non-publié)
 
-Pour sélectionner l'utilisateur et le serveur sans saisir d'identifiants, utilisez l'éditeur visuel. Les réglages existants restent compatibles.
+## Installation via HACS
 
-## Personnalisation et documentation
+1. Dans **HACS**, recherchez **Tracearr HA** dans le catalogue et cliquez sur **Télécharger**.
+2. **Redémarrez Home Assistant** après l’installation ou la mise à jour.
 
-Tous les paramètres principaux sont disponibles dans l'éditeur graphique. Pour les valeurs YAML, les exemples complets et les comportements spécifiques :
+### Configuration initiale
 
-- [Guide complet des cartes et options](docs/CONFIGURATION.md)
-- [Historique des versions et améliorations](CHANGELOG.md)
-- [Maintenance, publication HACS et notes sur les marques/icônes](docs/MAINTENANCE.md)
+1. Dans Home Assistant, ouvrez **Paramètres → Appareils et services → Ajouter une intégration → Tracearr HA**.
+2. Renseignez l’adresse de votre serveur Tracearr et une clé API publique créée dans **Tracearr → Paramètres → Données et API → API**.
+3. Dans votre tableau de bord, choisissez **Modifier → Ajouter une carte**, recherchez **Tracearr** et sélectionnez la carte groupée ou individuelle. L’éditeur visuel permet de choisir un compte ou un serveur sans saisir son identifiant.
 
-## Compatibilité et limites
+Pour une mise à jour normale, conservez l’entrée et les cartes existantes. Après le redémarrage, actualisez le tableau de bord (`Ctrl + F5` si l’ancienne interface persiste, ou rechargez la page sur mobile). En mode ressources Lovelace YAML, [actualisez manuellement la version de la ressource](docs/CONFIGURATION.md#ressource-lovelace-en-mode-yaml).
 
-- Home Assistant **2025.6+**. Tracearr doit fournir les routes de l’API publique v2 **`/streams` et `/servers`**. Tracearr **2.6.0** ne fournit pas `/servers` et n’est pas compatible, même sans SSE ; **2.7.0** expose les deux routes REST et `/events`. Si `/events` est indisponible, l’intégration continue à interroger les deux routes REST.
-- Navigateurs récents Chromium, Firefox et Safari.
-- L'API publique utilisée ne permet pas de détecter automatiquement si un flux est local ou distant : les correspondances doivent être configurées manuellement.
-- L'arrêt à distance d'une lecture n'est pas implémenté.
-- L'intégration affiche les informations transmises par Tracearr ; elles peuvent être incomplètes ou différées.
+## Compatibilité
 
-## Dépannage rapide
+- **Home Assistant 2025.6 ou ultérieur.**
+- **Tracearr** doit fournir les routes REST requises de l’API publique v2. Voir les [détails de compatibilité Tracearr](docs/CONFIGURATION.md#compatibilité-tracearr) et la portée des vérifications par version.
+- **Plex, Jellyfin et Emby** sont suivis via Tracearr ; l’intégration ne se connecte pas directement aux serveurs multimédias.
+- **Chromium et Firefox** ont été testés. **Safari** n’a pas fait l’objet d’une validation spécifique.
 
-- **Aucun capteur :** contrôlez l'URL, la clé API et **Paramètres → Système → Journaux**.
-- **Clé API refusée sur une intégration déjà configurée :** utilisez la demande de réauthentification de Home Assistant pour saisir une nouvelle clé. Ne supprimez pas l’intégration : ses entités et réglages sont conservés.
-- **Carte manquante ou ancienne interface :** vérifiez l'unique ressource JavaScript ci-dessus, redémarrez Home Assistant et rechargez le cache du navigateur.
-- **Affiche absente :** vérifiez que Tracearr fournit `poster_url` et consultez les erreurs réseau/journaux. Le fond cinéma reste sombre sans affiche.
-- **Carrousel immobile :** vérifiez le nombre de flux visibles, la lecture automatique, les préférences d'animation et la pause au survol.
+## Limites actuelles
 
-**Licence MIT.** Projet communautaire indépendant, sans affiliation ou approbation officielle de Tracearr, Home Assistant, Plex, Jellyfin ou Emby. Son icône est une création distincte.
+- **LAN/WAN :** la classification des lectures repose sur des règles manuelles par compte ou appareil. Tracearr HA ne déduit pas automatiquement la localisation d’un flux.
+- **Arrêt à distance :** l’intégration ne permet pas d’arrêter une lecture.
+- **Métadonnées :** la précision et la disponibilité des informations techniques dépendent des données que Tracearr transmet. Elles peuvent être incomplètes ou différées.
+- **Musique :** l’affichage dédié aux lectures musicales reste prévu dans le [lot 6C](docs/ROADMAP.md#lot-6c--lectures-musicales) ; il n’est pas inclus dans cette bêta.
+
+## Documentation et dépannage
+
+- [Guide de configuration](docs/CONFIGURATION.md) : éditeur visuel, [exemples YAML](docs/CONFIGURATION.md#exemples-de-cartes-lovelace), badges et filtres.
+- [Historique des versions](CHANGELOG.md) : [nouveautés de la stable `v0.1.17`](CHANGELOG.md#0117--2026-11-26), notes du candidat et versions précédentes. [Versions publiées sur GitHub](https://github.com/Moosketair/home-assistant-tracearr/releases).
+- [Maintenance](docs/MAINTENANCE.md) : distribution HACS, icônes et marque.
+
+<details>
+<summary>Dépannage rapide</summary>
+
+- **Aucun capteur :** vérifiez l’adresse Tracearr, la clé API et **Paramètres → Système → Journaux**.
+- **Clé refusée sur une intégration existante :** utilisez la demande de réauthentification de Home Assistant pour remplacer la clé sans recréer l’entrée ni perdre ses entités ou réglages.
+- **Carte absente ou ancienne interface :** dans **Paramètres → Tableaux de bord → Ressources**, vérifiez l’unique module `/tracearr_ha/tracearr-card.js` avec `?v=` suivi de la version installée (par exemple `?v=0.1.17`). Redémarrez Home Assistant et rechargez le tableau de bord. En [mode YAML](docs/CONFIGURATION.md#ressource-lovelace-en-mode-yaml), vérifiez la déclaration manuelle.
+- **Affiche absente :** vérifiez que Tracearr transmet une URL d’affiche et consultez les erreurs réseau ou les journaux. Sans affiche, le fond cinéma reste uni et sombre.
+- **Carrousel immobile :** vérifiez le nombre de flux visibles, les réglages de défilement automatique, les préférences d’animation et la pause au survol.
+
+</details>
+
+## Contribution
+
+Pour [signaler un problème ou proposer une amélioration](https://github.com/Moosketair/home-assistant-tracearr/issues), indiquez les versions de Home Assistant, Tracearr et Tracearr HA, le navigateur et les étapes pour reproduire le problème. Masquez les clés API, les URL signées et les données personnelles dans les journaux et captures. Pour contribuer au code, consultez le [guide de développement](docs/DEVELOPMENT.md).
+
+**Licence MIT.** Projet communautaire indépendant, sans affiliation ni approbation officielle de Tracearr, Home Assistant, Plex, Jellyfin ou Emby. Son icône est une création distincte.

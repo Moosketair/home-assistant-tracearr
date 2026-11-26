@@ -4,6 +4,12 @@ Retour au [README](../README.md) · [Historique des versions](../CHANGELOG.md)
 
 Ce guide rassemble les réglages détaillés. Les nouveautés et les anciennes versions sont documentées dans `CHANGELOG.md` ; les options ci-dessous décrivent l'usage courant.
 
+## Compatibilité Tracearr
+
+Tracearr HA a besoin des routes REST `/streams` et `/servers` de l’API publique v2 (`/api/v2/public/`). La route `/events` fournit le flux temps réel SSE. Si ce flux est indisponible, Home Assistant continue de récupérer périodiquement les lectures et les serveurs via les deux routes REST ; le repli ne dispense donc pas de disposer de `/servers`.
+
+Tracearr `2.6.0` ne fournit pas `/servers` et n’est pas compatible, même sans SSE. Les routes nécessaires et `/events` sont présentes dans le code source de Tracearr `2.7.0`, mais cette vérification en lecture de code ne vaut pas essai sur une instance réelle. Elle ne garantit pas non plus la compatibilité de toutes les versions ultérieures. Voir [les sources amont examinées dans l’audit](AUDIT_INITIAL.md#compatibilité-et-vérifications-officielles).
+
 ### Ressource Lovelace en mode YAML
 
 En mode stockage, redémarrez Home Assistant après le remplacement de l’intégration : la ressource existante est actualisée automatiquement. En mode YAML, conservez une seule déclaration et adaptez `?v=` à la version du manifeste installé. Pour `v0.1.17` :
@@ -111,6 +117,35 @@ show_poster: true
 ```
 
 Remplacez l’identifiant serveur fictif par le `server_id` Tracearr du compte : `selected_account` attend `server_id:username`, pas `type:username`. `plex:alice` reste utilisable comme clé pour les alias et règles, mais ne sélectionne pas le compte dans cet exemple. Pour éviter de saisir l’identifiant à la main, choisissez **Lecture d’un utilisateur** puis le compte dans **l’éditeur graphique Lovelace → Choix des lectures et filtres**.
+
+**Dernière lecture active avec affiche et heure de fin :**
+
+```yaml
+type: custom:tracearr-stream-card
+selection: recent
+show_poster: true
+poster_size: 110
+show_end_time: true
+```
+
+**Liste avec fond cinéma et deux badges alignés :**
+
+```yaml
+type: custom:tracearr-streams-card
+mode: list
+stream_surface: blur
+stream_blur: 26
+stream_overlay: 72
+stream_accent_style: rounded
+show_header: true
+header_show_streams: true
+header_show_transcodes_total: true
+header_metric_settings:
+  streams:
+    align: left
+  transcodes_total:
+    align: right
+```
 
 ### Redimensionnement et personnalisation
 
