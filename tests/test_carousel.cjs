@@ -1005,6 +1005,51 @@ test('card editor exposes end time and advanced entity badge options', () => {
     assert.match(html,new RegExp(`data-badge-setting="${key}"`));
 });
 
+test('both cards resolve individual normal and zero colors independently, without changing legacy palettes', () => {
+  for (const type of ['tracearr-streams-card','tracearr-stream-card']) {
+    const card = new (classes.get(type))();
+    const config = {
+      header_show_streams:true,header_show_bandwidth:true,header_show_server_counts:true,
+      header_badge_color_mode:'server',header_zero_color_mode:'custom',header_zero_custom_color:'#202020',
+      header_metric_settings:{
+        streams:{normal_custom_color:'#fefefe',zero_color_mode:'custom',zero_custom_color:'#343434',blink_positive:true},
+        bandwidth:{normal_custom_color:'#3300ff'},
+      },
+      header_entity_badges:[{id:'requests',entity:'counter.requests',normal_custom_color:'#801011'}],
+    };
+    const stream = {id:'a',server_id:'p',server_type:'plex',bitrate:2000,state:'playing'};
+    const hass = value => {card._hass = {states:{'counter.requests':{state:value}}};};
+    const badge = (key, streams) => card._header(streams).match(new RegExp(`<span class="metric[^"]*" data-badge="${key}"[^>]+>`))?.[0];
+    card.setConfig(config);
+    hass('2');
+    assert.match(badge('streams',[stream]),/blink-positive.*--pill-bg:#fefefe;--pill-text:#000/);
+    assert.match(badge('bandwidth',[stream]),/--pill-bg:#3300ff/);
+    assert.match(badge('entity:0:requests:counter.requests',[stream]),/--pill-bg:#801011;--pill-text:#FFFFFF/);
+    const server = badge('server:p',[stream]);
+    assert.ok(server);
+    hass('0');
+    assert.match(badge('streams',[]),/--pill-bg:#343434/);
+    assert.doesNotMatch(badge('streams',[]),/blink-positive/);
+    assert.match(badge('bandwidth',[]),/--pill-bg:#202020/);
+    assert.match(badge('entity:0:requests:counter.requests',[]),/--pill-bg:#202020/);
+    hass('3');
+    assert.match(badge('entity:0:requests:counter.requests',[stream]),/--pill-bg:#801011/);
+    config.header_zero_color_mode = 'normal';
+    assert.match(badge('bandwidth',[]),/--pill-bg:#202020/,'setConfig did not mutate the saved configuration');
+    card.setConfig(config);
+    assert.match(badge('bandwidth',[]),/--pill-bg:#3300ff/);
+    delete config.header_metric_settings.streams.normal_custom_color;
+    config.header_metric_settings.bandwidth.normal_custom_color = 'red;outline:1px';
+    delete config.header_entity_badges[0].normal_custom_color;
+    card.setConfig(config);
+    for (const key of ['streams','bandwidth','entity:0:requests:counter.requests']) {
+      assert.match(badge(key,[stream]),/--pill-bg:var\(--accent-color,#00BCD4\)/);
+    }
+    assert.equal(badge('server:p',[stream]),server);
+    assert.match(badge('streams',[]),/--pill-bg:#343434/);
+  }
+});
+
 // 0.1.9: global LAN/WAN device mapping and reorderable header/footer fields.
 test('device location defaults to integration settings with card-level overrides', () => {
   const {card}=setup();

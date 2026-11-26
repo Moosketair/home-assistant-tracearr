@@ -252,6 +252,20 @@ Les temps écoulé et restant sont calculés localement à partir d'une horloge 
 
 Dans les deux cartes, **temps écoulé / temps restant** apparaît à gauche ; le temps restant suit `show_progress` et `show_remaining`. L’option `show_end_time: true` affiche **« Fin à HH:mm »** à droite pendant la lecture. En pause, la progression et les temps se figent ; le message orange **« En pause »** prend la place de l’heure de fin à droite, même si l’estimation est désactivée. Masquer la progression ou le temps restant ne les réaffiche pas en pause. À la reprise, l’heure de fin est recalculée. Une lecture périmée n’affiche pas d’estimation ; « Non actualisé » reste distinct de la dernière pause connue. Les heures peuvent rester approximatives si Tracearr remonte tardivement une mise en tampon.
 
-Les badges d'en-tête peuvent utiliser `header_positive_only`, `header_blink_positive`, `header_blink_seconds`, `header_show_names`, `header_zero_color_mode` et `header_zero_custom_color`. Chaque badge d'entité dans `header_entity_badges` ou statistique dans `header_metric_settings` peut surcharger son comportement avec `align`, `show_name`, `show_icon`, `only_positive`, `blink_positive`, `blink_seconds`, `zero_color_mode` et `zero_custom_color`. Les statistiques acceptent en plus un nom et une icône MDI personnalisés.
+Les badges d'en-tête peuvent utiliser `header_positive_only`, `header_blink_positive`, `header_blink_seconds`, `header_show_names`, `header_zero_color_mode` et `header_zero_custom_color`. Chaque badge d'entité dans `header_entity_badges` ou statistique dans `header_metric_settings` peut surcharger son comportement avec `align`, `show_name`, `show_icon`, `only_positive`, `blink_positive`, `blink_seconds`, `normal_custom_color`, `zero_color_mode` et `zero_custom_color`. Les statistiques acceptent en plus un nom et une icône MDI personnalisés. Le réglage de la statistique `server_counts` s’applique à tous les compteurs par serveur.
+
+Dans **En-tête et badges**, ouvrez la statistique ou le badge d’entité souhaité, puis **Couleur normale → Couleur particulière**. **Palette par défaut** efface la couleur particulière et rétablit la palette historique. La couleur spécifique à zéro, individuelle ou globale, garde la priorité quand elle s’applique. Si le réglage à zéro est **Palette normale**, le badge conserve sa couleur normale, personnalisée ou non. Sans `normal_custom_color`, aucun changement pour les anciennes cartes.
+
+```yaml
+header_metric_settings:
+  streams:
+    normal_custom_color: "#d8f6ba"
+    zero_color_mode: custom
+    zero_custom_color: "#333344"
+header_entity_badges:
+  - id: requests
+    entity: counter.requests
+    normal_custom_color: "#efcb87"
+```
 
 Les animations de clignotement sont désactivées lorsque le système demande une réduction des mouvements.

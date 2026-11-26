@@ -111,6 +111,7 @@
   const badgeIcon = (kind) => kind === "video" ?
     `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.8" y="8.5" width="18.4" height="12.3" rx="1.8"/><path d="M3.8 8.5 2.6 5.9a1.5 1.5 0 0 1 1-2L18.9 1.7a1.4 1.4 0 0 1 1.6 1.1l.4 2.3-17.1 3.4ZM8.3 3.2l3.1 4.1m2.2-4.8 3.2 4.1"/><path d="m9.5 11.8 5.7 3-5.7 3.1v-6.1Z" fill="currentColor" stroke="none"/></svg>` :
     `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4.2L12.8 4v16l-5.6-5H3V9Z"/><path d="M16.1 8.1c1.9 2 1.9 5.8 0 7.8m2.7-10.7c3.3 3.7 3.3 10 0 13.7"/></svg>`;
+  const optionalColor = value => typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value : undefined;
   const validColor = (value) => /^#[0-9a-fA-F]{6}$/.test(String(value || "")) ? value : "#00BCD4";
   // Centralized palette: progress, metric pills and per-stream badges share the
   // same choice. Contrast uses WCAG relative luminance (black or white).
@@ -337,6 +338,7 @@
         only_positive:!!row.only_positive,
         blink_positive:!!row.blink_positive,
         blink_seconds:row.blink_seconds == null ? undefined : clamp(row.blink_seconds,.5,20,2),
+        normal_custom_color:optionalColor(row.normal_custom_color),
         zero_color_mode:row.zero_color_mode === "custom" ? "custom" : "inherit",
         zero_custom_color:validColor(row.zero_custom_color || "#576574"),
         label:String(row.label || "").slice(0,100),
@@ -351,6 +353,7 @@
         align:badgeAlign(row.align),
         only_positive: !!row.only_positive, blink_positive: !!row.blink_positive,
         blink_seconds: row.blink_seconds ? clamp(row.blink_seconds,.5,20,2) : undefined,
+        normal_custom_color: optionalColor(row.normal_custom_color),
         zero_color_mode: row.zero_color_mode === "custom" ? "custom" : "inherit",
         zero_custom_color: validColor(row.zero_custom_color || "#576574"),
       })) : [];
@@ -852,7 +855,8 @@
         const duration = clamp(custom?.blink_seconds ?? c.header_blink_seconds,.5,20,2);
         const zeroMode = custom?.zero_color_mode === "custom" ? "custom" : c.header_zero_color_mode;
         const zeroColor = custom?.zero_color_mode === "custom" ? custom.zero_custom_color : c.header_zero_custom_color;
-        const palette = !positive && zeroMode === "custom" ? this._paletteForMode("custom",null,zeroColor) : this._headerPalette(colorType);
+        const palette = !positive && zeroMode === "custom" ? this._paletteForMode("custom",null,zeroColor) :
+          custom?.normal_custom_color ? this._paletteForMode("custom",null,custom.normal_custom_color) : this._headerPalette(colorType);
         const showName = custom?.show_name ?? c.header_show_names;
         const displayName = String(custom?.label || "").trim() || name;
         const safeIcon = String(custom?.icon || HEADER_ICONS[key] || "");
@@ -1524,6 +1528,7 @@
     .badge-row button,.add-badge { border:1px solid var(--divider-color,#7775);
       border-radius:7px; padding:8px; color:var(--primary-text-color);
       background:var(--secondary-background-color,transparent); cursor:pointer; text-align:left; }
+    .badge-color { display:grid; gap:8px; }
     .range-row { display:flex; gap:12px; align-items:center; }
     .range-row input[type=range] { flex:1; min-width:0; accent-color:var(--accent-color); }
     .range-row output { min-width:50px; text-align:right; font-variant-numeric:tabular-nums; }
@@ -1603,6 +1608,12 @@
         <option value="right" ${align==="right"?"selected":""}>Droite</option>
       </select></label>`;
     }
+    _normalColorEditor(color, attr) {
+      return `<div class="badge-color"><label>Couleur normale<select ${attr}>` +
+        `<option value="inherit" ${color ? "" : "selected"}>Palette par défaut</option>` +
+        `<option value="custom" ${color ? "selected" : ""}>Couleur particulière</option></select></label>` +
+        `<label>Couleur normale personnalisée<input type="color" ${attr} value="${E(validColor(color))}" ${color ? "" : "disabled"}></label></div>`;
+    }
     _metricBadgeEditor() {
       const rows = this._config.header_metric_settings || {};
       const checks = this._checks(HEADER_FIELDS.map(key => [`header_show_${key}`, HEADER_LABELS[key]]));
@@ -1619,6 +1630,7 @@
             `</div>`+
             `<label>Icône MDI (facultatif)<input type="text" data-metric-setting="icon" data-metric-key="${E(key)}" value="${E(item.icon || "")}" placeholder="${E(HEADER_ICONS[key])}"></label>`+
             `<label>Durée d'un clignotement (secondes)<input type="number" min="0.5" max="20" step="0.5" data-metric-setting="blink_seconds" data-metric-key="${E(key)}" value="${E(item.blink_seconds ?? this._config.header_blink_seconds)}"></label>`+
+            this._normalColorEditor(item.normal_custom_color,`data-metric-setting="normal_custom_color" data-metric-key="${E(key)}"`)+
             `<label>Couleur si valeur à zéro<select data-metric-setting="zero_color_mode" data-metric-key="${E(key)}"><option value="inherit" ${item.zero_color_mode!=="custom"?"selected":""}>Réglage global</option><option value="custom" ${item.zero_color_mode==="custom"?"selected":""}>Couleur particulière</option></select></label>`+
             `<label>Couleur personnalisée à zéro<input type="color" data-metric-setting="zero_custom_color" data-metric-key="${E(key)}" value="${E(validColor(item.zero_custom_color || "#576574"))}"></label>`;
           return this._subgroup(`metric-${key}`, HEADER_LABELS[key], content);
@@ -1640,6 +1652,7 @@
             `<label class="check"><input type="checkbox" data-badge-setting="blink_positive" data-badge-index="${index}" ${row.blink_positive ? "checked" : ""}>Clignoter si supérieur à 0</label>`+
           `</div>`+
           `<label>Durée d'un clignotement (secondes)<input type="number" min="0.5" max="20" step="0.5" data-badge-setting="blink_seconds" data-badge-index="${index}" value="${E(row.blink_seconds ?? this._config.header_blink_seconds)}"></label>`+
+          this._normalColorEditor(row.normal_custom_color,`data-badge-setting="normal_custom_color" data-badge-index="${index}"`)+
           `<label>Couleur si valeur à zéro<select data-badge-setting="zero_color_mode" data-badge-index="${index}"><option value="inherit" ${row.zero_color_mode !== "custom" ? "selected" : ""}>Réglage global</option><option value="custom" ${row.zero_color_mode === "custom" ? "selected" : ""}>Couleur particulière</option></select></label>`+
           `<label>Couleur personnalisée à zéro<input type="color" data-badge-setting="zero_custom_color" data-badge-index="${index}" value="${E(validColor(row.zero_custom_color || "#576574"))}"></label>`+
           `<button class="remove-badge" type="button" data-badge-remove="${index}" aria-label="Supprimer le badge">Supprimer</button>`+
@@ -1802,29 +1815,42 @@
           this._emit();
         });
       });
-      this.shadowRoot.querySelectorAll("[data-metric-setting]").forEach(input => {
+      this.shadowRoot.querySelectorAll("[data-metric-setting],[data-badge-setting]").forEach(input => {
+        const metric = input.dataset.metricSetting !== undefined;
+        const field = metric ? input.dataset.metricSetting : input.dataset.badgeSetting;
         input.addEventListener("change", () => {
-          const key = input.dataset.metricKey;
-          if (!HEADER_FIELDS.includes(key)) return;
-          const field = input.dataset.metricSetting;
-          const value = input.type === "checkbox" ? input.checked :
+          let value = input.type === "checkbox" ? input.checked :
             input.type === "number" ? clamp(input.value,.5,20,2) : input.value;
-          const settings = {...(this._config.header_metric_settings || {})};
-          settings[key] = {...(settings[key] || {}), [field]:value};
-          this._config = {...this._config,header_metric_settings:settings};
-          this._emit();
-        });
-      });
-      this.shadowRoot.querySelectorAll("[data-badge-setting]").forEach(input => {
-        input.addEventListener("change", () => {
-          const rows = [...(this._config.header_entity_badges || [])];
-          const index = Number(input.dataset.badgeIndex);
-          if (!rows[index]) return;
-          const field = input.dataset.badgeSetting;
-          const value = input.type === "checkbox" ? input.checked :
-            input.type === "number" ? clamp(input.value,.5,20,2) : input.value;
-          rows[index] = {...rows[index], [field]: value};
-          this._config = {...this._config,header_entity_badges:rows};
+          if (field === "normal_custom_color" && input.tagName === "SELECT") {
+            const picker = input.closest(".badge-color").querySelector("input");
+            if (value === "custom") {
+              picker.disabled = false;
+              value = picker.value;
+            } else {
+              picker.disabled = true;
+              picker.value = validColor(undefined);
+              value = undefined;
+            }
+          }
+          const update = row => {
+            const next = {...row};
+            if (value === undefined) delete next[field];
+            else next[field] = value;
+            return next;
+          };
+          if (metric) {
+            const key = input.dataset.metricKey;
+            if (!HEADER_FIELDS.includes(key)) return;
+            const settings = {...this._config.header_metric_settings};
+            settings[key] = update(settings[key]);
+            this._config = {...this._config,header_metric_settings:settings};
+          } else {
+            const rows = [...this._config.header_entity_badges];
+            const index = Number(input.dataset.badgeIndex);
+            if (!rows[index]) return;
+            rows[index] = update(rows[index]);
+            this._config = {...this._config,header_entity_badges:rows};
+          }
           this._emit();
         });
       });
