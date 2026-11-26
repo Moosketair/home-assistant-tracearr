@@ -37,8 +37,10 @@ const env = {
   requestAnimationFrame(fn) { const id = ++nextId; frames.set(id, fn); return id; },
   cancelAnimationFrame(id) { frames.delete(id); },
   performance: {now: () => time},
-  Date, URL, CSS: {escape: text => text}, console,
+  Date: class extends Date { static now() { return wallTime ?? Date.now(); } },
+  URL, CSS: {escape: text => text}, console,
 };
+let wallTime;
 const source = readFileSync(join(__dirname, '..', 'custom_components', 'tracearr_ha', 'frontend', 'tracearr-card.js'), 'utf8');
 vm.runInNewContext(source, env);
 const Card = classes.get('tracearr-streams-card');
@@ -310,7 +312,7 @@ test('video and audio icons indicate independent direct, transcode or unknown st
   assert.doesNotMatch(html,/media-flags/);
 });
 
-test('paused stream overlays poster and replaces remaining time with orange En pause', () => {
+test('paused stream overlays poster and keeps remaining time next to elapsed', () => {
   const {card} = setup();
   card._config = {...card._config,show_poster:true,show_avatar:false,show_progress:true,show_remaining:true};
   // Set up fake image proxy avoiding external calls.
@@ -320,11 +322,12 @@ test('paused stream overlays poster and replaces remaining time with orange En p
   assert.match(html, /poster-paused/);
   assert.match(html, /pause-symbol/);
   assert.match(html, /class="time-paused">En pause/);
-  assert.doesNotMatch(html,/class="time-remaining"/);
+  assert.match(html,/class="time-remaining" data-id="abc">-1:20/);
   assert.doesNotMatch(html,/class="stream paused"/);
   card._config.show_remaining=false;
   html=card._streamCard(null,base);
   assert.match(html,/class="time-paused">En pause/);
+  assert.doesNotMatch(html,/class="time-remaining"/);
   card._config.show_remaining=true;
   html=card._streamCard(null,{...base,state:'playing'});
   assert.doesNotMatch(html,/poster-paused/);
@@ -929,11 +932,11 @@ test('finish time independently appears in playing streams but not paused ones',
   assert.match(html,/Fin à \d{2}:\d{2}/);
   assert.doesNotMatch(html,/class="progress"/);
   html=card._streamCard(null,{...stream,state:'paused'});
-  assert.doesNotMatch(html,/Fin estimée/);
+  assert.doesNotMatch(html,/Fin à /);
   assert.match(html,/En pause/);
   card._config.show_end_time=false;
   html=card._streamCard(null,stream);
-  assert.doesNotMatch(html,/Fin estimée/);
+  assert.doesNotMatch(html,/Fin à /);
 });
 
 test('new icons are a clapperboard with play triangle and speaker with sound waves', () => {
@@ -1079,13 +1082,45 @@ test('elapsed and remaining are adjacent at left, estimated ending is separately
   assert.doesNotMatch(html, /time-right|Fin estimée/);
 });
 
-test('paused stream displays En pause beside elapsed and no predicted end', () => {
-  const {card} = setup();
-  card._config = {...card._config, show_poster:false, show_avatar:false,show_end_time:true};
-  const html = card._streamCard(null, {id:'pause1',username:'Alice',server_type:'plex',
-    media_title:'Film',media_type:'movie',state:'paused',progress_ms:60000,duration_ms:180000});
-  assert.match(html, /class="time-left">[\s\S]*class="time-current"[\s\S]*class="time-paused">En pause/);
-  assert.doesNotMatch(html, /class="time-end"/);
+test('both cards keep frozen remaining and progress in pause, then recompute the ETA on resume', () => {
+  try {
+    for (const [type, mode] of [['tracearr-streams-card','list'], ['tracearr-streams-card','carousel'], ['tracearr-stream-card','list']]) {
+      const card = new (classes.get(type))();
+      card.setConfig({mode,show_poster:false,show_avatar:false,show_progress:true,show_remaining:true,show_end_time:true});
+      const stream = {id:'a',state:'playing',progress_ms:60000,duration_ms:180000};
+      const html = () => card._streamCard(null,stream);
+      const start = new Date(2026,10,26,12,0).getTime();
+      time = 0; wallTime = start;
+      assert.match(html(),/Fin à 12:02/);
+      time = 1000; wallTime += 1000; stream.state = 'paused';
+      const paused = html();
+      assert.match(paused,/class="time-remaining" data-id="a">-1:59<\/span><\/span><span class="time-paused">En pause/);
+      assert.match(paused,/width:33\.89%/);
+      assert.doesNotMatch(paused,/Fin à /);
+      time += 180000; wallTime += 180000;
+      assert.equal(html(),paused);
+      stream.state = 'playing';
+      assert.match(html(),/Fin à 12:05/);
+      assert.doesNotMatch(html(),/class="time-paused"/);
+    }
+  } finally { wallTime = undefined; }
+});
+
+test('pause stays identifiable without making hidden time fields visible', () => {
+  for (const show_progress of [false,true]) {
+    for (const show_end_time of [false,true]) {
+      for (const show_remaining of [false,true]) {
+        const {card} = setup();
+        card.setConfig({show_progress,show_end_time,show_remaining,show_poster:false});
+        const html = card._streamCard(null,{id:'a',state:'paused',progress_ms:5000,duration_ms:0});
+        assert.match(html,/class="time-paused">En pause/);
+        assert.doesNotMatch(html,/Fin à |Non actualisé/);
+        assert.equal(html.includes('class="progress"'),show_progress);
+        assert.equal(html.includes('class="time-current"'),show_progress || show_end_time);
+        assert.equal(html.includes('class="time-remaining"'),show_progress && show_remaining);
+      }
+    }
+  }
 });
 
 

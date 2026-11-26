@@ -250,10 +250,13 @@
     .root[data-stale] .fill { background:#808080; transition:none; }
     .times { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:5px 8px;
       font-size:calc(var(--tr-font-size)*.82); font-variant-numeric:tabular-nums; }
-    /* Read elapsed / remaining as one unit; predicted end stays at the right. */
+    /* Read elapsed / remaining as one unit; status or predicted end stays at the right. */
     .time-left { display:inline-flex; align-items:baseline; gap:4px; white-space:nowrap; }
     .time-separator { opacity:.8; }
-    .time-end { margin-left:auto; white-space:nowrap; opacity:.9; text-align:right; }
+    .time-end,.time-paused,.time-status { margin-left:auto; white-space:nowrap; text-align:right; }
+    .time-end { opacity:.9; }
+    .time-status { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px 8px; }
+    .time-status > * { margin-left:0; }
     @container (max-width:360px) { .time-left { white-space:normal; } }
     .time-paused { color:#ff9900; font-weight:700; }
     /* Footer information wraps freely; the poster remains vertically centered beside it. */
@@ -986,10 +989,13 @@
       const displayPosition = Math.max(clock.lastRendered, this._positionAt(clock));
       const ratio = clock.duration > 0 ? 100 * Math.min(1, displayPosition / clock.duration) : 0;
       const timePair = playbackSeconds(displayPosition, clock.duration);
+      const paused = s.state === "paused";
+      const showTimes = c.show_progress || c.show_end_time;
+      const pauseLabel = paused ? `<span class="time-paused">En pause</span>` : "";
       const endLabel = c.show_end_time && clock.duration > 0 ?
         (stale ? `<span class="time-end">Non actualisé</span>` : clock.state === "playing" ?
           `<span class="time-end" data-id="${E(s.id)}">Fin à ${E(estimatedEnd(clock,displayPosition,Date.now()))}</span>` : "") : "";
-      const paused = s.state === "paused";
+      const rightTime = pauseLabel && endLabel ? `<span class="time-status">${pauseLabel}${endLabel}</span>` : pauseLabel || endLabel;
       const metaByKey = {};
       if (c.show_health && entry?.servers?.find(server => server.server_id === s.server_id)?.status === "down") metaByKey.health = (`<span class="chip warn">Serveur hors ligne</span>`);
       if (c.show_server) metaByKey.server = `<span>${E(s.server_name || s.server_type || "")}</span>`;
@@ -1024,7 +1030,7 @@
           ${c.show_avatar ? `<div class="user">${avatar ? `<img class="avatar" data-kind="avatar" src="${E(avatar)}" alt="" loading="eager" decoding="async">` : `<span class="avatar fallback-avatar">${E(name.slice(0,1).toUpperCase())}</span>`}<span>${E(name)}</span></div>` : `<div class="user">${E(name)}</div>`}
           ${mediaMarkup}
           ${c.show_progress ? `<div class="progress"><span class="fill" data-id="${E(s.id)}" style="width:${ratio.toFixed(2)}%"></span></div>` : ""}
-          ${c.show_progress || c.show_end_time ? `<div class="times"><span class="time-left"><span class="time-current" data-id="${E(s.id)}">${formattedSeconds(timePair.elapsed)}</span>${paused ? `<span class="time-separator">/</span><span class="time-paused">En pause</span>` : c.show_remaining && c.show_progress ? `<span class="time-separator">/</span><span class="time-remaining" data-id="${E(s.id)}">-${formattedSeconds(timePair.remaining)}</span>` : ""}</span>${endLabel}</div>` : ""}
+          ${showTimes || paused ? `<div class="times">${showTimes ? `<span class="time-left"><span class="time-current" data-id="${E(s.id)}">${formattedSeconds(timePair.elapsed)}</span>${c.show_remaining && c.show_progress ? `<span class="time-separator">/</span><span class="time-remaining" data-id="${E(s.id)}">-${formattedSeconds(timePair.remaining)}</span>` : ""}</span>` : ""}${rightTime}</div>` : ""}
           ${meta.length ? `<div class="meta">${meta.join("<span aria-hidden=\"true\">·</span>")}</div>` : ""}
         </div>
       </article>`;
@@ -1727,7 +1733,7 @@
         this._checks([
         ["compact","Mode compact"],["show_paused","Inclure les lectures en pause"],
         ["show_poster","Affiche"],["show_avatar","Avatar"],
-        ["show_progress","Progression"],["show_remaining","Temps restant et pause"],
+         ["show_progress","Progression"],["show_remaining","Temps restant"],
         ["show_end_time","Fin de lecture estimée"],["show_transcode_icons","Icônes vidéo/audio"],
       ])+
         this._select("stream_surface","Fond intérieur des lectures",[["soft","Légèrement contrasté"],["transparent","Transparent"],["blur","Affiche floutée (cinéma)"]])+
