@@ -7,6 +7,9 @@ Les changements sont classés par version publique. Les préversions et les anci
 - Les débits de l’en-tête et des panneaux se mettent à jour ensemble après modification des règles LAN/WAN, sans recharger la page ni déplacer le carrousel.
 - Les badges de l’en-tête restent lisibles sur les cartes étroites. Le groupe central reste aussi près du milieu que le permettent ses voisins ; les libellés longs reviennent à la ligne sans être coupés.
 - Les flèches du clavier pilotent le carrousel lorsqu’il a le focus, même si le glissement à la souris et les boutons de navigation sont désactivés.
+- Les cartes libèrent les horloges des lectures terminées et les ressources inutilisées, notamment au démontage.
+- Le clignotement des badges ne repart plus de zéro lors des mises à jour de valeurs ou de sessions.
+- Une panne interne inattendue du flux SSE est journalisée sans données sensibles ; le rafraîchissement REST continue.
 
 ## 0.1.16 — 2026-11-05
 

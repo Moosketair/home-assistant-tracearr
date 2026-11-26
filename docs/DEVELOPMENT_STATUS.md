@@ -1,4 +1,4 @@
-# État de reprise — 2E validée et point de départ 3.1, 26 novembre 2026
+# État de reprise — livraison locale 3.1, 26 novembre 2026
 
 **2A définitivement validée** sur `942de6ffa8d33b0ee10319fa39938c3f587f35aa`. **2B définitivement clôturée** : verdict indépendant 2B.4 **VALIDÉ** sur `f918150fd8fc6fa6f44d309aac3d4387d063d83b`, confirmé par le mainteneur. Les deux régressions relevées par 2B.2 sont corrigées ; les limites d’ordre faute de révision commune REST/SSE sont acceptées. Résultats indépendants : 21 Python, 72 JS, 61 sur chacun des Core 2025.6.0 et 2026.11.3, aucun échec, skip ou xfail. Aucun nouvel audit 2B requis.
 
@@ -8,12 +8,14 @@
 
 **2E définitivement clôturée** sur `b9c5880fe6ed2f2ad6f1b23acb4a5a7c3261e4dd` (`fix/frontend-responsive`), sans contre-audit supplémentaire, par décision du mainteneur. Référence 2E.1 : syntaxe JS valide, 75 tests Node réussis et 78 mesures par exécution sous Chromium et Firefox, en clair et en sombre (largeurs de carte 250, 320, 768, 1200 px). Aucun débordement ni chevauchement après correction, clavier du carrousel corrigé, cohérence LAN/WAN préservée, backend inchangé. Ces résultats sont repris de [RECETTE](RECETTE.md), pas rejoués pour la clôture.
 
+**3.1 livré localement** à partir du SHA 2E validé. A5 : les horloges, signatures et tentatives ne survivent plus aux sessions auxquelles elles appartiennent ; les ressources de la carte suivent son montage. Les badges conservent leur animation lors des actualisations. La réserve 2C.2 sur les exceptions internes SSE est traitée sans relancer le flux en boucle ni changer la récupération REST. Voir [RECETTE](RECETTE.md) pour les preuves ciblées et leurs limites. Les lots 6A, 6B et 6C restent uniquement documentés dans [ROADMAP](ROADMAP.md). Aucun audit indépendant ni lot suivant engagé.
+
 | Repère | Valeur |
 |---|---|
 | Dépôt | `Moosketair/home-assistant-tracearr`, copie de travail `/media/fat/proton_drive/dev/home-assistant-tracearr` lors de l’audit |
 | Référence fonctionnelle | `main` = tag `v0.1.16` = `443ce3859d09b67ccfd589d326d032753dc11d64` à la date de l’audit |
-| Travail local | `fix/frontend-responsive`, créée depuis le SHA 2D validé, sans changement préexistant ; SHA de livraison : `git rev-parse fix/frontend-responsive` |
-| Environnement | 2E.1 : Debian 13.2, Node 22.23.5, Chromium 152, Firefox 140 ESR. Essais Python et Core des lots précédents non relancés. |
+| Travail local | `fix/frontend-lifecycle-performance`, créée depuis le SHA 2E validé en reprenant la documentation 6B déjà approuvée ; SHA de livraison : `git rev-parse fix/frontend-lifecycle-performance` |
+| Environnement | 3.1 : Debian, Node 22.23.5, Chromium 152, Firefox 140 ESR ; tests Python/API et Core ciblés sur 2025.6.0 et 2026.11.3. |
 | Déploiement du mainteneur | HA Container géré par Dockge Enhanced, **non utilisé** ; aucune action distante de publication dans cette phase |
 | GitHub à la date de revue | Stable vérifiée sur le bon SHA, deux workflows verts sur ce SHA, une issue musique ouverte, aucune PR ouverte |
 

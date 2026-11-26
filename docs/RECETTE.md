@@ -220,6 +220,34 @@ Les **78 mesures par moteur et par mode clair/sombre** réussissent après corre
 
 **Non-régression réexécutée.** `node --check custom_components/tracearr_ha/frontend/tracearr-card.js`, `node --test tests/*.cjs` (Node **22.23.5**, **75 réussites**), `git diff --check`, ainsi que `?lan-wan` (liste groupée, carrousel et carte individuelle) dans les deux moteurs et les deux modes de couleur. **Réutilisé sans relancer :** validations Python/Core, contrat et garanties backend des lots 2A–2D. Éditeur HA réel, installation HACS, lecteurs réels, Safari, tactile et performance longue durée non exercés ; pas de changement du schéma YAML, du backend, du WS ou de la version.
 
+### 3.1 — cycle de vie, clignotement et diagnostic SSE
+
+**Avant/après sur le même banc.** Servir `recette/cartes.html?lifecycle` ou `?blink` comme ci-dessous. Pour reproduire les défauts, remplacer seulement le module JS de la copie isolée par `git show b9c5880:custom_components/tracearr_ha/frontend/tracearr-card.js`. Lire le JSON de la page : `ok:false` sur le parent, `ok:true` sur le candidat. Base essayée en clair sous Chromium 152.0.7977.82 et Firefox 140.15.0esr ; candidat testé dans les deux moteurs en clair et en sombre.
+
+| Mesure frontend (deux cartes, sauf intervalle/observateur de la carte groupée) | Parent `b9c5880` | Candidat |
+|---|---:|---:|
+| Horloges après 19 lectures courtes, 2 encore actives, puis aucune | 21 puis 21 | 2 puis 0 |
+| Signatures, compteurs d’essais, retries après disparition de la dernière lecture courte | 18, 1, 1 | 0, 0, 0 |
+| Avant montage : intervalles / abonnements WS | 2 / 2 | 0 / 0 |
+| Carte groupée montée, avec 2 lectures ; après 3 remontages et reconfigurations | 2 intervalles / 2 WS / 1 observateur ; tick remplacé à chaque configuration | 2 / 2 / 1 ; même tick si la configuration ne change pas son besoin |
+| Cartes montées, aucune lecture : intervalles / abonnements WS | 2 / 2 | 0 / 2 |
+| Après retrait des deux cartes : horloges / signatures / compteurs ; timers, observateurs, trames d’animation et abonnements WS | 21 / 18 / 1 ; 0 tâche frontend suivie et 0 WS | 0 / 0 / 0 ; 0 tâche frontend suivie et 0 WS |
+
+`?lifecycle` vérifie aussi l’ancre du carrousel, l’identité d’une horloge active et l’indépendance des cartes, le gel en pause puis la reprise. Node couvre en plus pause filtrée, changement d’entrée avec ID de lecture réutilisé, état vide masqué, callbacks WS tardifs, signatures tardives et annulation des transitions. Les chiffres sont des décomptes d’objets ou de handles ciblés, pas une mesure de la RAM ni une preuve d’absence de fuite globale.
+
+**Clignotement.** Sur la base, le cycle CSS seul est régulier. Une variation de capteur, de débit ou la disparition d’une lecture détruisait les nœuds de l’en-tête : les trois animations testées sautaient de **0,22 à 1** à mi-cycle, contrairement à une progression seule. Sur le candidat, les mêmes mises à jour conservent les nœuds, les animations et l’opacité mesurée (**écart 0**), en liste et carrousel groupés et sur la carte individuelle. Les durées **500 / 900 / 1 400 ms** restent indépendantes. Les passages positif → zéro → positif arrêtent ou masquent seulement le badge concerné, puis permettent sa reprise. Le réordonnancement des compteurs de deux serveurs conserve 0,22. Le banc relève une descente et une montée progressives sur 32 échantillons du cycle court. Aucun nouveau timer d’animation.
+
+**Panne interne SSE.** Sur Core 2025.6.0 avec le backend `b9c5880`, 3 échecs discriminants : `RuntimeError` muette, `TimeoutError` d’application prise pour un timeout réseau, générateur SSE non fermé explicitement à la panne ; le contrôle d’annulation passe déjà. Les quatre cas passent sur le candidat. L’erreur est journalisée une seule fois avec classe et lieu, sans la chaîne contenant une clé, une URL et un corps factices. `sse_connected` devient faux sur le WS, le REST reste disponible et son producteur récupère la progression suivante. Le flux SSE ne se relance pas automatiquement sur cette panne ; le lecteur est fermé et l’unload termine le polling sans fermer la session aiohttp de HA.
+
+| Vérification sur le candidat | Résultat |
+|---|---|
+| `TMPDIR=/tmp/opencode bash recette/lancer.sh base -k test_api` | 2 tests API sur Python 3.13.5 ; syntaxe du module valide, suite Node complète également exécutée. |
+| `node --test tests/test_carousel.cjs` (Node 22.23.5) | 79 passés. |
+| `TMPDIR=/tmp/opencode bash recette/lancer.sh min -k 'internal_sse_failure or sse_source_is_closed or bad_sse_frame or reconnect or ready'` (et `current`) | 26 passés sur chacun des Core 2025.6.0 / Python 3.13.18 et 2026.11.3 / Python 3.14.10, sans échec ni skip ; avertissements de dépendances HA/aiohttp. |
+| `?lifecycle`, `?blink`, `?responsive`, `?lan-wan` | Passent dans les deux navigateurs et les deux thèmes du banc. Par combinaison, 78 mesures responsive, écart de centrage ≤0,01 px, aucun débordement ni chevauchement, quatre vérifications clavier et trois cas LAN/WAN. |
+
+Les validations officielles 0 à 2E restent acquises ; seules les non-régressions ciblées ci-dessus sont rejouées. Pas d’essai longue durée, de vrai dashboard HA, de Safari, de tactile physique ni de lecteur réel. Le mainteneur peut confirmer le ressenti du clignotement sur son dashboard lors d’une validation ultérieure ; aucune publication n’est engagée.
+
 ## Recette visuelle légère
 
 `recette/cartes.html` monte le JS distribué, avec une source WS de carte synthétique. Les métriques sont mesurées sur les éléments réels du Shadow DOM. Sous Chromium (152.0.7977.82 pendant la validation) :
@@ -251,6 +279,6 @@ Pour la preuve avant correction de 2E.1, servir une deuxième copie isolée de c
 
 1. Comparer les largeurs **de carte** 250/320/768/1200 px. Deux colonnes demandées donnent **1/1/2/2**. Attendre la fin de la matrice, ou utiliser `?responsive` pour les assertions. Relever l’écart de centrage et le débordement ; les pixels exacts dépendent de la police. Les valeurs d’avant correction sont conservées dans la section 2E.1.
 2. Basculer groupée/individuelle, liste/carrousel ; avancer avec les flèches. Observer le compteur puis mettre en pause/reprendre : l’écoulé de la première session doit se figer/repartir. Basculer le libellé et la largeur sans recharger la page.
-3. Démonter/remonter plusieurs fois ; vérifier visuellement l’absence de panneaux dupliqués, le retour du flux et, dans les outils de développement du navigateur, le nombre de timers/écouteurs si cette partie est modifiée. La page ne constitue pas une assertion automatique sur la mémoire.
+3. Démonter/remonter plusieurs fois ; vérifier visuellement l’absence de panneaux dupliqués et le retour du flux. Utiliser `?lifecycle` pour décompter les états, les timers, l’observateur et les abonnements de carte, et `?blink` pour mesurer le cycle natif et les mises à jour. Ces sondes ne remplacent pas un profilage de RAM.
 
 **Limites.** Les preuves P1 portent sur le code publié avec un vrai backend Core et un réseau local simulé. Le banc ne valide pas d’installation HACS, de vrai dashboard HA, de lecteur physique Plex/Jellyfin/Emby, de débit Internet, de proxy inverse, de permissions multi-utilisateurs en production, ni d’iOS/Android. Il n’implémente pas l’ensemble de l’API Tracearr, ni son stockage, sa cadence de heartbeat ou ses quotas réels. La sonde frontend ne charge pas le sélecteur d’entités de HA. Pour la suite, garder ces essais rapides, puis compléter par un environnement de prépublication distinct selon les changements.
