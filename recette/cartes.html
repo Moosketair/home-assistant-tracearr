@@ -16,7 +16,14 @@
 <script>
   const el = id => document.getElementById(id);
   const host = el("host"), sizes = [250, 320, 768, 1200], reports = [];
-  let card, mode = "carousel", individual = false, longLabel = false, listener, paused = false;
+  const params = new URLSearchParams(location.search);
+  // Let native layout, ResizeObserver and any deferred reflow settle.
+  const frame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  if (params.has("visual")) {
+    for (const node of document.querySelectorAll("h1, label, body > button, #result")) node.hidden = true;
+  }
+  const longText = "Consommation distante des utilisateurs sur le serveur du séjour";
+  let card, mode = "carousel", individual = false, longLabel = false, connection, listener, paused = false;
   const entry = {id:"fixture", connected:true, servers:[], streams:[1,2,3].map(i => ({
     id:String(i), server_id:"fixture", server_name:"Test", server_type:"plex", username:"Fixture",
     state:"playing", media_title:`Film ${i}`, duration_ms:120000, progress_ms:10000, bitrate:1000
@@ -24,16 +31,16 @@
   function configure() {
     card?.setConfig({mode:individual ? "list" : mode, carousel_visible:2, carousel_transition:"none", show_title:false,
       header_show_video:true, header_show_bandwidth:true, header_metric_settings:{
-        streams:{align:"left"}, bandwidth:{align:"center", label:longLabel ?
-          "Consommation distante des utilisateurs sur le serveur du séjour" : "Débit"}, video:{align:"right"}
+         streams:{align:"left"}, bandwidth:{align:"center", label:longLabel ? longText : "Débit"}, video:{align:"right"}
       }});
   }
   function attach() {
     card = host.appendChild(document.createElement(individual ? "tracearr-stream-card" : "tracearr-streams-card"));
     configure();
-    card.hass = {connection:{subscribeMessage:async fn => {
+    connection = {subscribeMessage:async fn => {
       listener = fn; fn({entries:[entry]}); return () => {if (listener === fn) listener = null;};
-    }}, states:{}};
+    }};
+    card.hass = {connection, states:{}};
   }
   function measure(width) {
     host.style.width = `${width}px`;
@@ -84,9 +91,197 @@
       return {layout:single ? "individual" : layout, before, after, restored, anchorPreserved, ok};
     });
   }
+  async function probeResponsive() {
+    const root = () => card.shadowRoot;
+    const find = q => root().querySelector(q);
+    const all = q => [...root().querySelectorAll(q)];
+    const rect = node => node.getBoundingClientRect();
+    const round = n => +n.toFixed(2);
+    const overlaps = (a, b) => Math.min(a.bottom,b.bottom) - Math.max(a.top,b.top) > 1;
+    const observerErrors = [];
+    const captureError = event => {
+      if (event.message.includes("ResizeObserver")) observerErrors.push(event.message);
+    };
+    window.addEventListener("error", captureError);
+    const sensor = {
+      id:"requests", entity:"sensor.requests", label:"Demandes", align:"center", show_icon:true,
+      only_positive:false, blink_positive:true, blink_seconds:3
+    };
+    const setState = state => {
+      card.hass = {connection, states:{"sensor.requests":{state, attributes:{icon:"mdi:gauge",unit_of_measurement:"Go"}}}};
+    };
+    const config = (groups, extra={}) => card.setConfig({
+      mode:individual ? "list" : mode, carousel_visible:2, carousel_transition:"none", carousel_autoplay:false,
+      show_title:false, show_poster:false, show_avatar:false, header_show_streams:!!groups.left,
+      header_show_bandwidth:!!groups.center, header_show_video:!!groups.right,
+      header_metric_settings:{
+        streams:{align:"left",label:groups.left}, bandwidth:{align:"center",label:groups.center},
+        video:{align:"right",label:groups.right}
+      }, ...extra
+    });
+    function geometry(natural = []) {
+      const metrics = find(".head-metrics");
+      const box = rect(metrics), outer = rect(find(".root"));
+      const groups = all(".head-group");
+      const badges = all(".metric");
+      const bounds = badges.map(rect);
+      const gap = parseFloat(getComputedStyle(metrics).columnGap);
+      const center = find(".align-center"), left = find(".align-left"), right = find(".align-right");
+      let centerOffset = null, centerError = null;
+      if (center) {
+        const c = rect(center), l = left && rect(left), r = right && rect(right);
+        const ideal = (box.left + box.right - c.width) / 2;
+        const min = l && overlaps(l,c) ? l.right + gap : box.left;
+        const max = (r && overlaps(c,r) ? r.left - gap : box.right) - c.width;
+        centerOffset = round(c.left - ideal);
+        centerError = round(Math.abs(c.left - Math.max(min, Math.min(ideal, max))));
+      }
+      const overflow = area => round(Math.max(0, ...bounds.map(b => Math.max(area.left - b.left, b.right - area.right))));
+      const collision = bounds.some((a, i) => bounds.slice(i+1).some(b =>
+        overlaps(a,b) && Math.min(a.right,b.right) - Math.max(a.left,b.left) > 1));
+      const clipped = badges.some(b => {
+        const text = document.createRange();
+        text.selectNodeContents(b);
+        const pill = rect(b);
+        return [...text.getClientRects()].some(r =>
+          r.width > 0 && (r.left < pill.left - 1 || r.right > pill.right + 1));
+      });
+      const lines = new Set(bounds.map(b => Math.round((b.top+b.bottom)/2))).size;
+      const oneLine = bounds.every(b => overlaps(b,bounds[0]));
+      const naturalPx = round(natural.reduce((sum,w) => sum+w,0) + Math.max(0,natural.length-1)*gap);
+      const fits = natural.length > 0 && naturalPx <= box.width + 0.01;
+      const edgeAligned = (!left || Math.abs(rect(left).left - box.left) <= 0.25) &&
+        (!right || Math.abs(rect(right).right - box.right) <= 0.25);
+      const widths = groups.map(g => round(rect(g).width));
+      const intrinsic = groups.every((g,i) => !natural.length || Math.abs(widths[i] - Math.min(natural[i], box.width)) <= 0.25);
+      const overflowPx = overflow(box);
+      return {cardPx:rect(card).width, availablePx:round(box.width), naturalPx, widths,
+        overflowPx, outsideCardPx:overflow(outer), centerOffset, centerError, lines, oneLine, fits, collision, clipped, edgeAligned, intrinsic,
+        ok:overflowPx <= 0.25 && !collision && !clipped && (centerError ?? 0) <= 0.25 &&
+          (!fits || oneLine) && edgeAligned && intrinsic};
+    }
+    const rows = [];
+    async function layout(name, groups, extra, titles) {
+      host.style.width = "1200px";
+      config(groups, extra);
+      await frame();
+      const natural = all(".head-group").map(g => [...g.children].reduce((sum,b) => sum + rect(b).width,0) +
+        (g.childElementCount - 1) * parseFloat(getComputedStyle(g).columnGap));
+      for (const width of [...sizes, 250, 1200]) {
+        host.style.width = `${width}px`;
+        await frame();
+        const row = geometry(natural);
+        const order = all(".metric").map(b => b.title).join("|") === titles.join("|");
+        const title = extra?.show_title ? find("h3")?.textContent === extra.title : !find("h3");
+        const shortCentered = name !== "court" || (row.oneLine && Math.abs(row.centerOffset) <= 0.25);
+        const compact = name !== "long" || (width <= 320 ? row.lines === 2 : row.oneLine);
+        const shifted = width !== 320 ||
+          (name !== "gauche large" || (row.oneLine && row.centerOffset > 1)) &&
+          (name !== "droite large" || (row.oneLine && row.centerOffset < -1));
+        rows.push({name,width,...row,order,title,compact,shifted,
+          ok:row.ok && order && title && shortCentered && compact && shifted && row.cardPx === width});
+      }
+    }
+    setState("7");
+    const short = {left:"Flux", center:"D", right:"V"};
+    await layout("court", short, {}, ["Flux","D","V"]);
+    await layout("long", {...short,center:longText}, {}, ["Flux",longText,"V"]);
+    await layout("centres multiples", short, {header_entity_badges:[sensor],
+      header_badge_order:"entity:requests,streams,bandwidth,video"}, ["Flux","Demandes","D","V"]);
+    const wideSide = "Flux distants HD";
+    await layout("gauche large", {...short,left:wideSide}, {}, [wideSide,"D","V"]);
+    await layout("droite large", {...short,right:wideSide}, {}, ["Flux","D",wideSide]);
+    await layout("sans gauche", {center:"D",right:wideSide}, {}, ["D",wideSide]);
+    await layout("sans droite", {left:"Flux",center:"D"}, {}, ["Flux","D"]);
+    await layout("sans centre", {left:"Flux",right:"V"}, {show_title:true,title:"Mon serveur"}, ["Flux","V"]);
+    await layout("centre seul", {center:longText}, {}, [longText]);
+    await layout("centré sans espaces", {}, {header_entity_badges:[{...sensor,label:"M".repeat(75)}]}, ["M".repeat(75)]);
+    await layout("texte agrandi", short, {font_size:28, header_entity_badges:[sensor]}, ["Flux","D","Demandes","V"]);
+    mode = "list";
+    await layout("liste titrée", short, {show_title:true,title:"Mon serveur"}, ["Flux","D","V"]);
+    card.remove(); individual = true; attach();
+    await layout("individuelle", {...short,center:longText}, {}, ["Flux",longText,"V"]);
+    card.remove(); individual = false; mode = "carousel"; attach();
+
+    host.style.width = "320px";
+    config({left:"Flux",right:"Vidéo"}, {header_entity_badges:[sensor]});
+    const carousel = find(".carousel");
+    find('button[data-step="1"]').click();
+    const index = card._carouselIndex, scroll = carousel.scrollLeft;
+    const dynamic = [];
+    for (const state of ["7","1234567890".repeat(8),"7"]) {
+      setState(state);
+      await frame();
+      const badge = find(".align-center .metric"), center = rect(badge);
+      dynamic.push({state,...geometry(), height:round(center.height), value:badge.textContent.endsWith(`${state} Go`),
+        icon:badge.querySelector('ha-icon[icon="mdi:gauge"]') !== null, blink:badge.classList.contains("blink-positive"),
+        anchor:carousel === find(".carousel") && index === card._carouselIndex && scroll === carousel.scrollLeft && scroll > 0});
+    }
+    const dynamicOk = dynamic.every(b => b.ok && b.value && b.icon && b.blink && b.anchor) &&
+      dynamic[1].height > dynamic[0].height && dynamic[0].height === dynamic[2].height;
+    const keyboard = [];
+    for (const width of sizes) {
+      host.style.width = `${width}px`;
+      config(short, {carousel_show_arrows:false, carousel_mouse_drag:false});
+      const track = find(".carousel");
+      track.focus({preventScroll:true});
+      const focused = root().activeElement === track;
+      const send = key => !track.dispatchEvent(new KeyboardEvent("keydown",{key,bubbles:true,cancelable:true}));
+      const right = send("ArrowRight"), forward = card._carouselIndex === 1 && track.scrollLeft > 0;
+      const left = send("ArrowLeft"), back = card._carouselIndex === 0 && track.scrollLeft === 0;
+      const noButtons = !find(".carousel-nav");
+      const other = !send("a");
+      keyboard.push({width,focused,right,forward,left,back,noButtons,other,
+        ok:focused && right && forward && left && back && noButtons && other});
+    }
+    const artwork = [];
+    for (const width of sizes) {
+      host.style.width = `${width}px`;
+      config(short,{show_poster:true,poster_size:135,stream_surface:"blur"});
+      const poster = rect(find(".poster-wrap"));
+      const stream = find(".stream");
+      const columns = Math.round(rect(find(".streams")).width / rect(stream).width);
+      artwork.push({width,poster:[poster.width,poster.height],columns,
+        ok:poster.width === 99 && poster.height === 147 && !!find(".stream-backdrop .backdrop-empty") &&
+          getComputedStyle(stream).backgroundColor === "rgb(25, 26, 29)" && columns === (width <= 320 ? 1 : 2)});
+    }
+    const empty = [];
+    listener({entries:[{...entry,streams:[]}]});
+    for (const emptyMode of ["message","header_only","hide"]) {
+      config(short, {empty_mode:emptyMode,header_positive_only:true,
+        header_entity_badges:[{...sensor,only_positive:true}],show_title:true,title:"Mon serveur"});
+      setState("0");
+      const noBadges = !find(".head-metrics");
+      const expected = emptyMode === "message" ? !!find(".empty-message") && !!find("h3") :
+        emptyMode === "header_only" ? !find(".streams") && !!find("h3") : card.style.display === "none";
+      empty.push({emptyMode,ok:noBadges && expected});
+    }
+    listener({entries:[entry]});
+    config(short, {show_header:false});
+    const hiddenHeader = !find(".head") && all(".stream").length === entry.streams.length;
+    config(short, {header_entity_badges:[{...sensor,show_name:false,zero_color_mode:"custom",zero_custom_color:"#202020"}]});
+    const iconOnly = find(".align-center .metric[title=Demandes]");
+    const customization = !!iconOnly?.querySelector("ha-icon") && iconOnly.textContent === "0 Go" &&
+      !iconOnly.classList.contains("blink-positive") && iconOnly.style.getPropertyValue("--pill-bg") === "#202020";
+    window.removeEventListener("error", captureError);
+    return {ok:rows.every(r => r.ok) && dynamicOk && keyboard.every(r => r.ok) && artwork.every(r => r.ok) &&
+      empty.every(r => r.ok) && hiddenHeader && customization && !observerErrors.length,
+      theme:matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
+      rows,dynamic,dynamicOk,keyboard,artwork,empty,hiddenHeader,customization,observerErrors};
+  }
+  async function measureMatrix() {
+    for (const label of [false,true]) {
+      longLabel = label; configure();
+      for (const w of sizes) {
+        host.style.width = `${w}px`;
+        await frame();
+        reports.push(measure(w));
+      }
+    }
+    longLabel = false; configure(); display();
+  }
   attach();
-  for (longLabel of [false,true]) {configure(); for (const w of sizes) reports.push(measure(w));}
-  longLabel = false; configure(); display();
+  longLabel = params.get("visual") === "long"; configure(); display();
   el("width").onchange = display;
   el("type").onclick = () => {card?.remove(); individual = !individual; attach(); display();};
   el("layout").onclick = () => {mode = mode === "list" ? "carousel" : "list"; configure(); display();};
@@ -96,9 +291,15 @@
     listener?.({entries:[entry]}); display();
   };
   el("mount").onclick = () => {if (card) {card.remove(); card=null;} else attach(); display();};
-  if (new URLSearchParams(location.search).has("lan-wan")) {
+  if (params.has("lan-wan")) {
     const cases = probeLanWan();
     el("result").textContent = JSON.stringify({ok:cases.every(row => row.ok),
       theme:matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light", cases}, null, 2);
+  }
+  if (params.has("responsive")) {
+    probeResponsive().then(report => { el("result").textContent = JSON.stringify(report, null, 2); })
+      .catch(error => { el("result").textContent = JSON.stringify({ok:false,error:String(error),stack:error.stack}); });
+  } else if (!params.has("lan-wan") && !params.has("visual")) {
+    measureMatrix();
   }
 </script></html>

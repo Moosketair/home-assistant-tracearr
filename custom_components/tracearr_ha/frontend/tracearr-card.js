@@ -158,38 +158,22 @@
       margin:0 0 12px; color:var(--primary-text-color,#fff); }
     .head h3 { flex:0 1 auto; margin:0; font-size:calc(var(--tr-font-size)*1.24); font-weight:700;
       color:var(--primary-text-color,#fff); overflow-wrap:anywhere; }
-    /* Only render populated badge groups. Without center badges, the left and
-       right groups share a flexible row and no empty middle column is reserved. */
+    /* Pack the populated groups at their natural widths before centering.
+       A group wider than the row wraps its own badges within the row. */
     .head-metrics { display:flex; flex:1 1 320px; width:0; flex-wrap:wrap;
-      align-items:center; justify-content:space-between; gap:5px 10px; min-width:0; }
-    .head-group { display:flex; flex:0 1 auto; flex-wrap:wrap; align-items:center; gap:5px; min-width:0; }
+      align-items:center; gap:5px 10px; min-width:0; }
+    .head-group { display:flex; flex:0 0 auto; width:max-content; max-width:100%;
+      flex-wrap:wrap; align-items:center; gap:5px; }
     .head-group.align-left { justify-content:flex-start; }
-    .head-group.align-center { justify-content:center; }
-    .head-group.align-right { justify-content:flex-end; margin-left:auto; }
+    .head-group.align-center { justify-content:center; margin-inline:auto; }
+    .head-group.align-right { justify-content:flex-end; margin-inline-start:auto; }
+    .head-metrics.center-last > .align-center { order:1; }
     .head.no-title .head-metrics { width:100%; }
-    .head-metrics.only-center { justify-content:center; }
-    /* Give the center only its badges' intrinsic width; the two remaining
-       tracks share the free space equally, keeping the badge at the true
-       midpoint. This keeps all three groups on one line on most phones. */
-    .head-metrics.with-center { display:grid;
-      grid-template-columns:minmax(0,1fr) max-content minmax(0,1fr); }
-    .head-metrics.with-center > .align-left { grid-column:1; }
-    .head-metrics.with-center > .align-center { grid-column:2; width:max-content;
-      max-width:100%; justify-self:center; justify-content:center; }
-    .head-metrics.with-center > .align-right { grid-column:3; margin-left:0; }
-    @container (max-width:260px) {
-      /* Only extremely narrow card containers need the centered badge(s)
-         to occupy another row. Avoid arbitrary mobile-width breakpoints. */
-      .head-metrics.with-center { display:flex; }
-      .head-metrics.with-center > .align-left { order:1; }
-      .head-metrics.with-center > .align-right { order:2; margin-left:auto; }
-      .head-metrics.with-center > .align-center { order:3; flex:1 1 100%;
-        width:100%; margin-inline:0; justify-content:center; }
-    }
     .metric { display:inline-flex; align-items:center; gap:4px; padding:4px 9px; border-radius:20px;
       font-size:calc(var(--tr-font-size)*.80); font-weight:600; background:var(--pill-bg);
-      color:var(--pill-text); white-space:nowrap; }
-    .metric ha-icon { --mdc-icon-size:16px; width:16px; height:16px; display:inline-flex; }
+      color:var(--pill-text); box-sizing:border-box; min-width:0; max-width:100%; }
+    .metric-text { min-width:0; overflow-wrap:anywhere; }
+    .metric ha-icon { --mdc-icon-size:16px; flex:none; width:16px; height:16px; display:inline-flex; }
     .metric.blink-positive { animation:tracearr-badge-pulse var(--badge-blink,2s) ease-in-out infinite; }
     @keyframes tracearr-badge-pulse { 0%,100% { opacity:1; } 50% { opacity:.22; } }
     .streams { display:flex; flex-direction:column; gap:10px; }
@@ -390,6 +374,8 @@
       this._renderFingerprint = null;
       this._liveFingerprints = new Map();
       this._headerMarkup = "";
+      this._headerResize = null;
+      this._headerFrame = null;
       this._entry = null;
     }
     static getStubConfig() { return {...DEFAULTS}; }
@@ -415,11 +401,13 @@
     }
     connectedCallback() {
       this._closed = false;
+      this._observeHeaderLayout();
       this._setTimers();
       if (this._hass?.connection && !this._connection) this._subscribe(this._hass.connection);
     }
     disconnectedCallback() {
       this._closed = true;
+      this._stopHeaderLayout();
       clearInterval(this._tick);
       clearInterval(this._carouselTimer);
       this._stopCarouselAnimation();
@@ -785,7 +773,7 @@
         const iconMarkup = custom?.show_icon && /^(mdi|hass):[a-z0-9-]+$/.test(safeIcon) ?
           `<ha-icon icon="${E(safeIcon)}" aria-hidden="true"></ha-icon>` : "";
         const output = `${showName && displayName ? `${E(displayName)} : ` : ""}${E(display)}`;
-        const markup = `<span class="metric${blinking ? " blink-positive" : ""}" style="--pill-bg:${palette.bg};--pill-text:${palette.text};--badge-blink:${duration}s" title="${E(displayName || display)}">${iconMarkup}${output}</span>`;
+        const markup = `<span class="metric${blinking ? " blink-positive" : ""}" style="--pill-bg:${palette.bg};--pill-text:${palette.text};--badge-blink:${duration}s" title="${E(displayName || display)}">${iconMarkup}<span class="metric-text">${output}</span></span>`;
         const position = badgeAlign(custom?.align);
         const align = position === "auto" ? (c.show_title ? "right" : "left") : position;
         metrics.set(key, [...(metrics.get(key) || []), {align,markup}]);
@@ -830,10 +818,9 @@
       const groups = {left:[],center:[],right:[]};
       for (const badge of orderedMetrics) groups[badge.align].push(badge.markup);
       const populated = ["left","center","right"].filter(position => groups[position].length);
-      // No empty group in the DOM: a missing center must not reserve a column.
-      // Keep symmetrical tracks only for multiple groups with a real center badge.
-      const layout = populated.length === 1 && populated[0] === "center" ? " only-center" :
-        populated.includes("center") ? " with-center" : "";
+      // A center group alone is already centered by flex. With neighbors,
+      // correct its position once the browser has laid out the flex rows.
+      const layout = populated.length > 1 && populated.includes("center") ? " with-center" : "";
       const badgeMarkup = orderedMetrics.length ?
         `<div class="head-metrics${layout}">${populated.map(position =>
           `<div class="head-group align-${position}">${groups[position].join("")}</div>`).join("")}</div>` : "";
@@ -1084,12 +1071,6 @@
       };
       el.addEventListener("pointerup", end);
       el.addEventListener("pointercancel", end);
-      el.addEventListener("keydown", (event) => {
-        if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
-          event.preventDefault();
-          this._scroll(event.key === "ArrowRight" ? 1 : -1);
-        }
-      });
     }
     _scroll(direction, fromAutoplay=false) {
       // Never cut an animation short if the configured interval fires while a
@@ -1120,6 +1101,58 @@
       else if (oldHeader && !header) oldHeader.remove();
       else if (!oldHeader && header) root?.insertAdjacentHTML("afterbegin", header);
       this._headerMarkup = header;
+      this._observeHeaderLayout();
+    }
+    _stopHeaderLayout() {
+      this._headerResize?.disconnect();
+      this._headerResize = null;
+      if (this._headerFrame !== null) cancelAnimationFrame(this._headerFrame);
+      this._headerFrame = null;
+    }
+    _observeHeaderLayout() {
+      this._stopHeaderLayout();
+      if (!this.isConnected || typeof ResizeObserver !== "function") return;
+      const metrics = this.shadowRoot.querySelector(".head-metrics.with-center");
+      if (!metrics) return;
+      const center = metrics.querySelector(".align-center");
+      const left = metrics.querySelector(".align-left");
+      const right = metrics.querySelector(".align-right");
+      const update = () => {
+        const row = metrics.getBoundingClientRect(), box = center.getBoundingClientRect();
+        const style = getComputedStyle(metrics);
+        const gap = parseFloat(style.columnGap);
+        const start = left?.getBoundingClientRect(), end = right?.getBoundingClientRect();
+        // If neither side fits alongside the center, keep the sides together
+        // when possible instead of using three rows. This depends only on
+        // intrinsic widths, so changing the order cannot change the decision.
+        const fits = (a,b) => a.width + b.width + gap <= row.width + 0.01;
+        const centerLast = !!(start && end && fits(start,end) && !fits(start,box) && !fits(end,box));
+        if (this._headerFrame !== null) cancelAnimationFrame(this._headerFrame);
+        this._headerFrame = null;
+        if (metrics.classList.contains("center-last") !== centerLast) {
+          // Repacking may change the observed height; don't do it during
+          // observer delivery. The new row order only needs flex alignment.
+          this._headerFrame = requestAnimationFrame(() => {
+            this._headerFrame = null;
+            metrics.classList.toggle("center-last", centerLast);
+            center.style.translate = "";
+            update(); // Position may change even if all observed sizes are unchanged.
+          });
+          return;
+        }
+        const onRow = rect => rect && rect.top < box.bottom && rect.bottom > box.top ? rect : null;
+        const [l,r] = (style.direction === "rtl" ? [end,start] : [start,end]).map(onRow);
+        const min = l ? l.right + gap : row.left;
+        const max = (r ? r.left - gap : row.right) - box.width;
+        const ideal = row.left + (row.width - box.width) / 2;
+        const previous = parseFloat(center.style.translate) || 0;
+        // Translation leaves flex sizing and wrapping alone, so it cannot
+        // retrigger the observer. Clamp only against neighbors on this row.
+        const delta = Math.max(min, Math.min(ideal, max)) - box.left;
+        if (Math.abs(delta) > 0.01) center.style.translate = `${previous + delta}px`;
+      };
+      this._headerResize = new ResizeObserver(update);
+      for (const node of [metrics, center, left, right]) if (node) this._headerResize.observe(node);
     }
     _updateCarouselLive(entry, streams) {
       const carousel = this.shadowRoot.querySelector(".streams.carousel");
@@ -1180,7 +1213,12 @@
       const oldScroll = carousel?.scrollLeft || 0;
       const previousAnchor = carousel?.querySelectorAll(".stream")?.[this._carouselIndex]?.dataset?.session;
       this._stopCarouselAnimation();
-      if (c.empty_mode === "hide" && !streams.length) { this.shadowRoot.innerHTML = `<style>${style}</style>`; this.style.display="none"; return; }
+      if (c.empty_mode === "hide" && !streams.length) {
+        this.shadowRoot.innerHTML = `<style>${style}</style>`;
+        this._observeHeaderLayout();
+        this.style.display="none";
+        return;
+      }
       this.style.display="";
       const head = this._header(streams);
       this._headerMarkup = head;
@@ -1197,6 +1235,7 @@
         `<div class="${classes}" ${c.mode === "carousel" ? `tabindex="0" role="region" aria-label="Lectures en carrousel"` : ""} style="--carousel-visible:${visible}">${items || `<div class="empty-message">${E(emptyText)}</div>`}</div>`;
       const nav = c.mode === "carousel" && c.carousel_show_arrows && streams.length > 1 ? `<div class="carousel-nav"><button class="nav" data-step="-1" aria-label="Précédent">❮</button><span>${streams.length} lectures</span><button class="nav" data-step="1" aria-label="Suivant">❯</button></div>` : "";
       this.shadowRoot.innerHTML = `<style>${style}</style><ha-card style="--tr-font-size:${clamp(c.font_size,10,28,14)}px;${posterVars}"><div class="root ${c.compact?"compact":""} ${c.stream_surface === "transparent" ? "flat-streams" : ""}">${head}${body}${nav}</div></ha-card>`;
+      this._observeHeaderLayout();
       const newCarousel = this.shadowRoot.querySelector(".streams.carousel");
       if (newCarousel) {
         const cards = [...newCarousel.querySelectorAll(".stream")];
@@ -1209,6 +1248,12 @@
           newCarousel.scrollLeft = cards[this._carouselIndex].offsetLeft - cards[0].offsetLeft;
         } else newCarousel.scrollLeft = oldScroll;
         this._enableMouseDrag(newCarousel, cards);
+        newCarousel.addEventListener("keydown", (event) => {
+          if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+            event.preventDefault();
+            this._scroll(event.key === "ArrowRight" ? 1 : -1);
+          }
+        });
         // A touch swipe is manual navigation too: give the user the entire
         // interval before automatically advancing again.
         newCarousel.addEventListener("touchend", () => this._armCarouselAutoplay(), {passive:true});

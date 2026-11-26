@@ -356,14 +356,14 @@ test('native Sections layout owns size regardless of legacy pixel/row settings',
 });
 
 test('arrows can be hidden but carousel keyboard controls and dragging remain supported', () => {
-  const {card,carousel,cards,listeners}=setup({count:3,visible:1,effect:'none'});
+  const {card,carousel,listeners}=setup({count:3,visible:1,effect:'none'});
   card._config.carousel_show_arrows=false;
   card._config.carousel_mouse_drag=true;
   const classes=new Set();
   carousel.classList={add:c=>classes.add(c),remove:c=>classes.delete(c)};
   carousel.setPointerCapture=()=>{};
   carousel.hasPointerCapture=()=>false;
-  card._enableMouseDrag(carousel,cards);
+  card.render();
   const get = name => listeners.find(l=>l.event===name).fn;
   get('pointerdown')({pointerType:'mouse',button:0,clientX:220,pointerId:1});
   assert.ok(classes.has('is-dragging'));
@@ -375,10 +375,21 @@ test('arrows can be hidden but carousel keyboard controls and dragging remain su
   assert.ok(!classes.has('is-dragging'));
   get('keydown')({key:'ArrowRight',preventDefault:()=>{}});
   assert.equal(card._carouselIndex,2);
-  card._payload={entries:[{id:'a',connected:true,streams:cards.map((c,i)=>({id:String(i),username:'x',server_type:'plex',media_title:'Film',media_type:'movie',state:'playing',started_at:String(i),progress_ms:0,duration_ms:10000}))}]};
-  card._renderFingerprint=null;
-  card.render();
   assert.doesNotMatch(card.shadowRoot.innerHTML,/data-step="-1"/);
+});
+
+test('focused carousel keeps arrow keys when buttons and mouse drag are disabled', () => {
+  const {card,carousel,listeners}=setup();
+  card.setConfig({mode:'carousel',carousel_show_arrows:false,carousel_mouse_drag:false,carousel_transition:'none'});
+  const keydown = listeners.find(l => l.event === 'keydown')?.fn;
+  assert.ok(keydown, 'keyboard handler attached independently of drag');
+  assert.ok(listeners.every(({event}) => !event.startsWith('pointer')));
+  let prevented = 0;
+  for (const key of ['ArrowRight','a','ArrowLeft']) {
+    keydown({key,preventDefault:() => prevented++});
+    assert.equal(carousel.scrollLeft, key === 'ArrowLeft' ? 0 : 110);
+  }
+  assert.equal(prevented, 2);
 });
 
 
@@ -1356,7 +1367,9 @@ test('editor renders the same advanced style and alignment controls for both car
     assert.match(html,/data-field="header_show_video"/);
     assert.match(html,/data-order="header_badge_order"/);
   }
-});test('mobile: left and right badges share a row without reserving an empty center column', () => {
+});
+
+test('left and right badges have no placeholder for an empty center group', () => {
   const {card}=setup();
   card.setConfig({
     show_title:false,header_show_streams:true,header_show_transcodes_total:true,
@@ -1376,15 +1389,9 @@ test('editor renders the same advanced style and alignment controls for both car
   assert.doesNotMatch(html,/class="head-metrics with-center"/);
   const before=html.indexOf('1 flux'),after=html.indexOf('Seerr : 0');
   assert.ok(before>=0 && after>before);
-  card.render();
-  const css=card.shadowRoot.innerHTML;
-  assert.match(css,/\.head-metrics \{ display:flex;[^}]*flex-wrap:wrap;/s);
-  assert.match(css,/\.head-group \{ display:flex; flex:0 1 auto;/);
-  assert.match(css,/\.head-group\.align-right \{ justify-content:flex-end; margin-left:auto; \}/);
-  assert.doesNotMatch(css,/\.head-group \{ flex:1 1 100%; \}/);
 });
 
-test('center columns are created only while a centered badge is visible', () => {
+test('enhanced centering is enabled only with a visible center and at least one neighbor', () => {
   const {card}=setup();
   card.setConfig({
     show_title:false,header_show_streams:true,header_show_video:true,
@@ -1401,11 +1408,11 @@ test('center columns are created only while a centered badge is visible', () => 
     header_metric_settings:{video:{align:'center'}},
   });
   html=card._header([{id:'a',video_decision:'transcode',audio_decision:'copy',state:'playing'}]);
-  assert.match(html,/class="head-metrics only-center"/);
+  assert.match(html,/<div class="head-metrics"><div class="head-group align-center">/);
   assert.doesNotMatch(html,/class="head-group align-left"|class="head-group align-right"/);
 });
 
-test('center badge uses only its intrinsic width while retaining perfect horizontal centering', () => {
+test('groups preserve left, center and right markup for statistics and entity badges', () => {
   const {card}=setup();
   card.setConfig({
     show_title:false, header_show_streams:true, header_show_bandwidth:true,
@@ -1418,42 +1425,44 @@ test('center badge uses only its intrinsic width while retaining perfect horizon
   assert.match(header,/class="head-group align-left">[\s\S]*?1 flux/);
   assert.match(header,/class="head-group align-center">[\s\S]*?Seerr : 0/);
   assert.match(header,/class="head-group align-right">[\s\S]*?Débit : 2.5 Mb\/s/);
-  card.render();
-  const css=card.shadowRoot.innerHTML;
-  assert.match(css,/\.head-metrics\.with-center \{ display:grid;\s*grid-template-columns:minmax\(0,1fr\) max-content minmax\(0,1fr\); \}/);
-  assert.doesNotMatch(css,/grid-template-columns:minmax\(0,1fr\) auto minmax\(0,1fr\)/);
-  assert.match(css,/\.head-metrics\.with-center > \.align-center \{ grid-column:2; width:max-content;\s*max-width:100%; justify-self:center; justify-content:center; \}/);
-  assert.match(css,/@container \(max-width:260px\) \{/);
-  assert.doesNotMatch(css,/@container \(max-width:440px\) \{/);
-  assert.match(css,/\.head-metrics\.with-center > \.align-center \{ order:3; flex:1 1 100%;\s*width:100%; margin-inline:0; justify-content:center; \}/);
 });
 
-test('center track remains absent when no badge is centered', () => {
+test('header resize observation follows the current header and ends on disconnect', () => {
   const {card}=setup();
-  card.setConfig({show_title:false,header_show_streams:true,header_show_bandwidth:true,
-    header_metric_settings:{streams:{align:'left'},bandwidth:{align:'right'}}});
-  assert.match(card._header([]),/class="head-metrics"/);
-  assert.doesNotMatch(card._header([]),/with-center|head-group align-center/);
-  card.setConfig({show_title:false,header_show_streams:false,header_show_bandwidth:true,
-    header_metric_settings:{bandwidth:{align:'center'}}});
-  assert.match(card._header([]),/class="head-metrics only-center"/);
-  assert.doesNotMatch(card._header([]),/head-metrics with-center/);
-});test('a left, center and right badge share one row at normal mobile widths', () => {
-  const {card}=setup();
-  card.setConfig({
-    show_title:false,header_show_streams:true,header_show_bandwidth:true,
-    header_entity_badges:[{id:'seerr',entity:'counter.seerr',label:'Seerr',align:'center'}],
-    header_metric_settings:{streams:{align:'left'},bandwidth:{align:'right'}},
-  });
-  card._hass={states:{'counter.seerr':{state:'0',attributes:{}}}};
-  const html=card._header([{id:'a',state:'playing',bitrate:2000}]);
-  assert.match(html,/class="head-metrics with-center"/);
-  assert.match(html,/class="head-group align-left"/);
-  assert.match(html,/class="head-group align-center"/);
-  assert.match(html,/class="head-group align-right"/);
-  card.render();
-  const css=card.shadowRoot.innerHTML;
-  assert.match(css,/grid-template-columns:minmax\(0,1fr\) max-content minmax\(0,1fr\)/);
-  assert.match(css,/@container \(max-width:260px\)/);
-  assert.doesNotMatch(css,/@container \(max-width:440px\)/);
+  const observers = [];
+  env.ResizeObserver = class {
+    constructor(callback) { this.callback = callback; this.nodes = []; observers.push(this); }
+    observe(node) { this.nodes.push(node); }
+    disconnect() { this.nodes = []; }
+  };
+  const bounds = width => ({getBoundingClientRect:() => ({width})});
+  const center = bounds(220), left = bounds(48), right = bounds(48);
+  let metrics = {...bounds(220),classList:{contains:() => false},
+    querySelector:q => ({'.align-center':center,'.align-left':left,'.align-right':right})[q]};
+  const head = {};
+  card.shadowRoot.querySelector = q => q === '.head-metrics.with-center' ? metrics : q === '.head' ? head : null;
+  env.getComputedStyle = () => ({columnGap:'10px'});
+  try {
+    card.render();
+    assert.deepEqual(observers[0].nodes, [metrics,center,left,right]);
+    observers[0].callback();
+    const frame = card._headerFrame;
+    assert.ok(frames.has(frame), 'narrow row needs a deferred layout adjustment');
+    card._refreshHeader([{id:'fixture'}]);
+    assert.deepEqual(observers[0].nodes, []);
+    assert.ok(!frames.has(frame), 'replaced header leaves no scheduled layout work');
+    assert.deepEqual(observers[1].nodes, [metrics,center,left,right]);
+    metrics = null;
+    card._refreshHeader([]);
+    assert.deepEqual(observers[1].nodes, []);
+    assert.equal(observers.length,2);
+    metrics = {querySelector:q => q === '.align-center' ? center : left};
+    card.connectedCallback();
+    assert.ok(observers[2].nodes.includes(metrics));
+    card.disconnectedCallback();
+    assert.deepEqual(observers[2].nodes, []);
+  } finally {
+    delete env.ResizeObserver;
+    delete env.getComputedStyle;
+  }
 });

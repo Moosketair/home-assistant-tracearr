@@ -199,6 +199,27 @@ Suites complètes : **22 Python, 72 JavaScript, 88 sur Core 2025.6.0, 88 sur Cor
 
 `git diff --check` réussi. Les deux Core émettent des avertissements de leurs dépendances (5 sur `min`, 9 sur `current`), sans échec. Les validations complètes de 2C ci-dessus et les garanties de cycle HA/transport de 2A/2B restent des références antérieures, pas des suites réexécutées. Le correctif ne change pas ces chemins. Aucun vrai dashboard HA, lecteur physique, essai HACS ou déploiement ; le rendu utilise les éléments distribués avec des données fictives.
 
+### 2E.1 — en-tête responsive et clavier du carrousel (A11/A12)
+
+Sur Debian 13.2, comparer le JS de `28bef59` et celui du candidat avec la **même** page `recette/cartes.html` (voir ci-dessous). Dans Chromium **152.0.7977.82** et Firefox **140.15.0esr**, profils jetables sur loopback, en clair et en sombre :
+
+- **A11.** À 320 px, carrousel sans titre, trois groupes et libellé central « Consommation distante des utilisateurs sur le serveur du séjour » : avant, la colonne intrinsèque n’était pas plafonnée ; le banc d’origine mesure un dépassement du bord droit de **137 px sous Chromium / 138 px sous Firefox** (audit initial : 119/128 px, autre fixture). En dessous du point de coupure historique, le repli déplaçait le centre même quand tout tenait et ne limitait pas la largeur du texte. Après, les côtés tiennent ensemble et le libellé intégral occupe sa propre ligne centrée à 250 et 320 px ; à 768 et 1200 px l’ensemble tient sur une ligne. Le badge court se centre sans créer de rangée supplémentaire. La sonde vérifie les rectangles de la zone, des groupes, des badges et du texte, pas simplement le CSS.
+- **A12.** Mettre le focus sur la région du carrousel avec `carousel_mouse_drag:false` et `carousel_show_arrows:false`. Avant, `ArrowRight` ne déclenche aucun défilement géré par la carte : le retour anticipé désactive aussi l’installation du listener clavier. Après, les deux flèches font avancer/reculer l’index **et** le défilement, aux quatre largeurs dans les deux moteurs ; une autre touche n’est pas capturée. La sonde utilise le vrai focus Shadow DOM et des événements clavier synthétiques. Le nouveau test Node échoue aussi sur la base (listener manquant).
+
+Ouvrir `recette/cartes.html?responsive` et attendre le JSON de recette (`ok:true`). Les cas couvrent valeurs courte, longue et sans espaces, plusieurs badges centraux, groupes asymétriques/absents, titre personnalisé/masqué, texte agrandi, et un aller-retour 1200 → 250 → 1200 px sans recréer la carte. Le badge HA court → long → court ne change ni la piste ni l’ancre du carrousel. Vérifications complémentaires : ordre, icône sans nom, unité, couleur à zéro, clignotement, masquage à zéro, en-tête masqué, trois présentations vides, affiche à 135 %, repli sans image pour le fond cinéma et nombre de colonnes effectives. `?visual=long` ou `?visual=short` isole le rendu à 320 px pour une capture.
+
+[Comparatif Chromium à 320 px](../recette/preuves/2e1-badges-320px.png), de gauche à droite : badge long avant, même badge après, badge court après en sombre.
+
+| Mesure sur le banc | Parent (Chromium / Firefox) | Candidat (Chromium / Firefox) |
+|---|---|---|
+| Libellé long, 250 px, dépassement gauche et droite du bord de carte | 87 px de chaque côté, dans les deux moteurs | 0 px |
+| Libellé long, 320 px, dépassement droit du bord de carte | 137 / 138 px | 0 px |
+| Trois libellés courts qui tiennent, 250 px | 2 lignes (coupure CSS fixe) | 1 ligne, centre à ≤0,25 px du milieu |
+
+Les **78 mesures par moteur et par mode clair/sombre** réussissent après correction : aucun dépassement horizontal ni chevauchement, écart maximal de **0,02 px** par rapport à la meilleure position centrale disponible. Les quatre essais clavier réussissent dans chacune des quatre exécutions.
+
+**Non-régression réexécutée.** `node --check custom_components/tracearr_ha/frontend/tracearr-card.js`, `node --test tests/*.cjs` (Node **22.23.5**, **75 réussites**), `git diff --check`, ainsi que `?lan-wan` (liste groupée, carrousel et carte individuelle) dans les deux moteurs et les deux modes de couleur. **Réutilisé sans relancer :** validations Python/Core, contrat et garanties backend des lots 2A–2D. Éditeur HA réel, installation HACS, lecteurs réels, Safari, tactile et performance longue durée non exercés ; pas de changement du schéma YAML, du backend, du WS ou de la version.
+
 ## Recette visuelle légère
 
 `recette/cartes.html` monte le JS distribué, avec une source WS de carte synthétique. Les métriques sont mesurées sur les éléments réels du Shadow DOM. Sous Chromium (152.0.7977.82 pendant la validation) :
@@ -226,7 +247,9 @@ python3 -m http.server --bind 127.0.0.1 --directory "$ui" 0
 rm -rf -- "$ui"
 ```
 
-1. Comparer les largeurs **de carte** 250/320/768/1200 px. Deux colonnes demandées donnent **1/1/2/2**. Relever l’écart de centrage court et le débordement des bords des badges longs ; les pixels exacts dépendent de la police. Sur cette page à 320 px, débordement droit mesuré : **137 px Chromium / 138 px Firefox 140.15.0esr**.
+Pour la preuve avant correction de 2E.1, servir une deuxième copie isolée de ce dossier et y remplacer **seulement** le JS par `git show 28bef59:custom_components/tracearr_ha/frontend/tracearr-card.js`. Garder la même page de recette et ne pas modifier le fichier de travail.
+
+1. Comparer les largeurs **de carte** 250/320/768/1200 px. Deux colonnes demandées donnent **1/1/2/2**. Attendre la fin de la matrice, ou utiliser `?responsive` pour les assertions. Relever l’écart de centrage et le débordement ; les pixels exacts dépendent de la police. Les valeurs d’avant correction sont conservées dans la section 2E.1.
 2. Basculer groupée/individuelle, liste/carrousel ; avancer avec les flèches. Observer le compteur puis mettre en pause/reprendre : l’écoulé de la première session doit se figer/repartir. Basculer le libellé et la largeur sans recharger la page.
 3. Démonter/remonter plusieurs fois ; vérifier visuellement l’absence de panneaux dupliqués, le retour du flux et, dans les outils de développement du navigateur, le nombre de timers/écouteurs si cette partie est modifiée. La page ne constitue pas une assertion automatique sur la mémoire.
 

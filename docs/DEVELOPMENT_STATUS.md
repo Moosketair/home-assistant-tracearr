@@ -1,17 +1,19 @@
-# État de reprise — étape 2D.1, 26 novembre 2026
+# État de reprise — étape 2E.1, 26 novembre 2026
 
 **2A définitivement validée** sur `942de6ffa8d33b0ee10319fa39938c3f587f35aa`. **2B définitivement clôturée** : verdict indépendant 2B.4 **VALIDÉ** sur `f918150fd8fc6fa6f44d309aac3d4387d063d83b`, confirmé par le mainteneur. Les deux régressions relevées par 2B.2 sont corrigées ; les limites d’ordre faute de révision commune REST/SSE sont acceptées. Résultats indépendants : 21 Python, 72 JS, 61 sur chacun des Core 2025.6.0 et 2026.11.3, aucun échec, skip ou xfail. Aucun nouvel audit 2B requis.
 
 **2C définitivement clôturée** sur `8e63524a972e739d4ad0c92527e8ed2d962526bc` (`fix/sse-image-robustness`) : le contre-audit 2C.2 a conclu **VALIDÉ AVEC RÉSERVES NON BLOQUANTES**, verdict accepté par le mainteneur. Réserves acceptées : exception interne SSE non journalisée, préexistante, à examiner dans le lot 3 ; arrondi du timeout aiohttp accepté ; aucune incompatibilité concrète démontrée avec une éventuelle compression imposée par un proxy inverse.
 
-**2D.1 livrée localement** : A6 reproduit puis corrigé dans les deux cartes, sans modification du backend, de la priorité LAN/WAN ou des options. Voir [ARCHITECTURE](ARCHITECTURE.md) et [RECETTE](RECETTE.md) pour la preuve et ses limites. Arrêt à 2D.1 ; 2E et audit indépendant non engagés.
+**2D définitivement clôturée** : le mainteneur valide 2D.1 sur `28bef59afbceffe6364c3e508037af6cf935d08d` (`fix/lan-wan-consistency`), sans contre-audit supplémentaire. A6 corrigé dans les deux cartes, sans changement backend ni modification de la priorité LAN/WAN.
+
+**2E.1 livrée localement** : A11 (badges coupés ou superposés) et A12 (clavier du carrousel lié au drag souris) reproduits puis corrigés. Pas de changement d’options, de contrat WS ou de version. Voir [RECETTE](RECETTE.md) pour les vérifications réexécutées et leurs limites, et [ROADMAP](ROADMAP.md) pour les reports. Arrêt à 2E.1 ; lot 3 et audit indépendant non engagés.
 
 | Repère | Valeur |
 |---|---|
 | Dépôt | `Moosketair/home-assistant-tracearr`, copie de travail `/media/fat/proton_drive/dev/home-assistant-tracearr` lors de l’audit |
 | Référence fonctionnelle | `main` = tag `v0.1.16` = `443ce3859d09b67ccfd589d326d032753dc11d64` à la date de l’audit |
-| Travail local | `fix/lan-wan-consistency`, créée depuis le SHA 2C validé, sans changement préexistant ; SHA de livraison : `git rev-parse fix/lan-wan-consistency` |
-| Environnement | Debian 13.2 ; suite : Python 3.13.5, Node 22.23.5 ; Core minimum et stable essayés en environnements temporaires séparés |
+| Travail local | `fix/frontend-responsive`, créée depuis le SHA 2D validé, sans changement préexistant ; SHA de livraison : `git rev-parse fix/frontend-responsive` |
+| Environnement | 2E.1 : Debian 13.2, Node 22.23.5, Chromium 152, Firefox 140 ESR. Essais Python et Core des lots précédents non relancés. |
 | Déploiement du mainteneur | HA Container géré par Dockge Enhanced, **non utilisé** ; aucune action distante de publication dans cette phase |
 | GitHub à la date de revue | Stable vérifiée sur le bon SHA, deux workflows verts sur ce SHA, une issue musique ouverte, aucune PR ouverte |
 
@@ -27,6 +29,6 @@
 
 **Changement 2A.1.** Un abonné WS écoute désormais le domaine. Un relais par entrée alimente ce signal à partir des notifications existantes ; retrait et remplacement d’entrée sont visibles même sans trafic d’une autre entrée. Le code des producteurs REST/SSE, les entités, le JS et les configurations restent ceux de la stable. Le contre-audit doit notamment vérifier les notifications aux frontières du reload, le rejet des sources retirées et la libération des listeners sur déconnexion. Les trois xfail A1 sont devenus des tests ordinaires et six scénarios ont été ajoutés. Résultat final : **21 Python et 72 JS historiques réussis ; 12 réussis et 6 xfail stricts A2 sur chaque Core**, sans échec inattendu.
 
-**Ce qui reste à établir.** Installation HACS/HA complète, comportement avec de vraies sessions des trois serveurs, performances longue durée, mobile tactile, Safari et thèmes. La compatibilité pré-SSE annoncée n’est pas générale : `/servers` est obligatoire et absent de Tracearr 2.6.0. Les options historiques ne doivent pas être réécrites pour résoudre les problèmes de lecture ou d’édition.
+**Ce qui reste à établir.** Installation HACS/HA complète, comportement avec de vraies sessions des trois serveurs, performances longue durée, mobile tactile, Safari et intégration aux thèmes de dashboards HA (le banc autonome couvre clair et sombre). La compatibilité pré-SSE annoncée n’est pas générale : `/servers` est obligatoire et absent de Tracearr 2.6.0. Les options historiques ne doivent pas être réécrites pour résoudre les problèmes de lecture ou d’édition.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.
