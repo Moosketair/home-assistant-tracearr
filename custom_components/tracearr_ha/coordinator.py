@@ -5,6 +5,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Coroutine
+from contextlib import aclosing
 from typing import Any, NamedTuple
 
 from homeassistant.core import HomeAssistant
@@ -177,30 +178,18 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
     async def _sse_loop(self) -> None:
         retry = 5
         while True:
+            failure = None
             try:
-                async for event in self.client.events():
-                    if event.get("type") == "ready":
-                        # Do not block ingress on REST, including a refresh already
-                        # running. A ready during that request needs a later fetch.
-                        self._sse_ready = True
-                        self._ready_serial += 1
-                        self._refresh_requested.set()
-                        retry = 5
-                    elif event.get("type") == "server.health":
-                        payload = event.get("data", {})
-                        if (isinstance(payload, dict) and isinstance(payload.get("server_id"), str)
-                                and payload["server_id"] and isinstance(payload.get("status"), str)
-                                and payload["status"]
-                                and (payload.get("reason") is None or isinstance(payload["reason"], str))):
-                            fields = {k: payload[k] for k in ("status", "reason") if k in payload}
-                            if self._server_changes is not None:
-                                self._server_changes.record(payload["server_id"], fields)
-                            server = self.servers.get(payload.get("server_id"))
-                            if server:
-                                server.update(fields)
-                                self._emit()
-                    else:
-                        self._apply_stream_event(event)
+                async with aclosing(self.client.events()) as events:
+                    async for event in events:
+                        try:
+                            if self._apply_sse_event(event):
+                                retry = 5
+                        except Exception as exc:
+                            # An application failure, even a TimeoutError here,
+                            # is not a transport failure and must not reconnect.
+                            failure = exc
+                            break
             except TracearrRateLimited as exc:
                 retry = exc.retry_after
             except TracearrAuthError:
@@ -209,11 +198,57 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
             except (TracearrUnavailable, asyncio.TimeoutError) as exc:
                 _LOGGER.debug("Tracearr SSE disconnected: %s", exc)
                 retry = min(max(retry * 2, 5), 60)
+            except Exception as exc:
+                failure = failure if failure is not None else exc
             finally:
                 self._sse_ready = False
                 self.sse_connected = False
-                self._emit()
+                try:
+                    self._emit()
+                except Exception as exc:
+                    if failure is None:
+                        failure = exc
+                if failure is not None:
+                    self._log_sse_failure(failure)
+            if failure is not None:
+                return
             await asyncio.sleep(retry)
+
+    @staticmethod
+    def _log_sse_failure(exc: Exception) -> None:
+        # Do not log exception text, chained exceptions, URLs or event payloads.
+        origin = exc.__traceback__
+        while origin is not None and origin.tb_next is not None:
+            origin = origin.tb_next
+        location = f"{origin.tb_frame.f_code.co_name}:{origin.tb_lineno}" if origin else "unknown"
+        _LOGGER.error("Tracearr SSE stopped after an internal error (%s at %s); REST polling continues",
+                      type(exc).__name__, location)
+
+    def _apply_sse_event(self, event: dict) -> bool:
+        """Apply one event; true means the reconnect delay can reset."""
+        if event.get("type") == "ready":
+            # Do not block ingress on REST, including a refresh already
+            # running. A ready during that request needs a later fetch.
+            self._sse_ready = True
+            self._ready_serial += 1
+            self._refresh_requested.set()
+            return True
+        elif event.get("type") == "server.health":
+            payload = event.get("data", {})
+            if (isinstance(payload, dict) and isinstance(payload.get("server_id"), str)
+                    and payload["server_id"] and isinstance(payload.get("status"), str)
+                    and payload["status"]
+                    and (payload.get("reason") is None or isinstance(payload["reason"], str))):
+                fields = {k: payload[k] for k in ("status", "reason") if k in payload}
+                if self._server_changes is not None:
+                    self._server_changes.record(payload["server_id"], fields)
+                server = self.servers.get(payload.get("server_id"))
+                if server:
+                    server.update(fields)
+                    self._emit()
+        else:
+            self._apply_stream_event(event)
+        return False
 
     def _apply_stream_event(self, event: dict) -> None:
         mutation = stream_mutation(self.streams, event)

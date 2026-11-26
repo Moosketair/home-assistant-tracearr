@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 
 from aiohttp import ClientError, ClientResponse, ClientSession, ClientTimeout
@@ -191,7 +191,7 @@ class TracearrClient:
                 break
         return results
 
-    async def events(self) -> AsyncIterator[dict]:
+    async def events(self) -> AsyncGenerator[dict, None]:
         """Read SSE event/data frames, including multiline data and comment pings."""
         headers = {**self.headers, "Accept": "text/event-stream"}
         try:

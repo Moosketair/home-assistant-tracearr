@@ -1,5 +1,6 @@
 """Malformed SSE and fragmented artwork, through the real HA backend."""
 import asyncio
+from contextlib import aclosing
 from datetime import timedelta
 import gzip
 
@@ -8,6 +9,7 @@ from homeassistant.components.http.auth import async_sign_path
 import pytest
 
 from custom_components.tracearr_ha import frontend
+from custom_components.tracearr_ha.api import TracearrClient
 from core import core, observed
 from simulateur import Gate, KEY, PNG, Tracearr
 
@@ -67,6 +69,98 @@ def test_bad_sse_frame_does_not_mutate_or_interrupt(bad_frame):
                 assert not task.done()
                 assert await bench.hass.config_entries.async_unload(entry.entry_id)
                 assert task.cancelled() and coord._poll_task.cancelled()
+
+    asyncio.run(asyncio.wait_for(run(), 12))
+
+
+@pytest.mark.parametrize("error_type", [RuntimeError, TimeoutError])
+def test_internal_sse_failure_is_diagnosed_without_leaking_data(monkeypatch, caplog, error_type):
+    async def run():
+        async with Tracearr().serve() as sim, core() as bench:
+            sim.change("started", "s")
+            entry = await bench.add(sim)
+            coord = bench.coord(entry)
+            task, poll = coord._sse_task, coord._poll_task
+            serial = coord._ready_serial
+            sensitive = f"Bearer {KEY} {sim.url}/?signature=fixture-private body-fixture-private"
+
+            def apply_failure(_event):
+                raise error_type(sensitive)
+
+            monkeypatch.setattr(coord, "_apply_stream_event", apply_failure)
+            async with bench.connect() as ws:
+                await ws.call("tracearr_ha/subscribe")
+                sub = ws.seq
+                await ws.snapshots(sub)
+                sim.change("progress", "s", progress_ms=1234)
+                # Wait for completion without propagating the old task's error.
+                done, _ = await asyncio.wait({task}, timeout=1)
+                assert task in done, "internal errors must not enter the reconnect delay"
+                snapshot = (await ws.snapshots(sub))[-1][0]
+                assert snapshot["connected"] and not snapshot["sse_connected"]
+                assert coord.connected and coord.last_update_success and not coord._sse_ready
+                assert coord._ready_serial == serial and not poll.done()
+                # Wake the unchanged recovery producer, not a manual refresh.
+                coord._refresh_requested.set()
+                await observed(coord, lambda: coord.streams["s"]["progress_ms"] == 1234)
+                assert not coord.sse_connected and coord._ready_serial == serial
+                assert await bench.hass.config_entries.async_unload(entry.entry_id)
+                assert task.done() and poll.cancelled()
+                errors = [r for r in caplog.records if r.name.endswith(".coordinator") and r.levelname == "ERROR"]
+                assert len(errors) == 1
+                assert "SSE" in errors[0].getMessage() and error_type.__name__ in errors[0].getMessage()
+                assert "apply_failure:" in errors[0].getMessage()
+                assert errors[0].exc_info is None and task.exception() is None
+                for secret in (KEY, sim.url, "fixture-private", "Bearer"):
+                    assert secret not in caplog.text
+
+    asyncio.run(asyncio.wait_for(run(), 12))
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+def test_sse_source_is_closed_on_task_end(monkeypatch, cancel):
+    async def run():
+        async with Tracearr().serve() as sim, core() as bench:
+            events = TracearrClient.events
+            closed = asyncio.Event()
+
+            async def observe_source(self):
+                try:
+                    async with aclosing(events(self)) as source:
+                        async for event in source:
+                            yield event
+                finally:
+                    closed.set()
+
+            # Keep a reference so GC cannot close the source on the task's
+            # behalf, masking whether the coordinator explicitly closed it.
+            sources = []
+
+            def tracked_source(self):
+                source = observe_source(self)
+                sources.append(source)
+                return source
+
+            monkeypatch.setattr(TracearrClient, "events", tracked_source)
+            entry = await bench.add(sim)
+            coord = bench.coord(entry)
+            task = coord._sse_task
+            if cancel:
+                assert await bench.hass.config_entries.async_unload(entry.entry_id)
+                assert task.cancelled()
+            else:
+                def apply_failure(_event):
+                    raise ValueError("fixture")
+
+                monkeypatch.setattr(coord, "_apply_stream_event", apply_failure)
+                sim.change("started", "s")
+                await asyncio.wait({task})
+            try:
+                assert closed.is_set()
+                assert cancel or task.exception() is None
+                assert not coord.client.session.closed
+            finally:
+                await sources[0].aclose()
 
     asyncio.run(asyncio.wait_for(run(), 12))
 
