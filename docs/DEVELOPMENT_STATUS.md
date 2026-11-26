@@ -1,6 +1,8 @@
-# État de reprise — recette locale 4.2
+# État de reprise — prépublication bêta 5A.1
 
-**Lot 4.1 définitivement clôturé.** Verdict indépendant 4.1.4 **VALIDÉ** sur `41403f51b665a7e839fe7474ed7edd274fb04b0d`, confirmé par le mainteneur : **14 anomalies sur 14 validées**, dont A9. Les réserves déjà documentées sont acceptées. Le mainteneur a autorisé le lot 4.2 uniquement : candidat local et recette, sans publication.
+**Lot 4.1 définitivement clôturé.** Verdict indépendant 4.1.4 **VALIDÉ** sur `41403f51b665a7e839fe7474ed7edd274fb04b0d`, confirmé par le mainteneur : **14 anomalies sur 14 validées**, dont A9. Les réserves déjà documentées sont acceptées.
+
+**Lot 4.2 accepté.** Le mainteneur accepte les résultats de [la recette locale](RECETTE_42.md) au SHA `61fc2e2108d0c2034d6a574d9e01813c9d4308fe`. En 5A.1, il autorise uniquement la [préversion `v0.1.17-beta.1`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.17-beta.1), sur le candidat final de `release/v0.1.17`, pour ses essais via HACS. Aucun changement du code distribué en 5A.1. Le tag GitHub et les vérifications associées font foi ; `v0.1.16` reste la référence stable. Pas de publication stable ni de fusion dans `main`.
 
 **2A définitivement validée** sur `942de6ffa8d33b0ee10319fa39938c3f587f35aa`. **2B définitivement clôturée** : verdict indépendant 2B.4 **VALIDÉ** sur `f918150fd8fc6fa6f44d309aac3d4387d063d83b`, confirmé par le mainteneur. Les deux régressions relevées par 2B.2 sont corrigées ; les limites d’ordre faute de révision commune REST/SSE sont acceptées. Résultats indépendants : 21 Python, 72 JS, 61 sur chacun des Core 2025.6.0 et 2026.11.3, aucun échec, skip ou xfail. Aucun nouvel audit 2B requis.
 
@@ -60,6 +62,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** essais personnels du mainteneur après la [recette 4.2](RECETTE_42.md), puis décision explicite avant toute publication ou évolution 6A/6B/6C.
+**Suite :** essais personnels du mainteneur via HACS ([installation et retour à la stable](../CHANGELOG.md#installer-ou-revenir-à-la-stable)), puis décision explicite avant toute publication stable ou évolution 6A/6B/6C.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.

@@ -8,6 +8,8 @@
 
 **Version actuelle : 0.1.16** · Disponible dans le catalogue officiel HACS après publication de la Release. Le projet reste communautaire et évolutif ; testez les capteurs avant de les utiliser pour des automatismes critiques.
 
+**Préversion de test :** voir [les changements et la procédure HACS pour `v0.1.17-beta.1`](CHANGELOG.md#0117-beta1--préversion-de-test). La stable recommandée reste `v0.1.16`.
+
 ## Nouveautés de la 0.1.16
 
 - **Badge centré compact :** le groupe central prend uniquement la largeur de ses badges et garde son centrage exact. Sur les écrans mobiles, les groupes gauche, centre et droite restent sur la même ligne dès que la place disponible le permet.

@@ -2,20 +2,26 @@
 
 Les changements sont classés par version publique. Les préversions et les anciennes notes restent consultables ci-dessous. Les [GitHub Releases](https://github.com/Moosketair/home-assistant-tracearr/releases) permettent de télécharger une version précise.
 
-## 0.1.17-beta.1 — Candidat local (non publié)
+## 0.1.17-beta.1 — Préversion de test
 
-- Les débits de l’en-tête et des panneaux se mettent à jour ensemble après modification des règles LAN/WAN, sans recharger la page ni déplacer le carrousel.
-- Les badges de l’en-tête restent lisibles sur les cartes étroites. Le groupe central reste aussi près du milieu que le permettent ses voisins ; les libellés longs reviennent à la ligne sans être coupés.
-- Les flèches du clavier pilotent le carrousel lorsqu’il a le focus, même si le glissement à la souris et les boutons de navigation sont désactivés.
-- Les cartes libèrent les horloges des lectures terminées et les ressources inutilisées, notamment au démontage.
-- Le clignotement des badges ne repart plus de zéro lors des mises à jour de valeurs ou de sessions.
-- Une panne interne inattendue du flux SSE est journalisée sans données sensibles ; le rafraîchissement REST continue.
-- L’éditeur JSON LAN/WAN conserve les exceptions « Non classé » déjà enregistrées.
-- Après refus de la clé API par les routes REST, Home Assistant permet de la remplacer sans recréer l’intégration ni perdre ses entités et options.
-- Si Tracearr ne peut plus actualiser les lectures, les deux cartes signalent les données périmées et figent les temps. Elles reprennent depuis le prochain snapshot fiable, sans affecter les autres instances.
-- Une réponse REST inexploitable ne valide plus une nouvelle clé et ne remplace plus les dernières données valides ni les lectures déjà reçues par SSE.
-- Une entrée en cours de suppression n’enregistre plus de nouvelle clé ni ne déclenche de rechargement tardif. Si un déchargement a échoué sans supprimer l’entrée, le formulaire indique qu’un redémarrage est nécessaire pour appliquer la clé enregistrée.
-- Après mise à niveau et redémarrage, la ressource Lovelace enregistrée en mode stockage est mise à jour sur place. En mode YAML, remplacer manuellement la clé de cache par `?v=0.1.17-beta.1` pour ce candidat. Les réglages des cartes ne changent pas.
+Cette bêta est destinée à valider l’installation et la mise à niveau via HACS. **La version recommandée hors test reste `v0.1.16`.**
+
+### Ce qui change depuis `v0.1.16`
+
+- **Connexions plus fiables :** les cartes continuent de recevoir les mises à jour WebSocket après rechargement d’une entrée. Les trames SSE atypiques ne coupent plus le flux ; si le flux cesse de fonctionner, la récupération REST continue.
+- **Données REST/SSE cohérentes :** un rafraîchissement REST n’écrase plus les changements SSE reçus pendant ce rafraîchissement. Une réponse REST inexploitable ne remplace pas les données valides.
+- **Images :** le proxy attend l’image complète avant de la servir, au lieu de livrer un contenu tronqué.
+- **Réauthentification native :** si la clé API est refusée, Home Assistant permet de la remplacer sans recréer l’intégration ni perdre ses entités ou options. La clé de remplacement est vérifiée sur un snapshot exploitable avant son enregistrement.
+- **Panne complète de Tracearr :** les cartes signalent que les données sont périmées et figent les temps de lecture, puis reprennent à partir du prochain snapshot fiable.
+- **Débits LAN/WAN :** en-têtes et panneaux se mettent à jour ensemble, sans déplacer le carrousel. L’éditeur JSON conserve les règles « Non classé ».
+- **Cartes et badges :** meilleure adaptation aux cartes étroites, navigation du carrousel au clavier, clignotement continu pendant les mises à jour et nettoyage des horloges et abonnements inutilisés.
+- **Documentation :** routes requises de l’API Tracearr et sélection d’un compte dans une carte individuelle clarifiées.
+
+### Installer ou revenir à la stable
+
+1. Faites une sauvegarde Home Assistant. Dans **HACS → Tracearr HA**, ouvrez le menu **⋮** et sélectionnez **Mettre à jour les informations** si la bêta n’apparaît pas. Activez l’affichage des versions bêta sur cette fiche si l’option est proposée.
+2. Choisissez **Télécharger** ou **Retélécharger**, puis sélectionnez précisément `v0.1.17-beta.1` dans le sélecteur de versions. Redémarrez Home Assistant, puis actualisez le tableau de bord. En mode ressources Lovelace YAML, remplacez manuellement la clé de cache par `?v=0.1.17-beta.1`. En mode stockage, la ressource existante est actualisée automatiquement.
+3. Pour **revenir à `v0.1.16`**, retéléchargez cette version via le même sélecteur, sans supprimer l’entrée Tracearr. Redémarrez Home Assistant et actualisez le tableau de bord ; en mode ressources YAML, restaurez `?v=0.1.16`. Désactivez ensuite l’affichage des bêtas si vous ne souhaitez plus les tester.
 
 ## 0.1.16 — 2026-11-05
 
