@@ -36,7 +36,7 @@ Les badges du bandeau général ont une couleur normale configurable par badge, 
 
 ### Lot 6B — Badges techniques personnalisables
 
-**Décision du mainteneur — préparation documentaire uniquement.** Le lot 6B concerne les badges techniques des panneaux de lecture, pas la personnalisation des couleurs des badges de capteurs du bandeau général. Aucun développement de ces fonctionnalités pendant le lot 3.1 : son périmètre fonctionnel, ses tests, ses autorisations et sa condition de fin restent inchangés.
+**Décision du mainteneur — 6B.1 autorisé** à partir de `b526cdf9` (6A.1 définitivement validé). Le lot concerne les panneaux de lecture, pas les badges de statistiques et de capteurs du bandeau général.
 
 Les cinq styles seront proposés dans l’éditeur graphique :
 
@@ -48,7 +48,7 @@ Les cinq styles seront proposés dans l’éditeur graphique :
 | Minimaliste | Fond neutre avec trait latéral coloré. |
 | Technique | Deux niveaux : format principal et information complémentaire. |
 
-**Personnalisation dans l’éditeur :** choix du style, réglage de la taille du texte, de l’arrondi et de l’espacement des badges, activation ou désactivation des couleurs par format, palette prédéfinie, modification des couleurs par format, réinitialisation des personnalisations et aperçu en direct.
+**Personnalisation dans l’éditeur partagé :** un style par carte, dispositions compacte ou séparée, visibilité et ordre par catégorie, couleurs automatiques désactivables, personnalisations par format avec réinitialisation individuelle ou globale, et aperçu en direct. **Aucune nouvelle option manuelle de taille, d’arrondi ou d’espacement** : chaque style s’adapte au contenu et à la largeur disponible. Les réglages historiques restent disponibles.
 
 **Palette indicative, à affiner pendant le lot 6B :**
 
@@ -57,14 +57,17 @@ Les cinq styles seront proposés dans l’éditeur graphique :
 | Doré | 4K UHD |
 | Violet | Dolby Vision et Dolby Atmos |
 | Orange | HDR10 et HDR10+ |
-| Bleu | Full HD et famille DTS |
+| Bleu | Full HD |
+| Cyan | Famille DTS |
 | Vert émeraude | Audio lossless |
 | Turquoise | HEVC et codecs vidéo modernes |
 | Gris | Formats standards |
 
 Le rendu doit être réalisé en HTML/CSS, sans fichier image, sans logo officiel et sans téléchargement de ressources graphiques externes. Les couleurs et les formes doivent permettre de reconnaître rapidement les caractéristiques du média tout en maintenant un design homogène entre formats. L’affichage doit rester compact et s’adapter à la largeur disponible, avec un contraste et une lisibilité suffisants en thèmes clair et sombre.
 
-N’afficher que les formats réellement identifiables dans les métadonnées Tracearr : la palette ne présume pas que tous les formats cités sont détectables. Prévoir un moteur de rendu commun aux lectures vidéo et aux futures lectures musicales lorsque c’est pertinent.
+N’afficher que les formats réellement identifiables ; les inconnus restent neutres. Proposer **Destination uniquement** et **Source → destination** pour les valeurs fiables ; si la destination manque, indiquer que la valeur affichée est celle de la source. Sans choix explicite, préserver la sémantique historique ; Classique sans personnalisation conserve aussi la présentation historique. Moteur commun aux deux cartes et à l’aperçu, réutilisable en 6C sans ouvrir ce lot. Aucun changement backend ni de version.
+
+Voir [les réglages et limites du contrat](CONFIGURATION.md#badges-techniques-des-panneaux-de-lecture) et [la recette 6B.1](RECETTE.md#6b1--badges-techniques). Validation graphique du mainteneur requise avant toute préparation de publication ; persistance Lovelace et recette HA prévues en validation commune 6A/6B.
 
 ### Lot 6C — Lectures musicales
 

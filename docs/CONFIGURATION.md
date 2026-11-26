@@ -176,6 +176,48 @@ header_entity_badges:
     label: Salon
 ```
 
+### Badges techniques des panneaux de lecture
+
+Dans l’éditeur Lovelace des deux cartes, ouvrez **Badges techniques**. Les réglages sont propres à chaque carte, indépendants des badges de statistiques et de capteurs de l’en-tête. **Classique** est le rendu historique : résolution et débit avec la palette globale, codecs en texte combiné. **Premium** utilise un fond teinté et une bordure colorée ; **Cinéma**, un fond de couleur pleine ; **Minimaliste**, un fond neutre avec un trait latéral ; **Technique**, un second niveau quand une précision est disponible (dimensions, profil ou disposition des canaux). La taille, l’arrondi et l’espacement des nouveaux badges s’adaptent sans réglage supplémentaire.
+
+| Clé YAML | Valeurs et comportement par défaut |
+|---|---|
+| `technical_badge_style` | `classic` (par défaut), `premium`, `cinema`, `minimal`, `technical`. |
+| `technical_badge_layout` | `compact` (par défaut) regroupe les catégories avec retour à la ligne ; `separate` crée un groupe vidéo, audio et général (conteneur/débit), seulement si le groupe contient une information visible. |
+| `technical_transcode_mode` | `destination` (Destination uniquement), `source_to_destination` (Source → destination). **Omettre** la clé pour conserver la sémantique historique : résolution source et priorité aux codecs du flux. |
+| `technical_badge_order` | Liste séparée par des virgules : `resolution,hdr,video_codec,audio_format,audio_codec,channels,container,bitrate` par défaut dans le nouveau rendu. Les catégories omises sont ajoutées à la fin. En disposition séparée, la première catégorie visible de chaque groupe détermine sa place ; l’ordre s’applique ensuite à l’intérieur de chaque groupe. |
+| `technical_badge_visibility` | Dictionnaire de booléens par catégorie de la liste ci-dessus, sauf `bitrate`, qui reste contrôlé par `show_bitrate`. Une clé absente hérite de `show_quality` pour `resolution` (défaut `true`), de `show_codecs` pour les deux codecs (défaut `false`). HDR, format audio, canaux et conteneur sont proposés par défaut dans les styles non classiques. |
+| `technical_badge_colors` | `true` par défaut pour les nouveaux styles, `false` pour un rendu neutre. Le style Classique n’utilise pas la palette par format. |
+| `technical_badge_custom_colors` | Dictionnaire facultatif `identifiant: "#RRGGBB"` ; seules les couleurs hexadécimales sur six chiffres sont admises. Dans **Couleurs avancées**, réinitialisez un format ou toute la palette. Désactiver les couleurs ou revenir à Classique conserve les valeurs personnalisées. |
+
+En Classique, sans réglage de disposition séparée, de transcodage, d’ordre ou de visibilité propre aux catégories, `footer_field_order`, `show_quality`, `show_codecs` et `show_bitrate` conservent exactement leur rôle initial. Avec le nouveau rendu, le bloc technique prend la première position technique de `footer_field_order` (parmi `quality`, `bitrate` et `codecs`). Serveur, appareil et santé restent dans leur bandeau historique ; le filtrage LAN/WAN du débit et les icônes direct/transcodage ne changent pas.
+
+```yaml
+type: custom:tracearr-stream-card
+technical_badge_style: technical
+technical_badge_layout: separate
+technical_transcode_mode: source_to_destination
+show_codecs: true
+technical_badge_order: resolution,video_codec,hdr,audio_format,audio_codec,channels,container,bitrate
+technical_badge_visibility:
+  container: false
+technical_badge_custom_colors:
+  4k: "#dca83b"
+  hevc: "#399e92"
+```
+
+**Identifiants de couleurs disponibles :**
+
+- Résolutions : `8k`, `4k`, `1440p`, `1080p`, `720p`, `480p`, `sd`.
+- Plage dynamique : `dv`, `hdr10plus`, `hdr10`, `hdr`, `hlg`, `sdr`.
+- Vidéo : `h264`, `hevc`, `av1`, `vp9`, `vp8`, `mpeg1`, `mpeg2`, `mpeg4`, `vc1`.
+- Formats et codecs audio : `atmos`, `dtsx`, `truehd`, `eac3`, `ac3`, `dts`, `dtshd`, `dtshd_ma`, `dtshd_hra`, `flac`, `alac`, `pcm`, `aac`, `opus`, `mp3`, `vorbis`.
+- Canaux et conteneurs : `mono`, `stereo`, `"5.1"`, `"7.1"`, `mkv`, `mp4`, `mpegts`, `webm`, `avi`, `mov`, `m2ts`, `flv`. Le débit et les autres valeurs fournies restent neutres.
+
+**Ce que Tracearr permet d’identifier.** Les résolutions viennent du libellé source ou des dimensions disponibles. Le type HDR provient de la plage dynamique publiée : un HDR générique reste HDR. Une version de Plex qui ne distingue pas HDR10+ dans ces données ne permet pas de l’afficher comme tel. Atmos nécessite un indicateur ou un nom explicite, jamais un simple TrueHD ou E‑AC‑3 ; DTS:X nécessite également un profil ou un nom explicite. Pour les canaux, une disposition exploitable prime ; à défaut, `5.1` et `7.1` suivent la convention Tracearr pour 6 et 8 canaux. Les conteneurs sont ceux de `transcode_info`, quand renseignés.
+
+**En transcodage**, les dimensions vidéo et le nombre de canaux de sortie ne sont affichés comme tels que si Tracearr les fournit, de même que le conteneur. Plex, Jellyfin et Emby peuvent renvoyer le codec source en guise de repli : si le codec est égal et que la piste est transcodée, la destination est considérée comme inconnue. Les adaptateurs reprennent ou supposent la plage dynamique de sortie (notamment SDR sur Jellyfin/Emby) : elle n’est pas présentée comme confirmée sur une piste transcodée. Les adaptateurs n’exposent pas non plus de profil audio de sortie indépendant ; un libellé Atmos/DTS:X explicite et distinct peut être utilisé s’il figure dans le codec diffusé. Si la destination manque, les deux modes conservent la donnée connue avec la mention visible **source** ; aucune flèche n’est ajoutée. Une piste explicitement copiée ou lue directement conserve ses caractéristiques d’origine. Lorsqu’une comparaison est possible, chaque valeur conserve sa propre couleur de format.
+
 ### Débits locaux et distants
 
 Dans **Débit et localisation des flux**, choisissez l'affichage du débit pour **Tous les flux**, **Local uniquement**, ou **Distant uniquement**. Ce réglage affecte à la fois les badges de débit individuels et le débit agrégé de l'en-tête.

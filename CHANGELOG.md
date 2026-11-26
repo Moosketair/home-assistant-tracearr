@@ -6,6 +6,7 @@ Les changements sont classés par version publique. Les préversions et les anci
 
 - Les deux cartes gardent le temps restant à gauche et affichent « En pause » à droite à la place de l’heure de fin, recalculée à la reprise.
 - La couleur normale des badges du bandeau peut être réglée badge par badge, indépendamment de la couleur à zéro, avec retour possible à la palette d’origine.
+- Les panneaux de lecture proposent cinq styles de badges techniques, des catégories réordonnables, des couleurs par format et un aperçu dans l’éditeur. Les modes de transcodage distinguent les caractéristiques de source et de destination selon les données disponibles. Les cartes existantes gardent leur rendu classique par défaut.
 
 ## 0.1.17 — 2026-11-26
 
