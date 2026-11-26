@@ -2,6 +2,10 @@
 
 Les changements sont classés par version publique. Les préversions et les anciennes notes restent consultables ci-dessous. Les [GitHub Releases](https://github.com/Moosketair/home-assistant-tracearr/releases) permettent de télécharger une version précise.
 
+## Non publié
+
+- Les débits de l’en-tête et des panneaux se mettent à jour ensemble après modification des règles LAN/WAN, sans recharger la page ni déplacer le carrousel.
+
 ## 0.1.16 — 2026-11-05
 
 - Badge centré à largeur intrinsèque : la colonne du centre utilise `max-content` plutôt qu'un tiers fixe de l'en-tête ; les deux colonnes latérales se partagent le reste, conservant le badge au milieu.

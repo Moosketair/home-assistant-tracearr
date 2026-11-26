@@ -563,6 +563,73 @@ test('changing bitrate/state/health does not rebuild carousel or reset autoplay 
   assert.equal(carousel.scrollLeft,110);
 });
 
+for (const scope of ['local','remote','both']) {
+  test(`option snapshots update ${scope} bitrate in list and carousel without changing sessions`, async () => {
+    const streams=[
+      {id:'s1',server_id:'p',server_type:'plex',device:'TV',bitrate:1000},
+      {id:'s2',server_id:'p',server_type:'plex',device:'Tablet',bitrate:2000},
+      {id:'s3',server_id:'j',server_type:'jellyfin',bitrate:4000},
+      {id:'s4',server_id:'e',server_type:'emby',bitrate:8000},
+    ].map((s,i) => ({...s,server_name:s.server_type,started_at:`${4-i}`,state:'playing'}));
+    const other={id:'other',connected:true,streams,network_locations:{'server:p':'local'}};
+    const entry={id:'target',connected:true,streams,stats:{total:4,bandwidth_mbps:15}};
+    const initial={'server:p':'remote','p:device:TV':'local','device:Tablet':'local','server:j':'local'};
+    const deviceChanged={...initial,'p:device:TV':'remote'};
+    const serverChanged={...deviceChanged,'server:p':'local'};
+    const steps=[
+      [initial,              [1,4], [2]],
+      [deviceChanged,        [4],   [1,2]],
+      [serverChanged,        [2,4], [1]],
+      [initial,              [1,4], [2]],
+    ];
+    for (const mode of ['list','carousel']) {
+      const {card,carousel,cards}=setup({count:4});
+      for (const panel of cards) panel.style={};
+      if (mode === 'list') card.shadowRoot.querySelector = selector =>
+        selector === 'ha-card' && card.shadowRoot.renders ? {} : null;
+      const createElement=env.document.createElement;
+      env.document.createElement = tag => tag === 'template' ? {
+        content:{}, set innerHTML(html) { this.content.firstElementChild={innerHTML:html,style:{}}; },
+      } : createElement(tag);
+      try {
+        card.setConfig({mode,entry_id:'target',bitrate_scope:scope,show_bitrate:true,
+          header_show_bandwidth:true,show_poster:false,show_avatar:false,carousel_autoplay:false,
+          carousel_transition:'none'});
+        let notify;
+        card.hass = {connection:{async subscribeMessage(fn) { notify=fn; return () => {}; }}};
+        let shellRenders;
+        for (const [network_locations,local,remote] of steps) {
+          const expected=scope === 'local' ? local : scope === 'remote' ? remote : [1,2,4,8];
+          notify({entries:[other,{...entry,network_locations}]});
+          const summary=card._streamSummary(card._streams(card._entryData()));
+          assert.equal(summary.bandwidth,expected.reduce((sum,n) => sum+n,0)*1000);
+          assert.equal(summary.total,4);
+          assert.deepEqual([...summary.byServer.values()].map(row => row.count),[2,1,1]);
+          assert.ok(card._headerMarkup.includes(`${(summary.bandwidth/1000).toFixed(1)} Mb/s`));
+          const panels = card.shadowRoot.content.split('data-session=').slice(1);
+          assert.deepEqual(panels.map(panel => panel.slice(1,3)),['s1','s2','s3','s4']);
+          for (const [i,value] of [1,2,4,8].entries()) {
+            const panel = mode === 'carousel' ? (cards[i].innerHTML ?? panels[i]) : panels[i];
+            assert.equal(panel.includes(`${value}.0 Mb/s`),expected.includes(value),`${mode}: s${i+1}`);
+          }
+          if (shellRenders === undefined) {
+            shellRenders=card.shadowRoot.renders;
+            if (mode === 'carousel') card._scroll(1);
+          } else if (mode === 'carousel' || scope === 'both') {
+            assert.equal(card.shadowRoot.renders,shellRenders);
+            if (mode === 'carousel') assert.equal(carousel.scrollLeft,110);
+          }
+        }
+      } finally {
+        // Let the async subscribe call install its unsubscribe before removal.
+        await Promise.resolve();
+        card.disconnectedCallback();
+        env.document.createElement=createElement;
+      }
+    }
+  });
+}
+
 test('manual arrow navigation resets autoplay delay to prevent immediate early jump', () => {
   const {card}=setup({count:3});
   card._setTimers();

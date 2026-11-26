@@ -741,6 +741,9 @@
       const scope = this._config.bitrate_scope || "both";
       return scope === "both" || this._networkScope(stream) === scope;
     }
+    _scopedBitrate(stream) {
+      return this._includeBitrate(stream) ? stream.bitrate ?? null : null;
+    }
     _streamSummary(streams) {
       const sums = {total:streams.length, direct:0, video:0, audio:0, both:0,
         transcodes:0, unknown:0, paused:0, bandwidth:0, byServer:new Map()};
@@ -749,7 +752,7 @@
         sums[kind]++;
         if (kind === "video" || kind === "audio" || kind === "both" || s.is_transcode) sums.transcodes++;
         if (s.state === "paused") sums.paused++;
-        if (this._includeBitrate(s)) sums.bandwidth += Math.max(0, Number(s.bitrate) || 0);
+        sums.bandwidth += Math.max(0, Number(this._scopedBitrate(s)) || 0);
         const id = s.server_id || `${s.server_type}:${s.server_name}`;
         const row = sums.byServer.get(id) || {name:s.server_name || s.server_type || "Serveur",type:s.server_type,count:0};
         row.count++;
@@ -911,8 +914,9 @@
       if (c.show_device && (s.device || s.player)) metaByKey.device = `<span>${E(s.device || s.player)}</span>`;
       if (c.show_quality && s.resolution) metaByKey.quality = `<span class="chip">${E(s.resolution)}</span>`;
       // The separate video/audio icons take the place of the old text badge.
-      if (c.show_bitrate && this._includeBitrate(s) && s.bitrate != null)
-        metaByKey.bitrate = `<span class="chip">${E((s.bitrate/1000).toFixed(1))} Mb/s</span>`;
+      const bitrate = c.show_bitrate ? this._scopedBitrate(s) : null;
+      if (bitrate !== null)
+        metaByKey.bitrate = `<span class="chip">${E((bitrate/1000).toFixed(1))} Mb/s</span>`;
       if (c.show_codecs && (s.stream_video_codec_display || s.stream_audio_codec_display)) metaByKey.codecs = `<span>${E([s.stream_video_codec_display,s.stream_audio_codec_display].filter(Boolean).join(" / "))}</span>`;
       const meta = normalizedOrder(c.footer_field_order, FOOTER_FIELDS).map(k => metaByKey[k]).filter(Boolean);
       const accent = SERVER_ACCENTS[String(s.server_type || "").toLowerCase()] || "var(--tr-accent)";
@@ -1104,7 +1108,8 @@
 
     _liveSnapshot(stream, entry) {
       const {progress_ms, ...rest} = stream;
-      return JSON.stringify({rest,health:entry?.servers?.find(x => x.server_id === stream.server_id)?.status});
+      return JSON.stringify({rest,health:entry?.servers?.find(x => x.server_id === stream.server_id)?.status,
+        showBitrate:this._config.show_bitrate && this._scopedBitrate(stream) !== null});
     }
     _refreshHeader(streams) {
       const header = this._header(streams);
@@ -1153,6 +1158,10 @@
         streams: c.mode === "carousel" ? streams.map(s => s.id) : streams.map(({progress_ms, ...rest}) => rest),
         stats: c.mode === "carousel" ? undefined : entry?.stats,
         servers: c.mode === "carousel" ? undefined : entry?.servers,
+        // Option-only WS snapshots can change the scoped bitrate without changing
+        // the streams. In carousel mode, invalidate only the affected panels.
+        bitrateIncluded: c.mode !== "carousel" && (c.show_bitrate || (c.show_header && c.header_show_bandwidth)) ?
+          streams.map(s => this._scopedBitrate(s) !== null) : undefined,
         aliases: entry?.aliases,
         avatars: entry?.avatars,
         connected: entry?.connected,

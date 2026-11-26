@@ -178,6 +178,8 @@ network_locations: |
 
 Les règles peuvent utiliser `identifiantServeur:utilisateur`, `plex:utilisateur`, `jellyfin:utilisateur`, `device:Nom`, `player:Nom` ou seulement le nom d'utilisateur. Indiquez `local` ou `remote`. Une règle par utilisateur/appareil est indicative et ne suit pas automatiquement les déplacements de l'appareil. En mode « Local » ou « Distant », les flux non classés **ne sont pas comptés** ; le mode « Tous » n'utilise pas les correspondances.
 
+Les règles de la carte ont priorité sur celles de l’intégration. À chaque niveau, une règle d’appareil, de lecteur ou de compte propre au serveur prime sur le défaut `server:identifiantServeur`, qui prime sur une règle générique. Dans les options de l’intégration, l’action groupée **Tous les appareils** remplace les choix individuels des appareils détectés sur ce serveur. Le filtre ne masque aucune lecture et ne change pas le capteur HA de débit total ni les compteurs de sessions.
+
 ### Comportement sans lecture
 
 Dans **Comportement sans lecture**, choisissez entre **Afficher un message**, **En-tête uniquement** ou **Masquer complètement la carte**. Le champ `empty_message` personnalise le texte lorsque personne ne regarde ; si Tracearr est déconnecté, le message « Tracearr indisponible » reste prioritaire.

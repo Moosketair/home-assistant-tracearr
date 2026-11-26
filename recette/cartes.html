@@ -2,6 +2,9 @@
 <html lang="fr"><meta charset="utf-8"><title>Recette locale des cartes Tracearr</title>
 <style>
   body {font: 15px system-ui; --primary-text-color: #16232b; --accent-color: #008899}
+  @media (prefers-color-scheme: dark) {
+    body {background:#16232b; --primary-text-color:#f0f4f8; --accent-color:#53ced5}
+  }
   ha-card {display:block} pre {white-space:pre-wrap} #host {max-width:none}
 </style>
 <h1>Carte de recette</h1>
@@ -46,6 +49,41 @@
   function display() {
     el("result").textContent = JSON.stringify({matrix:reports, current:card ? measure(+el("width").value) : "démontée"}, null, 2);
   }
+  // A6: deliver only an options snapshot, with identical sessions and stats.
+  function probeLanWan() {
+    return [["carousel",false],["list",false],["list",true]].map(([layout,single]) => {
+      if (single) { card.remove(); individual = true; attach(); }
+      host.style.width = "320px";
+      const publish = location => listener({entries:[{...entry, network_locations:{"server:fixture":location}}]});
+      publish("remote");
+      card.setConfig({mode:layout, carousel_visible:1, carousel_transition:"none",
+        header_show_bandwidth:true, show_bitrate:true, bitrate_scope:"remote",
+        show_poster:false, show_avatar:false});
+      const root = card.shadowRoot;
+      const read = () => {
+        const panels = [...root.querySelectorAll(".stream")];
+        return {header:root.querySelector('.metric[title="Débit distant"]')?.textContent,
+          badges:panels.map(panel => [...panel.querySelectorAll(".chip")]
+            .find(chip => chip.textContent.endsWith(" Mb/s"))?.textContent ?? null),
+          ids:panels.map(panel => panel.dataset.session)};
+      };
+      const track = root.querySelector(".carousel");
+      if (track) root.querySelector('button[data-step="1"]').click();
+      const scroll = track?.scrollLeft, index = card._carouselIndex, before = read();
+      publish("local");
+      const after = read();
+      publish("remote");
+      const restored = read();
+      const anchorPreserved = !track || (track === root.querySelector(".carousel") &&
+        scroll > 0 && track.scrollLeft === scroll && card._carouselIndex === index);
+      const ok = after.header?.endsWith("0.0 Mb/s") && after.badges.every(badge => badge === null) &&
+        before.header?.endsWith(single ? "1.0 Mb/s" : "3.0 Mb/s") &&
+        before.badges.every(badge => badge === "1.0 Mb/s") &&
+        after.ids.join() === before.ids.join() && JSON.stringify(before) === JSON.stringify(restored) &&
+        anchorPreserved;
+      return {layout:single ? "individual" : layout, before, after, restored, anchorPreserved, ok};
+    });
+  }
   attach();
   for (longLabel of [false,true]) {configure(); for (const w of sizes) reports.push(measure(w));}
   longLabel = false; configure(); display();
@@ -58,4 +96,9 @@
     listener?.({entries:[entry]}); display();
   };
   el("mount").onclick = () => {if (card) {card.remove(); card=null;} else attach(); display();};
+  if (new URLSearchParams(location.search).has("lan-wan")) {
+    const cases = probeLanWan();
+    el("result").textContent = JSON.stringify({ok:cases.every(row => row.ok),
+      theme:matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light", cases}, null, 2);
+  }
 </script></html>

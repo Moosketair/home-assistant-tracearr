@@ -186,6 +186,19 @@ Pour isoler les 27 nouveaux essais : `TMPDIR=/tmp/opencode bash recette/lancer.s
 
 Suites complètes : **22 Python, 72 JavaScript, 88 sur Core 2025.6.0, 88 sur Core 2026.11.3**, sans échec, skip ni xfail. Les avertissements HTTP/CORS de Core restent présents (175 et 96). Syntaxe JS, compilation Python, lecture JSON du manifeste et de `hacs.json`, et `git diff --check` réussis. Serveur Tracearr simulé sur loopback ; aucun essai HACS, navigateur HA, proxy inverse ou déploiement dans ce lot.
 
+### 2D.1 — cohérence du débit après modification LAN/WAN (A6)
+
+**Avant (`8e63524`).** Reproduction de [l’audit initial](AUDIT_INITIAL.md) dans `recette/cartes.html?lan-wan` : trois sessions de 1000 kbit/s, filtre distant, défaut serveur distant → local sans modifier les sessions. Chromium : 3,0 → 0,0 Mb/s dans l’en-tête du carrousel, trois badges à 1,0 Mb/s encore présents ; en liste et sur la carte individuelle, en-tête et panneaux périmés. Les nouveaux tests Node « local » et « distant » échouent ; « tous » passe.
+
+**Après.** Sur les trois rendus, l’en-tête affiche 0,0 Mb/s, les badges disparaissent puis reviennent en rétablissant la règle distante, sans perte de session ni déplacement du carrousel. Sonde DOM réussie sous Chromium 152.0.7977.82 en clair et sombre (`--force-dark-mode`). Reprendre la commande de la section suivante en ajoutant `?lan-wan` à l’URL ; le JSON du `<pre>` doit donner `ok: true`.
+
+| Essais réexécutés sur Debian 13.2 | Résultat |
+|---|---|
+| `TMPDIR=/tmp/opencode bash recette/lancer.sh base -k 'test_network_options or test_bulk_options or test_model'` | 13 Python 3.13.5 réussis ; syntaxe et 75 tests Node 22.23.5 réussis. Aller-retour par appareil, changement de défaut serveur, priorité historique, scopes local/distant/tous et comptes par serveur avec Plex/Jellyfin/Emby synthétiques. |
+| `TMPDIR=/tmp/opencode bash recette/lancer.sh min -k 'spec_network_options or test_rest_and_options_use_replacement_relay'` (et `current`) | 2 réussis sur Core 2025.6.0 / CPython 3.13.18 et 2 sur Core 2026.11.3 / CPython 3.14.10. Socket HA authentifiée conservée ; deux entrées isolées ; capteurs et stats totales non filtrés cohérents. Le snapshot d’options précède la réponse REST retenue ; la mutation SSE suivante puis la publication REST conservent la dernière règle et le bon débit. |
+
+`git diff --check` réussi. Les deux Core émettent des avertissements de leurs dépendances (5 sur `min`, 9 sur `current`), sans échec. Les validations complètes de 2C ci-dessus et les garanties de cycle HA/transport de 2A/2B restent des références antérieures, pas des suites réexécutées. Le correctif ne change pas ces chemins. Aucun vrai dashboard HA, lecteur physique, essai HACS ou déploiement ; le rendu utilise les éléments distribués avec des données fictives.
+
 ## Recette visuelle légère
 
 `recette/cartes.html` monte le JS distribué, avec une source WS de carte synthétique. Les métriques sont mesurées sur les éléments réels du Shadow DOM. Sous Chromium (152.0.7977.82 pendant la validation) :

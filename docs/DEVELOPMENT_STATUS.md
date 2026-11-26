@@ -1,12 +1,16 @@
-# État de reprise — étape 2C.1, 26 novembre 2026
+# État de reprise — étape 2D.1, 26 novembre 2026
 
-**2A définitivement validée** sur `942de6ffa8d33b0ee10319fa39938c3f587f35aa`. **2B définitivement clôturée** : verdict indépendant 2B.4 **VALIDÉ** sur `f918150fd8fc6fa6f44d309aac3d4387d063d83b`, confirmé par le mainteneur. Les deux régressions relevées par 2B.2 sont corrigées ; les limites d’ordre faute de révision commune REST/SSE sont acceptées. Résultats indépendants : 21 Python, 72 JS, 61 sur chacun des Core 2025.6.0 et 2026.11.3, aucun échec, skip ou xfail. Aucun nouvel audit 2B requis. **2C.1** est autorisée et livrée localement : robustesse SSE (A4), corps HTTP du proxy d’images (A3) et méthode de reprise dans [AGENTS.md](../AGENTS.md). Aucun lot suivant n’est autorisé par cette décision. Voir [ARCHITECTURE](ARCHITECTURE.md) et [RECETTE](RECETTE.md).
+**2A définitivement validée** sur `942de6ffa8d33b0ee10319fa39938c3f587f35aa`. **2B définitivement clôturée** : verdict indépendant 2B.4 **VALIDÉ** sur `f918150fd8fc6fa6f44d309aac3d4387d063d83b`, confirmé par le mainteneur. Les deux régressions relevées par 2B.2 sont corrigées ; les limites d’ordre faute de révision commune REST/SSE sont acceptées. Résultats indépendants : 21 Python, 72 JS, 61 sur chacun des Core 2025.6.0 et 2026.11.3, aucun échec, skip ou xfail. Aucun nouvel audit 2B requis.
+
+**2C définitivement clôturée** sur `8e63524a972e739d4ad0c92527e8ed2d962526bc` (`fix/sse-image-robustness`) : le contre-audit 2C.2 a conclu **VALIDÉ AVEC RÉSERVES NON BLOQUANTES**, verdict accepté par le mainteneur. Réserves acceptées : exception interne SSE non journalisée, préexistante, à examiner dans le lot 3 ; arrondi du timeout aiohttp accepté ; aucune incompatibilité concrète démontrée avec une éventuelle compression imposée par un proxy inverse.
+
+**2D.1 livrée localement** : A6 reproduit puis corrigé dans les deux cartes, sans modification du backend, de la priorité LAN/WAN ou des options. Voir [ARCHITECTURE](ARCHITECTURE.md) et [RECETTE](RECETTE.md) pour la preuve et ses limites. Arrêt à 2D.1 ; 2E et audit indépendant non engagés.
 
 | Repère | Valeur |
 |---|---|
 | Dépôt | `Moosketair/home-assistant-tracearr`, copie de travail `/media/fat/proton_drive/dev/home-assistant-tracearr` lors de l’audit |
 | Référence fonctionnelle | `main` = tag `v0.1.16` = `443ce3859d09b67ccfd589d326d032753dc11d64` à la date de l’audit |
-| Travail local | `fix/sse-image-robustness`, créée depuis `f918150fd8fc6fa6f44d309aac3d4387d063d83b` (`fix/rest-sse-consistency`), sans changement préexistant ; SHA de livraison : `git rev-parse fix/sse-image-robustness` |
+| Travail local | `fix/lan-wan-consistency`, créée depuis le SHA 2C validé, sans changement préexistant ; SHA de livraison : `git rev-parse fix/lan-wan-consistency` |
 | Environnement | Debian 13.2 ; suite : Python 3.13.5, Node 22.23.5 ; Core minimum et stable essayés en environnements temporaires séparés |
 | Déploiement du mainteneur | HA Container géré par Dockge Enhanced, **non utilisé** ; aucune action distante de publication dans cette phase |
 | GitHub à la date de revue | Stable vérifiée sur le bon SHA, deux workflows verts sur ce SHA, une issue musique ouverte, aucune PR ouverte |
