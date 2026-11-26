@@ -2,13 +2,15 @@
 import asyncio
 from copy import deepcopy
 import json
+from unittest.mock import patch
 
 import pytest
 
-from homeassistant.config_entries import ConfigEntryState
+from homeassistant.config_entries import ConfigEntryState, UnknownEntry
 from homeassistant.helpers import entity_registry as er
 import voluptuous as vol
 
+from custom_components.tracearr_ha.api import TracearrClient
 from core import DOMAIN, core, observed
 from simulateur import KEY, Gate, Tracearr
 
@@ -142,6 +144,125 @@ def test_removing_entry_during_reauth_validation_does_not_write_or_reload():
             assert entry.data["token"] == KEY
             assert entries.async_entries(DOMAIN) == []
             assert b.hass.data[DOMAIN] == {}
+
+    asyncio.run(run())
+
+
+def test_reauth_cannot_commit_while_native_removal_is_unloading():
+    async def run():
+        async with Tracearr().serve() as sim, core() as b:
+            entries = b.hass.config_entries
+            manager = type(entries)
+            entry = await b.add(sim)
+            before = dict(entry.data)
+            sim.key = NEW_KEY
+            await b.coord(entry).async_refresh()
+            await b.hass.async_block_till_done()
+            active, = reauth_flows(b, entry)
+            rest = sim.gates["servers"] = Gate()
+            platforms = Gate()
+            response_read = asyncio.Event()
+            late_reload_errors = []
+            read_servers = TracearrClient.servers
+            unload = manager.async_forward_entry_unload
+            reload = manager.async_reload
+
+            async def read(client):
+                response = await read_servers(client)
+                response_read.set()
+                return response
+
+            async def held_unload(ce, target, domain):
+                if target is entry and domain == "binary_sensor":
+                    await platforms.wait()
+                return await unload(ce, target, domain)
+
+            async def watch_reload(ce, entry_id):
+                try:
+                    return await reload(ce, entry_id)
+                except UnknownEntry:
+                    late_reload_errors.append(entry_id)
+                    raise
+
+            with (
+                patch.object(TracearrClient, "servers", read),
+                patch.object(manager, "async_forward_entry_unload", held_unload),
+                patch.object(manager, "async_reload", watch_reload),
+                patch.object(manager, "async_schedule_reload", autospec=True,
+                             side_effect=manager.async_schedule_reload) as scheduled,
+            ):
+                pending = asyncio.create_task(entries.flow.async_configure(active["flow_id"], {"token": NEW_KEY}))
+                removal = None
+                try:
+                    await asyncio.wait_for(rest.entered.wait(), 5)
+                    removal = asyncio.create_task(entries.async_remove(entry.entry_id))
+                    await asyncio.wait_for(platforms.entered.wait(), 5)
+                    assert entry.state is ConfigEntryState.UNLOAD_IN_PROGRESS
+                    assert entries.async_get_entry(entry.entry_id) is entry
+                    assert reauth_flows(b, entry)  # HA has not cancelled this flow yet.
+                    rest.release.set()
+                    await asyncio.wait_for(response_read.wait(), 5)
+                    saved_during_unload = entry.data != before
+                    scheduled_during_unload = scheduled.call_count
+                finally:
+                    rest.release.set()
+                    platforms.release.set()
+                assert not (await asyncio.wait_for(removal, 5))["require_restart"]
+                result = await asyncio.wait_for(pending, 5)
+                await b.hass.async_block_till_done()
+                assert (
+                    saved_during_unload, scheduled_during_unload,
+                    result["reason"], scheduled.call_count, len(late_reload_errors),
+                ) == (False, 0, "reauth_entry_removed", 0, 0)
+            assert entry.data == before and entries.async_get_entry(entry.entry_id) is None
+            assert not reauth_flows(b, entry)
+
+    asyncio.run(run())
+
+
+def test_reauth_after_refused_unload_saves_key_without_attempting_reload(caplog):
+    async def run():
+        async with Tracearr().serve() as sim, core() as b:
+            entries = b.hass.config_entries
+            manager = type(entries)
+            entry = await b.add(sim)
+            coord = b.coord(entry)
+            before = dict(entry.data)
+            options = {"aliases": {"fixture": "Recette"}}
+            entries.async_update_entry(entry, options=options)
+            registry = er.async_get(b.hass)
+            entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_total")
+            saved_entity = registry.async_update_entity(entity_id, name="Total personnalisé")
+            sim.key = NEW_KEY
+            await coord.async_refresh()
+            await b.hass.async_block_till_done()
+            active, = reauth_flows(b, entry)
+            unload = manager.async_forward_entry_unload
+
+            async def refuse(ce, target, domain):
+                if target is entry and domain == "binary_sensor":
+                    return False
+                return await unload(ce, target, domain)
+
+            with patch.object(manager, "async_forward_entry_unload", refuse):
+                assert not await entries.async_unload(entry.entry_id)
+            assert entry.state is ConfigEntryState.FAILED_UNLOAD
+            assert entries.async_get_entry(entry.entry_id) is entry and b.coord(entry) is coord
+            try:
+                with patch.object(manager, "async_schedule_reload") as scheduled:
+                    fid = active["flow_id"]
+                    invalid = await entries.flow.async_configure(fid, {"token": BAD_KEY})
+                    assert invalid["errors"] == {"base": "invalid_auth"}
+                    assert entry.data == before
+                    valid = await entries.flow.async_configure(fid, {"token": NEW_KEY})
+                    assert (valid["type"], valid["reason"]) == ("abort", "reauth_restart_required")
+                    scheduled.assert_not_called()
+                assert entry.data == {**before, "token": NEW_KEY} and entry.options == options
+                assert registry.async_get(entity_id) == saved_entity
+                assert entry.state is ConfigEntryState.FAILED_UNLOAD and b.coord(entry) is coord
+                assert not any(key in caplog.text for key in (KEY, BAD_KEY, NEW_KEY))
+            finally:
+                await entries.async_remove(entry.entry_id)
 
     asyncio.run(run())
 

@@ -25,7 +25,8 @@
       "already_configured": "Cette instance de Tracearr est déjà configurée",
       "reauth_successful": "La clé API Tracearr a été mise à jour",
       "reauth_entry_removed": "L’entrée de l’intégration Tracearr a été supprimée",
-      "reauth_interrupted": "L’intégration Tracearr a changé pendant la vérification. Aucune clé n’a été enregistrée."
+      "reauth_interrupted": "L’intégration Tracearr a changé pendant la vérification. Aucune clé n’a été enregistrée.",
+      "reauth_restart_required": "La clé API Tracearr a été enregistrée. Home Assistant n’a pas pu décharger cette entrée précédemment. Redémarrez Home Assistant pour utiliser la nouvelle clé."
     }
   },
   "options": {

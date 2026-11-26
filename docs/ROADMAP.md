@@ -14,6 +14,8 @@ Les phases 0 et 1.1 sont validées. **2A** est définitivement validée sur `942
 
 **4.1 :** douze anomalies validées par le mainteneur (A1–A8, A11–A14) ; refus de validation pour les défauts résiduels A9/A10. **4.1.1 :** correctifs locaux livrés, verdict indépendant attendu sur ces deux points. Le versionnement et l’invalidation du cache JS sont réservés à 4.2.
 
+**4.1.2** confirme les deux correctifs et valide définitivement A10. **4.1.3** traite exclusivement la course résiduelle A9 entre vérification de la clé et suppression HA ; seule A9 reste à contre-vérifier.
+
 | Ordre | Lot proposé | Critère de sortie avant livraison |
 |---|---|---|
 | 4 | **Validation globale** : matrice Core minimum/stable, non-régression avec fixtures Plex/Jellyfin/Emby, installation/mise à niveau HACS et essai sur un vrai dashboard HA isolé. | Vérifier HACS et hassfest sur le SHA candidat ; vérifier les flows, options, ressources et cartes réels, dont A10 en panne complète et en reprise. |

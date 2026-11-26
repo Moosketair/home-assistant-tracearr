@@ -298,6 +298,19 @@ Sur rejet REST, le cache valide, `last_sync` et les statistiques restent cohére
 
 Le contrat publié Tracearr v3.2.1 de `/streams` et `/servers` a été relu ; aucun service Tracearr réel, dashboard, HACS, hassfest candidat, ni campagne JS/navigateur rejoués (frontend inchangé). 4.2 et le contre-audit ne font pas partie de cette livraison.
 
+### 4.1.3 — course entre réauthentification et suppression (A9)
+
+**Avant (`b8908c2`, les deux Core).** La vérification de clé retenue sur `/servers` reprend alors que la suppression native HA est bloquée dans le déchargement d’une plateforme. L’entrée est en `UNLOAD_IN_PROGRESS` mais toujours dans le registre et le flow est actif. Résultat : clé modifiée, un reload programmé, `reauth_successful`, puis `UnknownEntry` non récupérée dans la tâche de reload. Aucune persistance après suppression n’est revendiquée. Le second test discriminant montre qu’un unload simplement refusé était suivi d’un succès nominal avec demande de reload, alors que Core interdit le reload d’une entrée `FAILED_UNLOAD`. **2 échecs sur 2 par Core**.
+
+**Après.** Les barrières réseau et déchargement reproduisent le même entrelacement ; le formulaire attend le verrou d’entrée hors I/O HTTP. La suppression retire l’entrée avant l’écriture : données inchangées, `reauth_entry_removed`, zéro reload demandé et zéro `UnknownEntry`. La suppression déjà terminée et le reload concurrent restent couverts. Après un unload refusé avec entrée conservée, une clé invalide est refusée ; une clé valide est enregistrée sur la même entrée, avec nom d’entité et options préservés, sans reload. Le formulaire demande un redémarrage pour appliquer la clé. La réauthentification nominale et les erreurs REST déjà testées conservent leur comportement.
+
+| Contrôle exécuté | Résultat |
+|---|---|
+| `pytest -p no:cacheprovider -c recette/pytest.ini -q recette -k 'spec_reauth or refused_unload_and_final_remove or residual_platforms or subscription_survives_reload or reload_failure_then_recovery or unsubscribe_after_reload_and_remove'` | **21 réussites, 91 désélectionnées par Core**, aucune erreur ni skip/xfail, avertissements du banc/dépendances. Core 2025.6.0 / CPython 3.13.18 et Core 2026.11.3 / CPython 3.14.10, venv épinglés et Tracearr factice sur loopback. |
+| `pytest -p no:cacheprovider -q tests/test_translations.py` | 1 réussite hors HA sur CPython 3.13.5 ; parité des 67 chemins et paramètres vérifiée entre les trois catalogues. |
+
+**Résultats antérieurs non rejoués.** Les 78 tests ciblés par Core de 4.1.2 restent des preuves historiques sur `b8908c2` ; le contre-audit valide définitivement A10 et confirme la correction des deux défauts de 4.1. En 4.1.3, ni l’intégrité du cache A10, ni la campagne globale, le JS, les navigateurs, HACS ou un redémarrage complet de HA n’ont été rejoués. Une suppression indépendante après une réauthentification légitimement terminée reste possible. Seule A9 reste à contre-vérifier.
+
 ## Recette visuelle légère
 
 `recette/cartes.html` monte le JS distribué, avec une source WS de carte synthétique. Les métriques sont mesurées sur les éléments réels du Shadow DOM. Sous Chromium (152.0.7977.82 pendant la validation) :

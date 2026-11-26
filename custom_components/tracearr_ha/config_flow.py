@@ -50,7 +50,10 @@ class TracearrConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(self, user_input=None):
-        entry = self._get_reauth_entry()
+        try:
+            entry = self._get_reauth_entry()
+        except config_entries.UnknownEntry:
+            return self.async_abort(reason="reauth_entry_removed")
         errors = {}
         if user_input is not None:
             token = user_input[CONF_TOKEN].strip()
@@ -70,21 +73,28 @@ class TracearrConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = "cannot_connect"
 
                 entries = self.hass.config_entries
-                if entries.async_get_entry(entry.entry_id) is not entry:
-                    return self.async_abort(reason="reauth_entry_removed")
-                # On both Core versions a concurrent reload aborts the flow,
-                # but does not stop a step already awaiting network I/O.
-                if entry.data is not previous_data or not any(
-                    flow["flow_id"] == self.flow_id
-                    for flow in entry.async_get_active_flows(self.hass, {"reauth"})
-                ):
-                    return self.async_abort(reason="reauth_interrupted")
-                if not errors:
-                    # Options already have a live-update listener. Schedule one
-                    # reload explicitly for this credential change only.
-                    entries.async_update_entry(entry, data={**entry.data, CONF_TOKEN: token})
-                    entries.async_schedule_reload(entry.entry_id)
-                    return self.async_abort(reason="reauth_successful")
+                # HA holds this lock from the start of removal, including
+                # platform unload, until the entry has left the registry.
+                # Keep the REST checks outside it and commit without yielding.
+                async with entry.setup_lock:
+                    if entries.async_get_entry(entry.entry_id) is not entry:
+                        return self.async_abort(reason="reauth_entry_removed")
+                    # Reload can abort the flow while this step is still running.
+                    if entry.data is not previous_data or not any(
+                        flow["flow_id"] == self.flow_id
+                        for flow in entry.async_get_active_flows(self.hass, {"reauth"})
+                    ):
+                        return self.async_abort(reason="reauth_interrupted")
+                    if not errors:
+                        restart_required = entry.state is config_entries.ConfigEntryState.FAILED_UNLOAD
+                        if not restart_required and not entry.state.recoverable:
+                            return self.async_abort(reason="reauth_interrupted")
+                        entries.async_update_entry(entry, data={**entry.data, CONF_TOKEN: token})
+                        if restart_required:
+                            return self.async_abort(reason="reauth_restart_required")
+                        # Schedule rather than await a reload: it needs this lock.
+                        entries.async_schedule_reload(entry.entry_id)
+                        return self.async_abort(reason="reauth_successful")
         return self.async_show_form(step_id="reauth_confirm", data_schema=vol.Schema({
             vol.Required(CONF_TOKEN): selector.TextSelector(selector.TextSelectorConfig(
                 type=selector.TextSelectorType.PASSWORD,
