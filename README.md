@@ -8,6 +8,8 @@
 
 **Version stable : 0.1.17** · Disponible via le catalogue officiel HACS. Le projet reste communautaire et évolutif ; testez les capteurs avant de les utiliser pour des automatismes critiques.
 
+Le candidat local [0.1.18-beta.1](CHANGELOG.md#0118-beta1--candidat-local-non-publié) n’est pas disponible via HACS.
+
 ## Nouveautés de la 0.1.17
 
 - Connexions et affichage des lectures plus fiables, y compris après rechargement et panne de Tracearr.

@@ -72,7 +72,7 @@ def test_storage_mode_2026_has_no_mode_attr():
     assert len(hass.http.views) == 1
 
 
-@pytest.mark.parametrize('previous_version', ['0.1.16', '0.1.17-beta.1'])
+@pytest.mark.parametrize('previous_version', ['0.1.16', '0.1.17-beta.1', '0.1.17'])
 def test_legacy_mode_and_existing_resource_updated(previous_version):
     resources = Resources([{'id': 'old', 'res_type': 'module', 'url': f'{MODULE}?v={previous_version}'}])
     hass = SimpleNamespace(data={'lovelace': SimpleNamespace(mode='storage', resources=resources)}, http=Http())

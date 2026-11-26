@@ -2,13 +2,17 @@
 
 Les changements sont classés par version publique. Les préversions et les anciennes notes restent consultables ci-dessous. Les [GitHub Releases](https://github.com/Moosketair/home-assistant-tracearr/releases) permettent de télécharger une version précise.
 
-## Non publié
+## 0.1.18-beta.1 — Candidat local non publié
+
+La version publique recommandée reste `v0.1.17`.
 
 - Les deux cartes gardent le temps restant à gauche et affichent « En pause » à droite à la place de l’heure de fin, recalculée à la reprise.
 - La couleur normale des badges du bandeau peut être réglée badge par badge, indépendamment de la couleur à zéro, avec retour possible à la palette d’origine.
 - Les panneaux de lecture proposent cinq styles de badges techniques, des catégories réordonnables, des couleurs par format et un aperçu dans l’éditeur. Les modes de transcodage distinguent les caractéristiques de source et de destination selon les données disponibles. Les cartes existantes gardent leur rendu classique par défaut.
 - Dans Sections, les cartes s’ajustent désormais à leur contenu par défaut. Un bandeau seul tient sur une ligne native quand son contenu le permet, sans modifier les tailles de carte enregistrées.
 - Le style Technique ajoute de courtes descriptions de formats. Si la destination est inconnue, la valeur source est affichée sans suffixe ni flèche ; la précision reste disponible dans l’infobulle.
+
+**Après prépublication uniquement :** faites une sauvegarde HA, activez si nécessaire les préversions dans le gestionnaire, puis sélectionnez `v0.1.18-beta.1`. Redémarrez Home Assistant et actualisez le dashboard sans recréer l’entrée ni les cartes. En stockage, la ressource existante est actualisée automatiquement ; en YAML, utilisez `/tracearr_ha/tracearr-card.js?v=0.1.18-beta.1`. Pour revenir à la stable, sélectionnez `v0.1.17`, redémarrez et restaurez `?v=0.1.17` en YAML. Supprimez les réglages visuels propres à la bêta uniquement si vous ne souhaitez pas les retrouver plus tard.
 
 ## 0.1.17 — 2026-11-26
 

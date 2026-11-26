@@ -18,6 +18,8 @@ lovelace:
 
 Sur les anciens Core qui n’ont pas `resource_mode`, utilisez le `mode: yaml` déjà en place plutôt que d’ajouter cette clé. Rechargez le dashboard après la mise à jour de la ressource ; ne recréez ni l’entrée Tracearr ni les cartes.
 
+Pour le candidat local `v0.1.18-beta.1`, remplacez `?v=0.1.17` par `?v=0.1.18-beta.1` dans cette même déclaration, sans ajouter de seconde ressource.
+
 ### Réglages du carrousel et de la présentation
 
 Le carrousel se pilote au **cliquer-glisser**, comme sur une interface tactile, en plus des flèches masquables. Sa barre de défilement horizontale est **toujours invisible**. Le cadre extérieur suit désormais le thème natif Home Assistant ; les panneaux de lecture disposent de leur propre fond (léger contraste ou transparent). La couleur de progression et des badges se règle avec une seule palette.
