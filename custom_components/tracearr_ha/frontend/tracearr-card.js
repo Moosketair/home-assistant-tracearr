@@ -159,8 +159,8 @@
   };
   const TECH_FORMATS = new Map();
   const TECH_ALIASES = new Map();
-  function techFormat(category, id, short, name, color="gray", aliases=[]) {
-    const format = {id, short, name, category, color:TECH_COLORS[color]};
+  function techFormat(category, id, short, name, color="gray", aliases=[], description) {
+    const format = {id, short, name, category, color:TECH_COLORS[color], description};
     TECH_FORMATS.set(id,format);
     for (const alias of [id, short, ...aliases]) TECH_ALIASES.set(`${category}:${alias.toLowerCase()}`,format);
   }
@@ -171,43 +171,45 @@
   techFormat("resolution","720p","720p","HD","gray",["hd"]);
   techFormat("resolution","480p","480p","480p");
   techFormat("resolution","sd","SD",["Définition standard","Standard definition"]);
-  techFormat("hdr","dv","DV","Dolby Vision","purple",["dolby vision","dovi"]);
-  techFormat("hdr","hdr10plus","HDR10+","HDR10+","orange");
-  techFormat("hdr","hdr10","HDR10","HDR10","orange");
-  techFormat("hdr","hdr","HDR",["HDR (type non précisé)","HDR (type unspecified)"],"orange");
+  techFormat("hdr","dv","DV","Dolby Vision","purple",["dolby vision","dovi"],"Dolby Vision");
+  techFormat("hdr","hdr10plus","HDR10+","HDR10+","orange",[],["HDR dynamique","Dynamic HDR"]);
+  techFormat("hdr","hdr10","HDR10","HDR10","orange",[],["HDR statique","Static HDR"]);
+  techFormat("hdr","hdr","HDR",["HDR (type non précisé)","HDR (type unspecified)"],"orange",[],["Type non précisé","Type unspecified"]);
   techFormat("hdr","hlg","HLG","Hybrid Log-Gamma","orange");
-  techFormat("hdr","sdr","SDR","Standard Dynamic Range");
-  techFormat("video_codec","h264","H.264","H.264 / AVC","gray",["avc","avc1","x264","h.264 (avc)"]);
-  techFormat("video_codec","hevc","HEVC","H.265 / HEVC","teal",["h265","h.265","x265","hev1","hvc1","h.265 (hevc)"]);
-  techFormat("video_codec","av1","AV1","AOMedia Video 1","teal",["av01"]);
+  techFormat("hdr","sdr","SDR","Standard Dynamic Range","gray",[],["Plage standard","Standard range"]);
+  techFormat("video_codec","h264","H.264","H.264 / AVC","gray",["avc","avc1","x264","h.264 (avc)"],"AVC");
+  techFormat("video_codec","hevc","HEVC","H.265 / HEVC","teal",["h265","h.265","x265","hev1","hvc1","h.265 (hevc)"],"H.265");
+  techFormat("video_codec","av1","AV1","AOMedia Video 1","teal",["av01"],"AOMedia");
   techFormat("video_codec","vp9","VP9","VP9","teal");
   techFormat("video_codec","vp8","VP8","VP8");
   techFormat("video_codec","mpeg2","MPEG-2","MPEG-2 Video","gray",["mpeg2video"]);
   techFormat("video_codec","mpeg4","MPEG-4","MPEG-4 Part 2");
   techFormat("video_codec","mpeg1","MPEG-1","MPEG-1 Video");
   techFormat("video_codec","vc1","VC-1","VC-1");
-  techFormat("audio_format","atmos","ATMOS","Dolby Atmos","purple",["dolby atmos"]);
-  techFormat("audio_format","dtsx","DTS:X","DTS:X","cyan",["dts-x","dts:x ma","dts:x profile 2"]);
-  techFormat("audio_codec","truehd","TRUEHD","Dolby TrueHD","green",["dolby truehd"]);
-  techFormat("audio_codec","eac3","E-AC-3","Dolby Digital Plus","gray",["eac-3","e-ac-3","dd+","dolby digital plus"]);
-  techFormat("audio_codec","ac3","AC-3","Dolby Digital","gray",["ac-3","dolby digital"]);
+  techFormat("audio_format","atmos","ATMOS","Dolby Atmos","purple",["dolby atmos"],"Dolby");
+  techFormat("audio_format","dtsx","DTS:X","DTS:X","cyan",["dts-x","dts:x ma","dts:x profile 2"],["Audio immersif","Immersive audio"]);
+  const lossless = ["Sans perte","Lossless"];
+  const channelDescription = ["Canaux","Channels"];
+  techFormat("audio_codec","truehd","TRUEHD","Dolby TrueHD","green",["dolby truehd"],lossless);
+  techFormat("audio_codec","eac3","E-AC-3","Dolby Digital Plus","gray",["eac-3","e-ac-3","dd+","dolby digital plus"],"Dolby Digital+");
+  techFormat("audio_codec","ac3","AC-3","Dolby Digital","gray",["ac-3","dolby digital"],"Dolby Digital");
   techFormat("audio_codec","dts","DTS","DTS Digital Surround","cyan",["dca"]);
   techFormat("audio_codec","dtshd","DTS-HD","DTS-HD","cyan",["dts-hd"]);
-  techFormat("audio_codec","dtshd_ma","DTS-HD MA","DTS-HD Master Audio","cyan",["dca-ma","dts-hd master audio","dts-hd-ma","dtshd-ma"]);
+  techFormat("audio_codec","dtshd_ma","DTS-HD MA","DTS-HD Master Audio","cyan",["dca-ma","dts-hd master audio","dts-hd-ma","dtshd-ma"],lossless);
   techFormat("audio_codec","dtshd_hra","DTS-HD HRA","DTS-HD High Resolution Audio","cyan",["dts-hd high resolution audio"]);
-  techFormat("audio_codec","flac","FLAC","Free Lossless Audio Codec","green");
-  techFormat("audio_codec","alac","ALAC","Apple Lossless Audio Codec","green");
+  techFormat("audio_codec","flac","FLAC","Free Lossless Audio Codec","green",[],lossless);
+  techFormat("audio_codec","alac","ALAC","Apple Lossless Audio Codec","green",[],lossless);
   techFormat("audio_codec","pcm","PCM","Pulse-Code Modulation","green",["lpcm","pcm_s16le","pcm_s24le","pcm_s32le"]);
   techFormat("audio_codec","aac","AAC","Advanced Audio Coding");
   techFormat("audio_codec","opus","OPUS","Opus");
   techFormat("audio_codec","mp3","MP3","MPEG Audio Layer III");
   techFormat("audio_codec","vorbis","VORBIS","Vorbis");
   techFormat("channels","mono","MONO","Mono","gray",["1.0"]);
-  techFormat("channels","stereo","2.0",["Stéréo","Stereo"],"gray",["stéréo"]);
-  techFormat("channels","5.1","5.1",["Surround 5.1","5.1 surround"]);
-  techFormat("channels","7.1","7.1",["Surround 7.1","7.1 surround"]);
-  techFormat("container","mkv","MKV","Matroska","gray",["matroska"]);
-  techFormat("container","mp4","MP4","MPEG-4 Part 14");
+  techFormat("channels","stereo","2.0",["Stéréo","Stereo"],"gray",["stéréo"],["Stéréo","Stereo"]);
+  techFormat("channels","5.1","5.1",["Surround 5.1","5.1 surround"],"gray",[],channelDescription);
+  techFormat("channels","7.1","7.1",["Surround 7.1","7.1 surround"],"gray",[],channelDescription);
+  techFormat("container","mkv","MKV","Matroska","gray",["matroska"],"Matroska");
+  techFormat("container","mp4","MP4","MPEG-4 Part 14","gray",[],"MPEG-4");
   techFormat("container","mpegts","MPEG-TS","MPEG Transport Stream","gray",["ts"]);
   techFormat("container","webm","WEBM","WebM");
   techFormat("container","avi","AVI","Audio Video Interleave");
@@ -346,14 +348,15 @@
     .tech-badge.tech-comparison { padding:0; border:0; }
     .tech-part { display:inline-grid; min-width:0; max-width:100%; }
     .tech-detail { font-size:.84em; font-weight:500; }
-    .tech-source { font-size:.84em; font-weight:500; }
     .tech-premium :is(.tech-badge:not(.tech-comparison),.tech-swatch) { background:color-mix(in srgb,var(--tech-color) 14%,var(--tech-surface));
       border-color:var(--tech-color); color:color-mix(in srgb,var(--tech-color) 23%,var(--tech-ink)); }
     .tech-cinema :is(.tech-badge:not(.tech-comparison),.tech-swatch) { background:var(--tech-color); color:var(--tech-contrast,#000);
       border-radius:.28em; padding-inline:.58em; }
     .tech-minimal :is(.tech-badge:not(.tech-comparison),.tech-swatch) { border-inline-start:.22em solid var(--tech-color); border-radius:.2em; }
+    .tech-technical,.tech-technical .tech-row,.tech-technical .tech-comparison { align-items:stretch; }
+    .tech-technical .tech-comparison > [aria-hidden] { align-self:center; }
     .tech-technical :is(.tech-badge:not(.tech-comparison),.tech-swatch) { border-color:color-mix(in srgb,var(--tech-color) 55%,var(--tech-surface));
-      border-radius:.32em; align-items:start; }
+      border-radius:.32em; }
     .tech-technical .tech-part strong { color:color-mix(in srgb,var(--tech-color) 23%,var(--tech-ink)); }
     .tech-classic :is(.tech-badge,.tech-swatch) { border-radius:7px; font-weight:600; }
   `;
@@ -381,13 +384,15 @@
       const full = format => `${pick(format.name)}${detail(format) ? ` (${detail(format)})` : ""}`;
       const label = `${pick(TECH_LABELS[key])} : ${before ? `${full(before)} → ` : ""}${full(value)}${sourceOnly ?
         (en ? " (source; output unknown)" : " (source ; destination inconnue)") : ""}`;
-      const part = format => `<span class="tech-part"><strong>${E(format.short)}</strong>${
-        mode === "technical" && detail(format) ? `<span class="tech-detail">${E(detail(format))}</span>` : ""}</span>`;
+      const part = format => {
+        const subtitle = mode === "technical" && (detail(format) || pick(format.description));
+        return `<span class="tech-part"><strong>${E(format.short)}</strong>${
+          subtitle ? `<span class="tech-detail">${E(subtitle)}</span>` : ""}</span>`;
+      };
       const swatch = format => `<span class="tech-swatch" ${paintColor(format)}>${part(format)}</span>`;
       return `<span class="tech-badge${before ? " tech-comparison" : ""}" data-tech="${key}" role="img" aria-label="${E(label)}" title="${E(label)}"${
         before ? "" : ` ${paintColor(value)}`}>` +
-        `${before ? `${swatch(before)}<span aria-hidden="true">→</span>${swatch(value)}` : part(value)}${
-          sourceOnly ? '<span class="tech-source">· source</span>' : ""}</span>`;
+        `${before ? `${swatch(before)}<span aria-hidden="true">→</span>${swatch(value)}` : part(value)}</span>`;
     };
     const rows = c.technical_badge_layout === "separate" ? [...new Set(values.map(item => TECH_GROUPS[item.key]))].map(group =>
       `<div class="tech-row" data-tech-group="${group}">${values.filter(item => TECH_GROUPS[item.key] === group).map(paint).join("")}</div>`).join("") :
@@ -457,6 +462,15 @@
       color:var(--primary-text-color,#fff); height:100%; min-height:0; box-sizing:border-box; }
     .root { padding:14px; min-width:0; height:100%; box-sizing:border-box;
       overflow-y:auto; overflow-x:hidden; scrollbar-width:thin; }
+    /* Keep the native card border inside the one-row minimum. Wrapped content
+       may grow naturally; a fixed Lovelace height retains the root scroller. */
+    :host([data-sections]) ha-card:has(> .header-only > .head) {
+      display:flex; flex-direction:column; min-height:var(--ha-section-grid-row-height,56px); }
+    :host([data-sections]) .root.header-only:has(> .head) {
+      display:flex; flex:1 1 auto; flex-direction:column; justify-content:safe center;
+      height:auto; padding-block:6px; }
+    :host([data-sections]) .header-only > .head { flex:none; margin-block-end:0; }
+    :host([data-sections]) .header-only .head:not(.no-title) .head-metrics { flex-basis:auto; width:auto; }
     .availability-status:not(:empty) { margin:0 0 10px; padding:6px 9px; border-radius:7px;
       background:#fff1db; color:#843900; border-inline-start:3px solid #cc6800;
       font-size:calc(var(--tr-font-size)*.88); font-weight:700; overflow-wrap:anywhere; }
@@ -789,11 +803,12 @@
       });
     }
     getCardSize() { return this._config.mode === "list" ? 5 : 4; }
+    set layout(value) { this.toggleAttribute("data-sections",value === "grid"); }
     getGridOptions() {
-      // HA Sections controls the persisted grid_options via its Layout tab.
-      // Only advertise compatible default/min/max dimensions here.
+      // Sections merges its saved grid_options over these static defaults.
+      // Intrinsic sizing reacts to stream updates without re-querying this API.
       return {columns:12, min_columns:3, max_columns:12,
-        rows:4, min_rows:2, max_rows:30};
+        rows:"auto", min_rows:1, max_rows:30};
     }
     _setTimers(streams, stale=false) {
       const running = !stale && this.isConnected && (this._config.show_progress || this._config.show_end_time) &&
@@ -1725,7 +1740,7 @@
       const shell = this.shadowRoot.querySelector("ha-card");
       const root = shell?.querySelector?.(".root");
       const shellStyle = `--tr-font-size:${clamp(c.font_size,10,28,14)}px;${posterVars}`;
-      const rootClasses = `root ${c.compact?"compact":""} ${c.stream_surface === "transparent" ? "flat-streams" : ""}`;
+      const rootClasses = `root ${c.compact?"compact":""} ${c.stream_surface === "transparent" ? "flat-streams" : ""}${!body && !stale ? " header-only" : ""}`;
       if (root) {
         // The body can still be rebuilt independently of the header. Keeping
         // the latter attached preserves CSS animation phases across snapshots.

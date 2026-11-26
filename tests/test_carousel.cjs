@@ -24,6 +24,11 @@ class MockHTMLElement {
     return this.shadowRoot;
   }
   matches() { return false; }
+  toggleAttribute(name,on) {
+    this.attributes ||= new Set();
+    if (on) this.attributes.add(name);
+    else this.attributes.delete(name);
+  }
 }
 const env = {
   HTMLElement: MockHTMLElement,
@@ -81,6 +86,34 @@ test('6B four enhanced styles share the same formats and only Technical shows av
     for (const label of ['4K','HDR10\\+','H\\.264','ATMOS','TRUEHD','7\\.1','MKV']) assert.match(html,new RegExp(`>${label}</strong>`));
     assert.equal(html.includes('<span class="tech-detail">3840 × 2160'),style==='technical');
     assert.doesNotMatch(html,/data-tech="bitrate"|<span class="tech-detail"><\/span>/);
+  }
+});
+
+test('6B.2 Technical describes known formats without inventing details', () => {
+  const stream = {...techFixture,source_video_details:{dynamicRange:'HDR10+',profile:'Main 10'},
+    stream_video_codec:null,stream_video_codec_display:null};
+  const html = technicalPanel({technical_badge_style:'technical'},stream);
+  for (const detail of ['HDR dynamique','Main 10','Sans perte','Canaux','Matroska','3840 × 2160']) {
+    assert.ok(html.includes(`<span class="tech-detail">${detail}</span>`),detail);
+  }
+  const fallback = technicalPanel({technical_badge_style:'technical'},{...stream,
+    source_video_details:{dynamicRange:'HDR10+'},source_audio_codec:'Uncatalogued',resolution:'4K',source_video_width:null});
+  assert.match(fallback,/>HEVC<\/strong><span class="tech-detail">H\.265<\/span>/);
+  assert.doesNotMatch(fallback,/×|>Uncatalogued<\/strong><span/);
+});
+
+test('6B.2 unknown output has no visible source label or comparison arrow in any style', () => {
+  for (const style of ['classic','premium','cinema','minimal','technical']) for (const mode of ['destination','source_to_destination']) {
+    const config = {technical_badge_style:style,technical_transcode_mode:mode,
+      technical_badge_visibility:{hdr:true}};
+    const stream = {...techFixture,stream_video_details:null,stream_video_codec:null,stream_video_codec_display:null,
+      transcode_info:null};
+    for (const type of ['tracearr-streams-card','tracearr-stream-card']) {
+      const html = technicalPanel(config,stream,type);
+      assert.match(html,/4K Ultra HD .*destination inconnue/);
+      assert.match(html,/HDR10\+ \(source ; destination inconnue\)/);
+      assert.doesNotMatch(html,/>[^<]*(?:source|src\.)[^<]*<|→/i);
+    }
   }
 });
 
@@ -174,6 +207,8 @@ test('6B preview and both cards use identical badge markup from the saved config
   editor.hass = {language:'en'};
   assert.match(editor.shadowRoot.innerHTML,/Destination only/);
   assert.match(editor._technicalPreview(),/Dynamic range \(HDR \/ SDR\)/);
+  assert.match(editor._technicalPreview(),/>Dynamic HDR</);
+  assert.doesNotMatch(editor._technicalPreview(),/>[^<]*source[^<]*</i);
   editor.setConfig({...config,technical_badge_style:'classic'});
   assert.doesNotMatch(editor.shadowRoot.innerHTML,/data-field="technical_badge_colors"/);
   assert.equal(editor._config.technical_badge_custom_colors['1080p'],'#aabbcc');
@@ -583,8 +618,8 @@ test('editor keeps layout in general display and renders header counters as simp
 test('native Sections layout owns size regardless of legacy pixel/row settings', () => {
   const {card}=setup();
   const opts=card.getGridOptions();
-  assert.equal(opts.rows,4);
-  assert.equal(opts.min_rows,2);
+  assert.equal(opts.rows,"auto");
+  assert.equal(opts.min_rows,1);
   assert.equal(opts.max_rows,30);
   card.setConfig({mode:'grid',height:330,grid_rows:7,grid_columns:6,font_size:18});
   assert.equal(card._config.mode,'list');
@@ -593,7 +628,19 @@ test('native Sections layout owns size regardless of legacy pixel/row settings',
   card.render();
   assert.doesNotMatch(card.shadowRoot.innerHTML,/height:330px/);
   assert.match(card.shadowRoot.innerHTML,/--tr-font-size:18px/);
-  assert.equal(card.getGridOptions().rows,4);
+  assert.equal(card.getGridOptions().rows,"auto");
+  for (const type of ['tracearr-streams-card','tracearr-stream-card']) {
+    const item = new (classes.get(type))();
+    const grid_options = {columns:6,rows:2};
+    item.setConfig({grid_options});
+    item.layout = "grid";
+    assert.ok(item.attributes.has("data-sections"));
+    assert.equal(item.getGridOptions().rows,"auto","HA merges the saved row count, not the card");
+    assert.deepEqual(item._config.grid_options,grid_options);
+    item.layout = "masonry";
+    assert.ok(!item.attributes.has("data-sections"));
+    assert.equal(item.getCardSize(),5);
+  }
 });
 
 test('arrows can be hidden but carousel keyboard controls and dragging remain supported', () => {

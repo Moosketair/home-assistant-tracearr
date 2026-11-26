@@ -587,11 +587,45 @@
         [...node.querySelectorAll(".tech-swatch,.tech-part,.tech-detail,strong")].some(part=>part.scrollWidth-part.clientWidth>1)),
       contrast:Math.min(...badges.map(node=>{
         const css=getComputedStyle(node);
-        return Math.min(...[...node.querySelectorAll("strong,.tech-detail,.tech-source")].map(part=>
+        return Math.min(...[...node.querySelectorAll("strong,.tech-detail")].map(part=>
           technicalContrast(getComputedStyle(part).color,getComputedStyle(part.closest(".tech-swatch") || node).backgroundColor)),
           technicalContrast(css.color,css.backgroundColor));
       })),
     };
+  }
+  async function probeTechnicalFinish() {
+    card.remove();
+    const rows = [];
+    for (const width of [250,320,768]) {
+      host.style.width=`${width}px`;
+      for (const [type,style] of [["streams","technical"],["stream","technical"],["stream","premium"]]) {
+        const {card:node} = mountTechnical(host,{technical_badge_style:style,
+          technical_transcode_mode:"source_to_destination",stream_surface:type==="streams" ? "blur" : "soft",
+          technical_badge_layout:type==="streams" ? "separate" : "compact",show_bitrate:true});
+        await frame();
+        const block=node.shadowRoot.querySelector(".technical");
+        const badges=block ? [...block.querySelectorAll(".tech-badge")] : [];
+        const hdr=block?.querySelector('[data-tech="hdr"]');
+        const metrics=badges.length ? technicalGeometry(block,badges) : {};
+        const noSource=!!hdr && /source ; destination inconnue/.test(hdr.getAttribute("aria-label")) &&
+          !/(?:source|src\.|→)/i.test(hdr.textContent);
+        const detail=hdr?.querySelector(".tech-detail")?.textContent;
+        const matchedStyle=style==="technical" ? detail==="HDR dynamique" : detail===undefined;
+        const geometrical=metrics.overflow<=1 && !metrics.overlap && !metrics.clipping && metrics.contrast>=4.5;
+        rows.push({name:`${type}-${style}`,width,ok:noSource && matchedStyle && geometrical,...metrics});
+        node.remove();
+      }
+    }
+    host.style.width="320px";
+    const editor=host.appendChild(document.createElement("tracearr-card-editor"));
+    editor.hass={language:"en"};
+    editor.setConfig({...technicalConfig,technical_badge_style:"technical",technical_transcode_mode:"source_to_destination"});
+    const hdr=editor.shadowRoot.querySelector('.tech-preview [data-tech="hdr"]');
+    const livePreview=hdr?.textContent==="HDR10+Dynamic HDR" &&
+      /source; output unknown/.test(hdr?.getAttribute("aria-label"));
+    editor.remove();
+    return {ok:rows.every(row=>row.ok) && livePreview,rows,livePreview,
+      theme:matchMedia("(prefers-color-scheme:dark)").matches ? "dark" : "light"};
   }
   async function probeTechnical(visual) {
     card.remove();
@@ -897,8 +931,9 @@
     el("result").textContent = JSON.stringify({ok:cases.every(row => row.ok),
       theme:matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light", cases}, null, 2);
   }
-  if (["technical","technical-preview","pause-colors","pause-colors-preview","outage","outage-preview","responsive","lifecycle","blink"].some(param => params.has(param))) {
-    const probe = params.has("technical") || params.has("technical-preview") ? () => probeTechnical(params.get("technical-preview")) :
+  if (["technical","technical-finish","technical-preview","pause-colors","pause-colors-preview","outage","outage-preview","responsive","lifecycle","blink"].some(param => params.has(param))) {
+    const probe = params.has("technical-finish") ? probeTechnicalFinish :
+      params.has("technical") || params.has("technical-preview") ? () => probeTechnical(params.get("technical-preview")) :
       params.has("pause-colors") || params.has("pause-colors-preview") ? () => probePauseColors(params.has("pause-colors-preview")) :
       params.has("outage") || params.has("outage-preview") ? () => probeOutage(params.has("outage-preview")) :
       params.has("responsive") ? probeResponsive : params.has("lifecycle") ? probeLifecycle : probeBlink;
