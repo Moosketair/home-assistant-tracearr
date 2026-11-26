@@ -2,6 +2,18 @@
 
 Les changements sont classés par version publique. Les préversions et les anciennes notes restent consultables ci-dessous. Les [GitHub Releases](https://github.com/Moosketair/home-assistant-tracearr/releases) permettent de télécharger une version précise.
 
+## 0.1.17 — 2026-11-26
+
+- Les cartes reçoivent à nouveau les mises à jour WebSocket après le rechargement d’une entrée. Le flux SSE tolère les trames atypiques et la récupération REST prend le relais si le flux cesse de fonctionner.
+- Un rafraîchissement REST préserve les changements SSE reçus en parallèle. Une réponse REST inexploitable ne remplace pas le dernier état fiable. Le proxy d’images attend le contenu complet avant de le servir.
+- En cas de refus de la clé API, Home Assistant permet de la remplacer sans recréer l’intégration, ni perdre ses entités ou options. La nouvelle clé est vérifiée avant d’être enregistrée.
+- Lors d’une panne complète de Tracearr, les cartes signalent les données périmées et figent les temps de lecture jusqu’au prochain snapshot fiable.
+- Les en-têtes et les panneaux affichent des débits LAN/WAN cohérents, sans déplacer le carrousel. L’éditeur JSON conserve les règles « Non classé ».
+- Les badges sont plus lisibles sur les cartes étroites et leur clignotement ne redémarre plus à chaque mise à jour. Le carrousel se pilote au clavier ; les cartes nettoient les abonnements et horloges inutilisés.
+- La documentation précise les routes de l’API Tracearr nécessaires et le ciblage d’un compte dans la carte individuelle.
+
+**Mise à jour :** installez `v0.1.17` via HACS, puis redémarrez Home Assistant et actualisez le dashboard. Ne recréez ni l’entrée ni les cartes. En mode Lovelace stockage, la ressource existante est actualisée automatiquement ; en mode YAML, utilisez `/tracearr_ha/tracearr-card.js?v=0.1.17`, y compris si vous venez de la bêta.
+
 ## 0.1.17-beta.1 — Préversion de test
 
 Cette bêta est destinée à valider l’installation et la mise à niveau via HACS. **La version recommandée hors test reste `v0.1.16`.**

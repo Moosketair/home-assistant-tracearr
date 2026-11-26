@@ -1,8 +1,10 @@
-# État de reprise — prépublication bêta 5A.1
+# État de reprise — promotion stable 5C.1
 
 **Lot 4.1 définitivement clôturé.** Verdict indépendant 4.1.4 **VALIDÉ** sur `41403f51b665a7e839fe7474ed7edd274fb04b0d`, confirmé par le mainteneur : **14 anomalies sur 14 validées**, dont A9. Les réserves déjà documentées sont acceptées.
 
-**Lot 4.2 accepté.** Le mainteneur accepte les résultats de [la recette locale](RECETTE_42.md) au SHA `61fc2e2108d0c2034d6a574d9e01813c9d4308fe`. En 5A.1, il autorise uniquement la [préversion `v0.1.17-beta.1`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.17-beta.1), sur le candidat final de `release/v0.1.17`, pour ses essais via HACS. Aucun changement du code distribué en 5A.1. Le tag GitHub et les vérifications associées font foi ; `v0.1.16` reste la référence stable. Pas de publication stable ni de fusion dans `main`.
+**Lots 4.2 et 5A.1 acceptés.** La [recette locale](RECETTE_42.md) au SHA `61fc2e2108d0c2034d6a574d9e01813c9d4308fe` a précédé la [préversion `v0.1.17-beta.1`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.17-beta.1), publiée au SHA `c67f7f8b1ab8b8b95995b2ed398b8eb63b190df9`. [HACS, hassfest et contrôles statiques](https://github.com/Moosketair/home-assistant-tracearr/actions/runs/45903204219) ont réussi sur ce tag.
+
+**Décision 5C.1.** Le mainteneur confirme l’installation de la bêta via HACS et des essais satisfaisants sur son Home Assistant habituel. Les débits WAN n’ont pas été essayés en conditions réelles ; réserve acceptée comme non bloquante, les validations LAN/WAN précédentes restent acquises. Promotion autorisée vers [la stable `v0.1.17`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.17), sans changement fonctionnel ; le tag et sa CI font foi. Le mainteneur effectue lui-même la mise à jour de son installation.
 
 **2A définitivement validée** sur `942de6ffa8d33b0ee10319fa39938c3f587f35aa`. **2B définitivement clôturée** : verdict indépendant 2B.4 **VALIDÉ** sur `f918150fd8fc6fa6f44d309aac3d4387d063d83b`, confirmé par le mainteneur. Les deux régressions relevées par 2B.2 sont corrigées ; les limites d’ordre faute de révision commune REST/SSE sont acceptées. Résultats indépendants : 21 Python, 72 JS, 61 sur chacun des Core 2025.6.0 et 2026.11.3, aucun échec, skip ou xfail. Aucun nouvel audit 2B requis.
 
@@ -23,11 +25,10 @@
 | Repère | Valeur |
 |---|---|
 | Dépôt | `Moosketair/home-assistant-tracearr`, copie de travail `/media/fat/proton_drive/dev/home-assistant-tracearr` lors de l’audit |
-| Référence fonctionnelle | `main` = tag `v0.1.16` = `443ce3859d09b67ccfd589d326d032753dc11d64` à la date de l’audit |
-| Travail local | `release/v0.1.17`, issue du SHA 4.1.4 validé ; candidat `v0.1.17-beta.1` (`0.1.17-beta.1` dans HA) |
+| Stable précédente | Tag `v0.1.16` = `443ce3859d09b67ccfd589d326d032753dc11d64`, conservé |
+| Branche de release | `release/v0.1.17` ; code de la bêta validée, seules les références de version, la recette de cache et la documentation sont ajustées pour la stable |
 | Environnement | 4.1.3 : Debian, CPython 3.13.5 hors HA, banc isolé Core 2025.6.0 (3.13.18) et 2026.11.3 (3.14.10) ; aucun HA de production. |
-| Déploiement du mainteneur | HA Container géré par Dockge Enhanced, **non utilisé** ; aucune action distante de publication dans cette phase |
-| GitHub à la date de revue | Stable vérifiée sur le bon SHA, deux workflows verts sur ce SHA, une issue musique ouverte, aucune PR ouverte |
+| Déploiement du mainteneur | Essai bêta effectué par le mainteneur ; aucune intervention sur son HA ni déploiement en 5C.1 |
 
 **Historique 2B.3.** Mutations normalisées par champ, placeholders SSE de la jointure exclus, remplacement de l'incarnation après stop/start. Un 503 REST ne baisse pas la confirmation d'un flux SSE ouvert ni ne devient un succès HA lors d'une notification. **Six tests discriminants : 6 échecs sur le parent → 6 succès sur chaque Core.** Détails dans [RECETTE](RECETTE.md) ; [ARCHITECTURE](ARCHITECTURE.md) documente la fusion, les états et les limites d'ordre/saturation. Version publique v0.1.16 inchangée.
 
@@ -62,6 +63,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** essais personnels du mainteneur via HACS ([installation et retour à la stable](../CHANGELOG.md#installer-ou-revenir-à-la-stable)), puis décision explicite avant toute publication stable ou évolution 6A/6B/6C.
+**Suite :** arrêt à la publication de `v0.1.17`. Les lots 6A/6B/6C restent dans la [feuille de route](ROADMAP.md) et nécessitent une autorisation distincte.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.

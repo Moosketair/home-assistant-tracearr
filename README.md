@@ -6,25 +6,13 @@
 
 **Surveillez les lectures Plex, Jellyfin et Emby dans Home Assistant avec les données de Tracearr.** L'intégration comprend des capteurs, une connexion temps réel et deux cartes Lovelace personnalisables (lectures groupées ou lecture individuelle).
 
-**Version actuelle : 0.1.16** · Disponible dans le catalogue officiel HACS après publication de la Release. Le projet reste communautaire et évolutif ; testez les capteurs avant de les utiliser pour des automatismes critiques.
+**Version stable : 0.1.17** · Disponible via le catalogue officiel HACS. Le projet reste communautaire et évolutif ; testez les capteurs avant de les utiliser pour des automatismes critiques.
 
-**Préversion de test :** voir [les changements et la procédure HACS pour `v0.1.17-beta.1`](CHANGELOG.md#0117-beta1--préversion-de-test). La stable recommandée reste `v0.1.16`.
+## Nouveautés de la 0.1.17
 
-## Nouveautés de la 0.1.16
-
-- **Badge centré compact :** le groupe central prend uniquement la largeur de ses badges et garde son centrage exact. Sur les écrans mobiles, les groupes gauche, centre et droite restent sur la même ligne dès que la place disponible le permet.
-
-### Autres améliorations récentes (0.1.15)
-
-- **Badge réellement centré :** lorsqu'un badge est placé au centre, la grille utilise des colonnes de même largeur et centre le contenu de sa colonne, indépendamment de la longueur des badges latéraux. Sur écran étroit, le badge central occupe sa propre ligne centrée.
-
-### Autres améliorations récentes (0.1.14)
-
-- **Fond cinéma** : affiche floutée derrière chaque lecture, avec intensité et assombrissement réglables, et repli vers un fond sombre si l'image manque.
-- **Liseré amélioré** : bord coloré épousant les arrondis, réglable en épaisseur, remplaçable par le trait droit ou masquable.
-- **Affiches plus fiables** : tailles de 50 à 200 %, récupération des URL signées dès leur disponibilité, trois nouvelles tentatives en cas d'erreur.
-- **Badges d'en-tête sur mesure** : statistiques Tracearr et entités Home Assistant alignables individuellement à gauche, au centre ou à droite ; personnalisation du nom, de l'icône, du masquage à zéro, du clignotement et de la couleur à zéro.
-- **Affichage mobile corrigé** : les badges à gauche et à droite partagent une ligne quand la largeur le permet, sans colonne centrale vide.
+- Connexions et affichage des lectures plus fiables, y compris après rechargement et panne de Tracearr.
+- Remplacement de la clé API directement dans Home Assistant sans recréer l’intégration.
+- Chargement des images, cohérence des débits LAN/WAN et lisibilité des badges améliorés.
 
 Consultez le [journal complet des versions](CHANGELOG.md) pour retrouver toutes les améliorations et corrections précédentes.
 
@@ -38,7 +26,7 @@ Consultez le [journal complet des versions](CHANGELOG.md) pour retrouver toutes 
 
 L'intégration conserve les réglages des cartes et les entrées de configuration Home Assistant lors des mises à jour normales. Après une mise à jour, rechargez aussi le navigateur avec `Ctrl + F5` (ou actualisez la page sur mobile).
 
-**Carte non proposée dans Lovelace ?** Vérifiez dans **Paramètres → Tableaux de bord → Ressources** qu'il n'existe qu'une seule ressource Module JavaScript pour `/tracearr_ha/tracearr-card.js`, avec `?v=` suivi de la version installée (`?v=0.1.16` pour la stable publique). En mode YAML, [mettez à jour la ressource manuellement](docs/CONFIGURATION.md#ressource-lovelace-en-mode-yaml).
+**Carte non proposée dans Lovelace ?** Vérifiez dans **Paramètres → Tableaux de bord → Ressources** qu'il n'existe qu'une seule ressource Module JavaScript pour `/tracearr_ha/tracearr-card.js`, avec `?v=` suivi de la version installée (`?v=0.1.17` pour cette stable). En mode YAML, [mettez à jour la ressource manuellement](docs/CONFIGURATION.md#ressource-lovelace-en-mode-yaml).
 
 ## Ce que propose Tracearr HA
 

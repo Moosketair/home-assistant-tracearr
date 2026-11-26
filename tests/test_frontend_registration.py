@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 FRONTEND = Path(__file__).resolve().parents[1] / 'custom_components/tracearr_ha/frontend.py'
 VERSION = json.loads(FRONTEND.with_name('manifest.json').read_text())['version']
 MODULE = '/tracearr_ha/tracearr-card.js'
@@ -70,8 +72,9 @@ def test_storage_mode_2026_has_no_mode_attr():
     assert len(hass.http.views) == 1
 
 
-def test_legacy_mode_and_existing_resource_updated():
-    resources = Resources([{'id': 'old', 'res_type': 'module', 'url': f'{MODULE}?v=0.1.16'}])
+@pytest.mark.parametrize('previous_version', ['0.1.16', '0.1.17-beta.1'])
+def test_legacy_mode_and_existing_resource_updated(previous_version):
+    resources = Resources([{'id': 'old', 'res_type': 'module', 'url': f'{MODULE}?v={previous_version}'}])
     hass = SimpleNamespace(data={'lovelace': SimpleNamespace(mode='storage', resources=resources)}, http=Http())
     asyncio.run(load_register_function()(hass))
     assert resources.created == []

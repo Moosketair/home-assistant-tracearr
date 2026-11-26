@@ -6,7 +6,7 @@ Lecture REST et SSE par entrée, capteurs globaux et par serveur, listes et carr
 
 ## Décisions explicites
 
-Les phases 0 et 1.1 sont validées. **2A** est définitivement validée sur `942de6f` après correction du reliquat de rollback. **2B** est définitivement clôturée après le verdict indépendant **VALIDÉ** de 2B.4 sur `f918150` (fusion et états de connexion corrigés ; limites d’ordre acceptées). **2C** est définitivement clôturée (A3/A4). **2D** est définitivement clôturée sur `28bef59` (A6), sans contre-audit supplémentaire, par décision du mainteneur. **2E** est définitivement clôturée sur `b9c5880` (A11/A12), sans contre-audit supplémentaire, par décision du mainteneur. Voir [l’état de reprise](DEVELOPMENT_STATUS.md) pour les SHA complets et [RECETTE](RECETTE.md) pour les preuves. Aucune publication ni migration approuvée ; la stable reste v0.1.16 (`443ce38`).
+Les phases 0 et 1.1 sont validées. **2A** est définitivement validée sur `942de6f` après correction du reliquat de rollback. **2B** est définitivement clôturée après le verdict indépendant **VALIDÉ** de 2B.4 sur `f918150` (fusion et états de connexion corrigés ; limites d’ordre acceptées). **2C** est définitivement clôturée (A3/A4). **2D** est définitivement clôturée sur `28bef59` (A6), sans contre-audit supplémentaire, par décision du mainteneur. **2E** est définitivement clôturée sur `b9c5880` (A11/A12), sans contre-audit supplémentaire, par décision du mainteneur. Voir [l’état de reprise](DEVELOPMENT_STATUS.md) pour les SHA complets et [RECETTE](RECETTE.md) pour les preuves.
 
 ## Ordre proposé après validation
 
@@ -14,7 +14,7 @@ Les phases 0 et 1.1 sont validées. **2A** est définitivement validée sur `942
 
 **4.1 :** douze anomalies validées par le mainteneur (A1–A8, A11–A14) ; refus de validation pour les défauts résiduels A9/A10. **4.1.1 :** correctifs locaux livrés, verdict indépendant attendu sur ces deux points. Le versionnement et l’invalidation du cache JS sont réservés à 4.2.
 
-**4.1.2** confirme les deux correctifs et valide définitivement A10. **4.1.3** traite exclusivement la course résiduelle A9 entre vérification de la clé et suppression HA ; seule A9 reste à contre-vérifier.
+**4.1.2** confirme les deux correctifs et valide définitivement A10. **4.1.3** traite exclusivement la course résiduelle A9 entre vérification de la clé et suppression HA ; **4.1.4** la valide et clôt définitivement les 14 anomalies. Après la recette 4.2 et les essais HACS de la bêta, le mainteneur a autorisé la stable `v0.1.17` (5C.1), sans ouvrir les lots 6A/6B/6C.
 
 | Ordre | Lot proposé | Critère de sortie avant livraison |
 |---|---|---|

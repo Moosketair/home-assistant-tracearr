@@ -6,13 +6,13 @@ Ce guide rassemble les réglages détaillés. Les nouveautés et les anciennes v
 
 ### Ressource Lovelace en mode YAML
 
-En mode stockage, redémarrez Home Assistant après le remplacement de l’intégration : la ressource existante est actualisée automatiquement. En mode YAML, conservez une seule déclaration et adaptez `?v=` à la version du manifeste installé. Pour le candidat local `v0.1.17-beta.1` :
+En mode stockage, redémarrez Home Assistant après le remplacement de l’intégration : la ressource existante est actualisée automatiquement. En mode YAML, conservez une seule déclaration et adaptez `?v=` à la version du manifeste installé. Pour `v0.1.17` :
 
 ```yaml
 lovelace:
   resource_mode: yaml
   resources:
-    - url: /tracearr_ha/tracearr-card.js?v=0.1.17-beta.1
+    - url: /tracearr_ha/tracearr-card.js?v=0.1.17
       type: module
 ```
 
