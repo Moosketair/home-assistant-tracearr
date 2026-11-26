@@ -9,6 +9,7 @@ from contextlib import aclosing
 from typing import Any, NamedTuple
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import TracearrAuthError, TracearrClient, TracearrRateLimited, TracearrUnavailable
@@ -114,6 +115,8 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
             # HA retains the existing data on UpdateFailed, but listeners must
             # see REST connectivity change alongside the still-live cache.
             self.data = self.snapshot()
+            if isinstance(exc, TracearrAuthError):
+                raise ConfigEntryAuthFailed("Tracearr API key invalid or unauthorized") from None
             raise UpdateFailed(str(exc)) from exc
         finally:
             self._refresh_tasks.discard(task)

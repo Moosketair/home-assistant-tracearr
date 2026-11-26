@@ -28,6 +28,7 @@ class Gate:
 
 class Tracearr:
     def __init__(self):
+        self.key = KEY
         self.servers = [
             {"server_id": f"00000000-0000-4000-8000-{i:012d}", "server_type": kind,
              "server_name": f"Fixture {kind}", "status": "up"}
@@ -76,7 +77,7 @@ class Tracearr:
         self.event("server.health", {k: self.servers[0][k] for k in ("server_id", "server_name", "status")})
 
     async def handle(self, request):
-        if request.headers.get("Authorization") != "Bearer " + KEY:
+        if request.headers.get("Authorization") != "Bearer " + self.key:
             raise web.HTTPUnauthorized()
         resource = request.match_info.get("resource", "image")
         if resource in self.errors:

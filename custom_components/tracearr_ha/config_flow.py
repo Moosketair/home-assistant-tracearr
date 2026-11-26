@@ -44,6 +44,41 @@ class TracearrConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(CONF_TOKEN): str,
         }), errors=errors)
 
+    async def async_step_reauth(self, entry_data):
+        """Open a blank form; never reuse the stored key as a default."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input=None):
+        entry = self._get_reauth_entry()
+        errors = {}
+        if user_input is not None:
+            token = user_input[CONF_TOKEN].strip()
+            if not token:
+                errors["base"] = "invalid_auth"
+            else:
+                client = TracearrClient(async_get_clientsession(self.hass), entry.data[CONF_URL], token)
+                try:
+                    await client.streams()
+                    await client.servers()
+                except TracearrAuthError:
+                    errors["base"] = "invalid_auth"
+                except (TracearrError, ValueError):
+                    errors["base"] = "cannot_connect"
+                else:
+                    # Options already have a live-update listener. Schedule one
+                    # reload explicitly for this credential change only.
+                    entries = self.hass.config_entries
+                    if entries.async_get_entry(entry.entry_id) is not entry:
+                        return self.async_abort(reason="reauth_entry_removed")
+                    entries.async_update_entry(entry, data={**entry.data, CONF_TOKEN: token})
+                    entries.async_schedule_reload(entry.entry_id)
+                    return self.async_abort(reason="reauth_successful")
+        return self.async_show_form(step_id="reauth_confirm", data_schema=vol.Schema({
+            vol.Required(CONF_TOKEN): selector.TextSelector(selector.TextSelectorConfig(
+                type=selector.TextSelectorType.PASSWORD,
+            )),
+        }), errors=errors)
+
     @staticmethod
     def async_get_options_flow(config_entry):
         return TracearrOptionsFlow()

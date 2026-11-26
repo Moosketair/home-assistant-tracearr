@@ -8,6 +8,13 @@
           "url": "Tracearr URL",
           "token": "Public API key (trr_pub_...)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Replace the Tracearr API key",
+        "description": "Enter a new public API key for this Tracearr instance. Your entities and settings will be kept.",
+        "data": {
+          "token": "New public API key"
+        }
       }
     },
     "error": {
@@ -15,7 +22,9 @@
       "invalid_auth": "Invalid API key"
     },
     "abort": {
-      "already_configured": "This Tracearr instance is already configured"
+      "already_configured": "This Tracearr instance is already configured",
+      "reauth_successful": "The Tracearr API key was updated",
+      "reauth_entry_removed": "The Tracearr integration entry was removed"
     }
   },
   "options": {
