@@ -76,8 +76,8 @@ function flushFrame(at) {
 }
 
 test('autoplay advances through all items and wraps to first (instead of jumping back)', () => {
-  const {card, carousel} = setup({count:3});
-  card._setTimers();
+  const {card, carousel, cards} = setup({count:3});
+  card._setTimers(cards);
   const timer = [...timers.values()].filter(t => t.duration === 7000).at(-1);
   assert.ok(timer, 'autoplay timer configured');
   for (const [index, left] of [[1,110],[2,220],[0,0],[1,110]]) {
@@ -121,6 +121,28 @@ test('slide transition animates scroll at chosen speed', () => {
   assert.equal(carousel.scrollLeft,110);
   assert.equal(card._carouselAnimating,false);
   assert.equal(carousel.style.scrollSnapType,'');
+});
+
+test('disconnect cancels pending carousel frames and Web Animations', () => {
+  const slide = setup({effect:'slide'});
+  slide.card._scroll(1);
+  const frame = slide.card._carouselFrame;
+  assert.ok(frames.has(frame));
+  slide.card.disconnectedCallback();
+  assert.ok(!frames.has(frame));
+  assert.equal(slide.carousel.style.scrollSnapType,'');
+
+  const fade = setup({effect:'fade'});
+  let cancelled = 0;
+  fade.cards[1].animate = () => ({
+    addEventListener() {},
+    cancel() { cancelled++; },
+  });
+  fade.card._scroll(1);
+  assert.equal(fade.card._carouselEffects.size,1);
+  fade.card.disconnectedCallback();
+  assert.equal(cancelled,1);
+  assert.equal(fade.card._carouselEffects.size,0);
 });
 
 test('progress-only SSE updates preserve carousel DOM, index and scroll position', () => {
@@ -176,9 +198,9 @@ test('responsive carousel advances even when CSS displays one item on narrow car
 });
 
 test('autoplay remains active while hovering unless pause on hover is opted in', () => {
-  const {card} = setup({count:3});
+  const {card,cards} = setup({count:3});
   card.matches = () => true;
-  card._setTimers();
+  card._setTimers(cards);
   const timer = [...timers.values()].filter(t => t.duration === 7000).at(-1);
   timer.fn();
   assert.equal(card._carouselIndex, 1);
@@ -459,8 +481,12 @@ test('actual seek forward or backward causes intentional jumps, unlike jitter', 
 
 test('progress clock uses monotonic time and a 250ms UI tick', () => {
   const {card} = setup();
-  card._setTimers();
-  assert.ok([...timers.values()].some(t => t.duration === 250));
+  card._setTimers([]);
+  assert.equal(card._tick,null);
+  card._setTimers([{state:'playing',duration_ms:10000}]);
+  assert.equal(timers.get(card._tick).duration,250);
+  card._setTimers([{state:'paused',duration_ms:10000}]);
+  assert.equal(card._tick,null);
   card.disconnectedCallback();
 });
 
@@ -642,8 +668,8 @@ for (const scope of ['local','remote','both']) {
 }
 
 test('manual arrow navigation resets autoplay delay to prevent immediate early jump', () => {
-  const {card}=setup({count:3});
-  card._setTimers();
+  const {card,cards}=setup({count:3});
+  card._setTimers(cards);
   const previous=card._carouselTimer;
   card._scroll(1); // user click
   assert.equal(card._carouselIndex,1);
@@ -1441,6 +1467,10 @@ test('header resize observation follows the current header and ends on disconnec
     querySelector:q => ({'.align-center':center,'.align-left':left,'.align-right':right})[q]};
   const head = {};
   card.shadowRoot.querySelector = q => q === '.head-metrics.with-center' ? metrics : q === '.head' ? head : null;
+  const createElement = env.document.createElement;
+  env.document.createElement = () => ({content:{firstElementChild:{}}});
+  let layoutChanged = false;
+  card._patchHeader = () => layoutChanged;
   env.getComputedStyle = () => ({columnGap:'10px'});
   try {
     card.render();
@@ -1449,9 +1479,13 @@ test('header resize observation follows the current header and ends on disconnec
     const frame = card._headerFrame;
     assert.ok(frames.has(frame), 'narrow row needs a deferred layout adjustment');
     card._refreshHeader([{id:'fixture'}]);
+    assert.equal(observers.length,1,'value changes keep the observer for the same groups');
+    metrics = {...metrics,querySelector:q => q === '.align-center' ? center : left};
+    layoutChanged = true;
+    card._refreshHeader([{id:'fixture'},{id:'second'}]);
     assert.deepEqual(observers[0].nodes, []);
     assert.ok(!frames.has(frame), 'replaced header leaves no scheduled layout work');
-    assert.deepEqual(observers[1].nodes, [metrics,center,left,right]);
+    assert.deepEqual(observers[1].nodes, [metrics,center,left,left]);
     metrics = null;
     card._refreshHeader([]);
     assert.deepEqual(observers[1].nodes, []);
@@ -1464,5 +1498,89 @@ test('header resize observation follows the current header and ends on disconnec
   } finally {
     delete env.ResizeObserver;
     delete env.getComputedStyle;
+    env.document.createElement = createElement;
   }
+});
+
+test('late WebSocket updates and acknowledgements cannot take over after reattaching to the same HA connection', async () => {
+  const {card} = setup();
+  const requests = [];
+  const source = {subscribeMessage(fn) {
+    return new Promise((resolve,reject) => requests.push({fn,resolve,reject}));
+  }};
+  const push = (request,id) => request.fn({entries:[{id,streams:[]}]});
+  const flush = async () => { await Promise.resolve(); await Promise.resolve(); };
+  card.isConnected = false;
+  card.hass = {connection:source};
+  assert.equal(requests.length,0);
+  card.isConnected = true; card.connectedCallback();
+  card.isConnected = false; card.disconnectedCallback();
+  card.isConnected = true; card.connectedCallback();
+  card.isConnected = false; card.disconnectedCallback();
+  card.isConnected = true; card.connectedCallback();
+  const [old,failed,current] = requests;
+  let staleClosed = 0, currentClosed = 0;
+  current.resolve(() => currentClosed++);
+  push(current,'current');
+  push(old,'old');
+  failed.reject(Error('abandoned subscription'));
+  old.resolve(() => staleClosed++);
+  await flush();
+  assert.equal(card._entryData().id,'current');
+  assert.equal(staleClosed,1);
+  card.isConnected = false; card.disconnectedCallback();
+  assert.equal(currentClosed,1);
+  assert.equal(card._entryData(),null);
+});
+
+test('a hidden paused session freezes its original clock; switching entries with the same session id resets it', () => {
+  const {card} = setup({count:1});
+  card.setConfig({show_paused:false,show_poster:false,show_avatar:false,empty_mode:'hide'});
+  const stream = {id:'s',state:'playing',duration_ms:120000,progress_ms:5000};
+  const publish = (id,streams) => {card._payload={entries:[{id,streams}]}; card.render();};
+  time = 0; publish('first',[stream]);
+  const clock = card._positions.get('s');
+  time = 2000; publish('first',[{...stream,state:'paused'}]);
+  time = 8000;
+  assert.equal(card._positionAt(clock),7000);
+  assert.equal(card._tick,null);
+  publish('first',[stream]);
+  assert.equal(card._positions.get('s'),clock);
+  assert.equal(clock.progress,7000);
+  publish('second',[stream]);
+  assert.notEqual(card._positions.get('s'),clock);
+  assert.equal(card._positions.get('s').progress,5000);
+  publish('second',[]);
+  assert.equal(card._positions.size,0);
+  assert.equal(card._liveFingerprints.size,0);
+  card.disconnectedCallback();
+});
+
+test('late signed artwork cannot populate a reused session path or restart a retry after disconnect', async () => {
+  const {card} = setup();
+  card.setConfig({mode:'list',show_avatar:false});
+  const stream = {id:'s',state:'playing',poster_url:'/api/v1/images/proxy?fixture=1'};
+  const entry = {id:'instance',streams:[stream]};
+  const requests = [], applied = [];
+  card._hass = {connection:{sendMessagePromise() {
+    return new Promise((resolve,reject) => requests.push({resolve,reject}));
+  }}};
+  card._applyArtwork = (_id,_kind,url) => applied.push(url);
+  const publish = streams => {card._payload={entries:[{...entry,streams}]}; card.render();};
+  const flush = async () => { await Promise.resolve(); await Promise.resolve(); };
+  publish([stream]); publish([]); publish([stream]);
+  assert.equal(requests.length,2);
+  requests[0].resolve({path:'/old'});
+  await flush();
+  assert.deepEqual(applied,[]);
+  requests[1].resolve({path:'/new'});
+  await flush();
+  assert.deepEqual(applied,['/new']);
+  publish([{...stream,poster_url:'/api/v1/images/proxy?fixture=2'}]);
+  card.isConnected = false; card.disconnectedCallback();
+  requests[2].reject(Error('late failure'));
+  await flush();
+  assert.equal(card._images.size,0);
+  assert.equal(card._imageRetryTimers.size,0);
+  assert.equal(card._imageAttempts.size,0);
 });

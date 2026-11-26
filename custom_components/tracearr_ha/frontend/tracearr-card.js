@@ -359,16 +359,17 @@
       this._config = {...DEFAULTS};
       this._hass = null;
       this._payload = {entries: []};
-      this._connection = null;
-      this._unsubscribe = null;
-      this._closed = false;
+      this._subscription = null;
       this._images = new Map();
+      this._artworkSources = new Map();
       this._imageRetryTimers = new Map();
       this._imageAttempts = new Map();
       this._positions = new Map();
       this._tick = null;
       this._carouselTimer = null;
+      this._carouselDelay = null;
       this._carouselFrame = null;
+      this._carouselEffects = new Set();
       this._carouselAnimating = false;
       this._carouselIndex = 0;
       this._renderFingerprint = null;
@@ -376,7 +377,7 @@
       this._headerMarkup = "";
       this._headerResize = null;
       this._headerFrame = null;
-      this._entry = null;
+      this._entryId = null;
     }
     static getStubConfig() { return {...DEFAULTS}; }
     static getConfigElement() { return document.createElement("tracearr-card-editor"); }
@@ -387,12 +388,12 @@
       this._liveFingerprints.clear();
       this._carouselIndex = 0;
       this._stopCarouselAnimation();
-      this._setTimers();
-      this.render();
+      if (this.isConnected) this.render();
     }
     set hass(hass) {
       this._hass = hass;
-      if (hass?.connection && this._connection !== hass.connection) this._subscribe(hass.connection);
+      if (!this.isConnected) return;
+      if (this._subscription?.connection !== (hass?.connection || undefined)) this._subscribe(hass?.connection);
       // Entity badges read the current HA state, independent of Tracearr SSE.
       // Updating only the header prevents unrelated sensor changes from resetting
       // the carousel animation, scroll position or playback clocks.
@@ -400,37 +401,67 @@
           this.shadowRoot?.querySelector("ha-card")) this._refreshHeader(this._streams(this._entryData()));
     }
     connectedCallback() {
-      this._closed = false;
-      this._observeHeaderLayout();
-      this._setTimers();
-      if (this._hass?.connection && !this._connection) this._subscribe(this._hass.connection);
+      this.render();
+      if (this._hass?.connection) this._subscribe(this._hass.connection);
     }
     disconnectedCallback() {
-      this._closed = true;
+      this._unsubscribe();
       this._stopHeaderLayout();
       clearInterval(this._tick);
       clearInterval(this._carouselTimer);
       this._stopCarouselAnimation();
       this._tick = null;
       this._carouselTimer = null;
-      if (this._unsubscribe) this._unsubscribe();
-      this._unsubscribe = null;
-      this._connection = null;
+      this._carouselDelay = null;
+      this._resetStreamState();
+      this._entryId = null;
+      this._payload = {entries: []};
+      this._renderFingerprint = null;
+      this._headerMarkup = "";
+      this._carouselIndex = 0;
+      this.shadowRoot.innerHTML = "";
+    }
+    _resetStreamState() {
+      this._positions.clear();
+      this._liveFingerprints.clear();
+      this._images.clear();
+      this._artworkSources.clear();
+      this._imageAttempts.clear();
       for (const timer of this._imageRetryTimers.values()) clearTimeout(timer);
       this._imageRetryTimers.clear();
     }
+    _disposeSubscription(unsubscribe) {
+      try { Promise.resolve(unsubscribe()).catch(() => {}); }
+      catch (_) { /* The connection may already be closed. */ }
+    }
+    _unsubscribe() {
+      const previous = this._subscription;
+      this._subscription = null;
+      if (previous?.unsubscribe) this._disposeSubscription(previous.unsubscribe);
+    }
     _subscribe(connection) {
-      if (this._unsubscribe) this._unsubscribe();
-      this._unsubscribe = null;
-      this._connection = connection;
+      const hadSource = this._subscription !== null;
+      this._unsubscribe();
+      if (hadSource) {
+        this._payload = {entries: []};
+        this.render();
+      }
+      if (!connection) return;
+      // The same HA connection can be reused after a detach/attach. Identify
+      // the subscription itself so callbacks from the old mount stay inert.
+      const subscription = this._subscription = {connection};
       connection.subscribeMessage((data) => {
-        if (this._closed) return;
+        if (this._subscription !== subscription || !this.isConnected) return;
         this._payload = data || {entries: []};
         this.render();
       }, {type: "tracearr_ha/subscribe"}).then((unsubscribe) => {
-        if (this._closed || this._connection !== connection) unsubscribe();
-        else this._unsubscribe = unsubscribe;
-      }).catch(() => { this._payload = {entries: []}; this.render(); });
+        if (this._subscription !== subscription) this._disposeSubscription(unsubscribe);
+        else subscription.unsubscribe = unsubscribe;
+      }).catch(() => {
+        if (this._subscription !== subscription) return;
+        this._payload = {entries: []};
+        this.render();
+      });
     }
     getCardSize() { return this._config.mode === "list" ? 5 : 4; }
     getGridOptions() {
@@ -439,23 +470,30 @@
       return {columns:12, min_columns:3, max_columns:12,
         rows:4, min_rows:2, max_rows:30};
     }
-    _setTimers() {
-      clearInterval(this._tick);
-      clearInterval(this._carouselTimer);
-      this._tick = this._carouselTimer = null;
-      if (this._closed) return;
-      this._tick = setInterval(() => this._updateProgress(), 250);
-      this._armCarouselAutoplay();
+    _setTimers(streams) {
+      const running = this.isConnected && (this._config.show_progress || this._config.show_end_time) &&
+        streams.some(s => s.state === "playing" && Number(s.duration_ms) > 0);
+      if (running && this._tick === null) this._tick = setInterval(() => this._updateProgress(), 250);
+      else if (!running && this._tick !== null) {
+        clearInterval(this._tick);
+        this._tick = null;
+      }
+      this._armCarouselAutoplay(false, streams.length);
     }
-    _armCarouselAutoplay() {
+    _armCarouselAutoplay(restart=false, count) {
+      const c = this._config;
+      const enabled = this.isConnected && c.mode === "carousel" && c.carousel_autoplay &&
+        (count ?? this.shadowRoot.querySelector(".streams.carousel")?.querySelectorAll(".stream").length ?? 0) > 1;
+      const delay = enabled ? clamp(c.carousel_interval, 3, 120, 7) * 1000 : null;
+      if (!restart && delay === this._carouselDelay) return;
       clearInterval(this._carouselTimer);
       this._carouselTimer = null;
-      if (this._closed || this._config.mode !== "carousel" || !this._config.carousel_autoplay) return;
-      const duration = clamp(this._config.carousel_interval, 3, 120, 7);
+      this._carouselDelay = delay;
+      if (delay === null) return;
       this._carouselTimer = setInterval(() => {
         if (!this.isConnected || (this._config.carousel_pause_on_hover && this.matches(":hover")) || document.hidden || window.matchMedia("(prefers-reduced-motion:reduce)").matches) return;
         this._scroll(1, true);
-      }, duration * 1000);
+      }, delay);
     }
     _entryData() {
       const all = this._payload?.entries || [];
@@ -502,6 +540,23 @@
     _artworkPath(entry, stream, kind) {
       return `/api/tracearr_ha/image/${encodeURIComponent(entry.id)}/${encodeURIComponent(stream.id)}/${kind}`;
     }
+    _pruneArtwork(entry, streams) {
+      const sources = new Map();
+      for (const stream of streams) {
+        const poster = (this._config.show_poster || this._config.stream_surface === "blur") && stream.poster_url;
+        const avatar = this._config.show_avatar && (this._avatar(entry,stream) || stream.user_avatar_url);
+        if (poster) sources.set(this._artworkPath(entry,stream,"poster"), poster);
+        if (avatar) sources.set(this._artworkPath(entry,stream,"avatar"), avatar);
+      }
+      for (const [path, source] of this._artworkSources) {
+        if (sources.get(path) === source) continue;
+        this._images.delete(path);
+        this._imageAttempts.delete(path);
+        clearTimeout(this._imageRetryTimers.get(path));
+        this._imageRetryTimers.delete(path);
+      }
+      this._artworkSources = sources;
+    }
     _image(entry,s,kind) {
       const direct = kind === "avatar" ? this._avatar(entry,s) : "";
       if (direct) return direct;
@@ -513,23 +568,24 @@
       const path = this._artworkPath(entry,s,kind);
       const cached = this._images.get(path);
       if (cached?.raw === raw && cached.expires > Date.now()) return cached.url || "";
-      if (cached?.pending && cached.raw === raw) return "";
-      if (this._hass?.connection) {
+      if ((cached?.pending && cached.raw === raw) || this._imageRetryTimers.has(path)) return "";
+      if (this.isConnected && this._hass?.connection) {
         // A signature arriving after the initial render must update the image
         // directly: unchanged SSE fingerprints otherwise leave placeholders forever.
-        const pending = this._hass.connection.sendMessagePromise({type:"auth/sign_path", path, expires:600})
+        const request = {pending:true,raw};
+        this._images.set(path,request);
+        this._hass.connection.sendMessagePromise({type:"auth/sign_path", path, expires:600})
           .then(result => {
-            if (this._images.get(path)?.raw !== raw) return;
+            if (this._images.get(path) !== request) return;
             if (typeof result?.path !== "string" || !result.path.startsWith("/")) throw Error("Invalid signed image path");
             this._images.set(path,{url:result.path,raw,expires:Date.now()+540000});
-            if (!this._closed) this._applyArtwork(s.id,kind,result.path);
+            this._applyArtwork(s.id,kind,result.path);
           })
           .catch(() => {
-            if (this._images.get(path)?.raw !== raw) return;
+            if (this._images.get(path) !== request) return;
             this._images.delete(path);
             this._scheduleImageRetry(entry,s,kind);
           });
-        this._images.set(path,{pending,raw,expires:Date.now()+60000});
       }
       return "";
     }
@@ -557,7 +613,7 @@
       }
     }
     _scheduleImageRetry(entry,stream,kind) {
-      if (!entry?.id || !stream?.id || this._closed) return;
+      if (!entry?.id || !stream?.id || !this.isConnected) return;
       const path = this._artworkPath(entry,stream,kind);
       if (this._imageRetryTimers.has(path)) return;
       const count = (this._imageAttempts.get(path) || 0) + 1;
@@ -566,9 +622,10 @@
       const delay = [2000,5000,15000][count-1];
       const timer = setTimeout(() => {
         this._imageRetryTimers.delete(path);
-        if (this._closed) return;
+        if (!this.isConnected) return;
         const currentEntry = this._entryData();
-        const current = currentEntry?.streams?.find(item => String(item.id) === String(stream.id));
+        const current = currentEntry?.id === entry.id &&
+          this._streams(currentEntry).find(item => String(item.id) === String(stream.id));
         if (!current || !(kind === "poster" ? (this._config.show_poster || this._config.stream_surface === "blur") : this._config.show_avatar)) return;
         this._images.delete(path);
         const url = this._image(currentEntry,current,kind);
@@ -755,7 +812,7 @@
       const metrics = new Map();
       // Every Tracearr statistic and HA entity can override the common style
       // and choose its own horizontal position without changing badge order.
-      const add = (key, enabled, name, display, value, colorType=null, custom=null) => {
+      const add = (key, enabled, name, display, value, colorType=null, custom=null, identity=key) => {
         if (!enabled) return;
         if (!key.startsWith("entity:")) custom = c.header_metric_settings?.[key] || {};
         const count = Number(value);
@@ -773,7 +830,7 @@
         const iconMarkup = custom?.show_icon && /^(mdi|hass):[a-z0-9-]+$/.test(safeIcon) ?
           `<ha-icon icon="${E(safeIcon)}" aria-hidden="true"></ha-icon>` : "";
         const output = `${showName && displayName ? `${E(displayName)} : ` : ""}${E(display)}`;
-        const markup = `<span class="metric${blinking ? " blink-positive" : ""}" style="--pill-bg:${palette.bg};--pill-text:${palette.text};--badge-blink:${duration}s" title="${E(displayName || display)}">${iconMarkup}<span class="metric-text">${output}</span></span>`;
+        const markup = `<span class="metric${blinking ? " blink-positive" : ""}" data-badge="${E(identity)}" style="--pill-bg:${palette.bg};--pill-text:${palette.text};--badge-blink:${duration}s" title="${E(displayName || display)}">${iconMarkup}<span class="metric-text">${output}</span></span>`;
         const position = badgeAlign(custom?.align);
         const align = position === "auto" ? (c.show_title ? "right" : "left") : position;
         metrics.set(key, [...(metrics.get(key) || []), {align,markup}]);
@@ -794,10 +851,11 @@
       add("both", c.header_show_both, "Vidéo + audio", summary.both, summary.both);
       add("transcodes_total", c.header_show_transcodes_total, "Transcodes", summary.transcodes, summary.transcodes);
       if (c.header_show_server_counts) {
-        for (const server of summary.byServer.values()) add("server_counts",true,server.name,server.count,server.count,server.type);
+        for (const [id,server] of summary.byServer) add("server_counts",true,server.name,server.count,server.count,server.type,null,
+          `server:${id}`);
       }
       // Custom badges consume the entity's current state, unit and icon.
-      for (const row of c.header_entity_badges || []) {
+      for (const [index,row] of (c.header_entity_badges || []).entries()) {
         const id = String(row.entity || "");
         if (!/^[a-z_]+\.[a-z0-9_]+$/.test(id)) continue;
         const state = this._hass?.states?.[id];
@@ -808,7 +866,8 @@
         const domain = id.split(".")[0];
         const fallback = ({counter:"mdi:counter", sensor:"mdi:gauge", binary_sensor:"mdi:check-circle-outline",
           input_number:"mdi:numeric", number:"mdi:numeric", light:"mdi:lightbulb", switch:"mdi:toggle-switch"})[domain] || "mdi:information-outline";
-        add(`entity:${row.id}`, true, name, `${value}${units}`, value, null, {...row,icon:state?.attributes?.icon || fallback});
+        add(`entity:${row.id}`, true, name, `${value}${units}`, value, null, {...row,icon:state?.attributes?.icon || fallback},
+          `entity:${index}:${row.id}:${id}`);
       }
       const title = c.show_title ? `<h3>${E(c.title || "Lectures en cours")}</h3>` : "";
       const order = normalizedOrder(c.header_badge_order,
@@ -969,6 +1028,8 @@
       if (this._carouselFrame !== null) cancelAnimationFrame(this._carouselFrame);
       this._carouselFrame = null;
       this._carouselAnimating = false;
+      for (const animation of this._carouselEffects) animation.cancel();
+      this._carouselEffects.clear();
       const el = this.shadowRoot?.querySelector(".streams.carousel");
       if (el) el.style.scrollSnapType = "";
     }
@@ -1008,7 +1069,12 @@
           }[effect];
           if (frames) {
             cards.slice(index, index + this._carouselVisibleCount(el, cards)).forEach(card => {
-              if (typeof card.animate === "function") card.animate(frames, {duration, easing: "ease-in-out"});
+              const animation = card.animate?.(frames, {duration, easing: "ease-in-out"});
+              if (!animation) return;
+              this._carouselEffects.add(animation);
+              const release = () => this._carouselEffects.delete(animation);
+              animation.addEventListener("finish", release, {once:true});
+              animation.addEventListener("cancel", release, {once:true});
             });
           }
         }
@@ -1067,7 +1133,7 @@
         }, {index:0, distance:Infinity}).index;
         this._carouselIndex = nearest;
         this._goToCarouselIndex(el, cards, nearest);
-        this._armCarouselAutoplay();
+        this._armCarouselAutoplay(true);
       };
       el.addEventListener("pointerup", end);
       el.addEventListener("pointercancel", end);
@@ -1084,7 +1150,7 @@
       const next = this._carouselIndex + (direction > 0 ? 1 : -1);
       this._carouselIndex = next > max ? 0 : next < 0 ? max : next;
       this._goToCarouselIndex(el, cards, this._carouselIndex);
-      if (!fromAutoplay) this._armCarouselAutoplay();
+      if (!fromAutoplay) this._armCarouselAutoplay(true);
     }
 
     _liveSnapshot(stream, entry) {
@@ -1096,12 +1162,81 @@
       const header = this._header(streams);
       if (header === this._headerMarkup) return;
       const oldHeader = this.shadowRoot.querySelector(".head");
-      const root = this.shadowRoot.querySelector(".root");
-      if (oldHeader && header) oldHeader.outerHTML = header;
-      else if (oldHeader && !header) oldHeader.remove();
-      else if (!oldHeader && header) root?.insertAdjacentHTML("afterbegin", header);
+      let layoutChanged = true;
+      if (oldHeader && header) {
+        const template = document.createElement("template");
+        template.innerHTML = header;
+        layoutChanged = this._patchHeader(oldHeader, template.content.firstElementChild);
+      } else if (oldHeader && !header) oldHeader.remove();
+      else if (header) this.shadowRoot.querySelector(".root")?.insertAdjacentHTML("afterbegin", header);
       this._headerMarkup = header;
-      this._observeHeaderLayout();
+      if (layoutChanged) this._observeHeaderLayout();
+    }
+    _patchHeader(current, next) {
+      const title = current.querySelector("h3"), nextTitle = next.querySelector("h3");
+      current.className = next.className;
+      if (!nextTitle) title?.remove();
+      else if (!title) current.prepend(nextTitle);
+      else if (title.textContent !== nextTitle.textContent) title.textContent = nextTitle.textContent;
+
+      const metrics = current.querySelector(".head-metrics"), nextMetrics = next.querySelector(".head-metrics");
+      if (!nextMetrics || !metrics) {
+        metrics?.remove();
+        if (nextMetrics) current.append(nextMetrics);
+        return metrics !== nextMetrics;
+      }
+      const before = [...metrics.children], after = [...nextMetrics.children];
+      const stillUsed = new Set(after.map(group => group.className));
+      const existing = new Map(before.map(group => [group.className,group]));
+      before.filter(group => !stillUsed.has(group.className)).forEach(group => group.remove());
+      let sibling = metrics.firstElementChild;
+      for (const nextGroup of after) {
+        const group = existing.get(nextGroup.className);
+        if (!group) metrics.insertBefore(nextGroup,sibling);
+        else {
+          this._patchBadgeGroup(group,nextGroup);
+          sibling = group.nextElementSibling;
+        }
+      }
+      if (before.map(group => group.className).join() === after.map(group => group.className).join()) return false;
+      metrics.className = nextMetrics.className;
+      const center = metrics.querySelector(".align-center");
+      if (center) center.style.translate = "";
+      return true;
+    }
+    _patchBadgeGroup(group, nextGroup) {
+      const key = node => node.dataset.badge;
+      const next = [...nextGroup.children];
+      const keys = new Set(next.map(key));
+      const existing = new Map();
+      for (const node of [...group.children]) {
+        if (keys.has(key(node))) existing.set(key(node),node);
+        else node.remove();
+      }
+      let sibling = group.firstElementChild;
+      for (const fresh of next) {
+        const badge = existing.get(key(fresh));
+        if (!badge) {
+          group.insertBefore(fresh,sibling);
+          continue;
+        }
+        if (badge.className !== fresh.className) badge.className = fresh.className;
+        if (badge.style.cssText !== fresh.style.cssText) badge.style.cssText = fresh.style.cssText;
+        if (badge.title !== fresh.title) badge.title = fresh.title;
+        if (badge.innerHTML !== fresh.innerHTML) badge.innerHTML = fresh.innerHTML;
+        if (badge !== sibling) {
+          // Server counts can be reordered when sessions change. A plain DOM
+          // reinsert restarts CSS animation on engines without moveBefore.
+          if (typeof group.moveBefore === "function") group.moveBefore(badge,sibling);
+          else {
+            const phase = badge.getAnimations?.()[0]?.currentTime;
+            group.insertBefore(badge,sibling);
+            const pulse = badge.getAnimations?.()[0];
+            if (pulse && phase != null) pulse.currentTime = phase;
+          }
+        }
+        sibling = badge.nextElementSibling;
+      }
     }
     _stopHeaderLayout() {
       this._headerResize?.disconnect();
@@ -1183,6 +1318,13 @@
       const c = this._config;
       if (!this.shadowRoot) return;
       const streams = this._streams(entry);
+      const entryId = entry?.id ?? null;
+      if (this._entryId !== entryId) {
+        this._resetStreamState();
+        this._entryId = entryId;
+        this._renderFingerprint = null;
+      }
+      this._pruneArtwork(entry, streams);
       // Keep a stable carousel shell while live SSE properties change. The
       // original full DOM rebuild used to teleport the slider without any
       // transition whenever pause/bitrate/health/codec updates arrived.
@@ -1202,7 +1344,16 @@
       // Refresh each stream's clock even if the rest of the card is unchanged.
       // Crucially, do NOT reset its anchor on every incoming SSE progress event.
       const now = this._now();
+      // Keep a previously displayed session's clock even while filtered out
+      // (in particular during a hidden pause), but drop it on actual stop.
+      const active = new Map((entry?.streams || []).map(stream => [stream.id,stream]));
+      const visibleIds = new Set(streams.map(stream => stream.id));
+      for (const id of this._positions.keys()) {
+        if (!active.has(id)) this._positions.delete(id);
+        else if (!visibleIds.has(id)) this._syncPosition(active.get(id), now);
+      }
       for (const stream of streams) this._syncPosition(stream, now);
+      this._setTimers(streams);
       if (fingerprint === this._renderFingerprint && this.shadowRoot.querySelector("ha-card")) {
         if (c.mode === "carousel") this._updateCarouselLive(entry, streams);
         this._updateProgress();
@@ -1215,14 +1366,14 @@
       this._stopCarouselAnimation();
       if (c.empty_mode === "hide" && !streams.length) {
         this.shadowRoot.innerHTML = `<style>${style}</style>`;
+        this._headerMarkup = "";
+        this._liveFingerprints.clear();
         this._observeHeaderLayout();
         this.style.display="none";
         return;
       }
       this.style.display="";
-      const head = this._header(streams);
-      this._headerMarkup = head;
-      this._liveFingerprints = new Map(streams.map(s => [s.id, this._liveSnapshot(s,entry)]));
+      this._liveFingerprints = new Map(c.mode === "carousel" ? streams.map(s => [s.id, this._liveSnapshot(s,entry)]) : []);
       const visible = clamp(c.carousel_visible, 1, 4, 1);
       const posterScale = clamp(c.poster_size, 50, 200, 100) / 100;
       const posterVars = `--tr-poster-width:${Math.round(73 * posterScale)}px;--tr-poster-height:${Math.round(109 * posterScale)}px;--tr-compact-poster-width:${Math.round(48 * posterScale)}px;--tr-compact-poster-height:${Math.round(72 * posterScale)}px`;
@@ -1234,8 +1385,24 @@
       const body = !streams.length && c.empty_mode === "header_only" ? "" :
         `<div class="${classes}" ${c.mode === "carousel" ? `tabindex="0" role="region" aria-label="Lectures en carrousel"` : ""} style="--carousel-visible:${visible}">${items || `<div class="empty-message">${E(emptyText)}</div>`}</div>`;
       const nav = c.mode === "carousel" && c.carousel_show_arrows && streams.length > 1 ? `<div class="carousel-nav"><button class="nav" data-step="-1" aria-label="Précédent">❮</button><span>${streams.length} lectures</span><button class="nav" data-step="1" aria-label="Suivant">❯</button></div>` : "";
-      this.shadowRoot.innerHTML = `<style>${style}</style><ha-card style="--tr-font-size:${clamp(c.font_size,10,28,14)}px;${posterVars}"><div class="root ${c.compact?"compact":""} ${c.stream_surface === "transparent" ? "flat-streams" : ""}">${head}${body}${nav}</div></ha-card>`;
-      this._observeHeaderLayout();
+      const shell = this.shadowRoot.querySelector("ha-card");
+      const root = shell?.querySelector?.(".root");
+      const shellStyle = `--tr-font-size:${clamp(c.font_size,10,28,14)}px;${posterVars}`;
+      const rootClasses = `root ${c.compact?"compact":""} ${c.stream_surface === "transparent" ? "flat-streams" : ""}`;
+      if (root) {
+        // The body can still be rebuilt independently of the header. Keeping
+        // the latter attached preserves CSS animation phases across snapshots.
+        if (shell.getAttribute("style") !== shellStyle) shell.setAttribute("style",shellStyle);
+        if (root.className !== rootClasses) root.className = rootClasses;
+        this._refreshHeader(streams);
+        root.querySelector(".streams")?.remove();
+        root.querySelector(".carousel-nav")?.remove();
+        root.insertAdjacentHTML("beforeend",body + nav);
+      } else {
+        this._headerMarkup = this._header(streams);
+        this.shadowRoot.innerHTML = `<style>${style}</style><ha-card style="${shellStyle}"><div class="${rootClasses}">${this._headerMarkup}${body}${nav}</div></ha-card>`;
+        this._observeHeaderLayout();
+      }
       const newCarousel = this.shadowRoot.querySelector(".streams.carousel");
       if (newCarousel) {
         const cards = [...newCarousel.querySelectorAll(".stream")];
@@ -1256,7 +1423,7 @@
         });
         // A touch swipe is manual navigation too: give the user the entire
         // interval before automatically advancing again.
-        newCarousel.addEventListener("touchend", () => this._armCarouselAutoplay(), {passive:true});
+        newCarousel.addEventListener("touchend", () => this._armCarouselAutoplay(true), {passive:true});
         newCarousel.addEventListener("scroll", () => {
           if (this._carouselAnimating || !cards.length) return;
           const step = cards.length > 1 ? cards[1].offsetLeft - cards[0].offsetLeft : 0;

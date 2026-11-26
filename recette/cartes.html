@@ -269,6 +269,184 @@
       theme:matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
       rows,dynamic,dynamicOk,keyboard,artwork,empty,hiddenHeader,customization,observerErrors};
   }
+  async function probeLifecycle() {
+    const results = [];
+    const box = host.appendChild(document.createElement("div"));
+    box.style.width = "320px";
+    const active = entry.streams.slice(0,2).map(s => ({...s}));
+    const subscribers = new Set();
+    const hass = {states:{},connection:{
+      subscribeMessage:async fn => {subscribers.add(fn); return () => subscribers.delete(fn);},
+      sendMessagePromise:async ({path}) => {
+        if (path.includes("/broken/")) throw Error("fixture");
+        return {path};
+      }
+    }};
+    const main = document.createElement("tracearr-streams-card");
+    const second = document.createElement("tracearr-stream-card");
+    const config = {mode:"carousel",carousel_transition:"none",carousel_autoplay:true,carousel_interval:120,
+      header_show_bandwidth:true,header_metric_settings:{streams:{align:"left"},bandwidth:{align:"center"}},
+      show_avatar:false};
+    const report = node => ({
+      positions:node._positions.size, images:node._images.size, attempts:node._imageAttempts.size,
+      retries:node._imageRetryTimers.size, intervals:Number(node._tick != null) + Number(node._carouselTimer != null),
+      headerObserver:Number(node._headerResize != null), frames:Number(node._headerFrame != null) + Number(node._carouselFrame != null),
+      listeners:subscribers.size
+    });
+    const publish = streams => {
+      for (const fn of subscribers) fn({entries:[{...entry,streams}]});
+    };
+    main.setConfig(config);
+    main.hass = second.hass = hass;
+    const beforeMount = report(main);
+    box.append(main,second);
+    publish(active);
+    const clock = main._positions.get("1");
+    const track = main.shadowRoot.querySelector(".carousel");
+    main.shadowRoot.querySelector('button[data-step="1"]').click();
+    const index = main._carouselIndex, scroll = track.scrollLeft;
+    publish([{...active[0],bitrate:2600}, active[1]]);
+    const anchor = index > 0 && scroll > 0 && main.shadowRoot.querySelector(".carousel") === track &&
+      main._carouselIndex === index && track.scrollLeft === scroll;
+    for (let i=0; i<18; i++) {
+      publish([...active,{...active[0],id:`short-${i}`,poster_url:"/api/v1/images/proxy?fixture=1"}]);
+      await Promise.resolve();
+      publish(active);
+    }
+    publish([...active,{...active[0],id:"broken",poster_url:"/api/v1/images/proxy?fixture=2"}]);
+    await frame();
+    const peak = report(main);
+    publish(active);
+    const churn = report(main);
+    const activeKept = main._positions.get("1") === clock && clock !== second._positions.get("1");
+    publish([{...active[0],state:"paused"},active[1]]);
+    const pausedAt = clock.progress;
+    await frame();
+    const frozen = clock.state === "paused" && main._positionAt(clock) === pausedAt;
+    publish(active);
+    await frame();
+    const resumed = clock.state === "playing" && main._positionAt(clock) > pausedAt;
+    publish([]);
+    const idle = report(main);
+    await Promise.resolve();
+    for (let i=0; i<3; i++) {
+      main.remove();
+      const detached = report(main);
+      main.setConfig({...config,font_size:14+i});
+      const configured = report(main);
+      box.prepend(main);
+      publish(active);
+      main.setConfig(config);
+      const mounted = report(main);
+      const stableTick = main._tick;
+      main.setConfig(config);
+      const timerStable = main._tick === stableTick;
+      await Promise.resolve();
+      results.push({detached,configured,mounted,timerStable});
+    }
+    main.remove();
+    second.remove();
+    const end = report(main);
+    const clear = row => row.positions === 0 && row.images === 0 && row.attempts === 0 && row.retries === 0;
+    const off = row => clear(row) && row.intervals === 0 && row.headerObserver === 0 && row.frames === 0;
+    return {ok:off(beforeMount) && beforeMount.listeners === 0 && peak.retries === 1 &&
+      churn.positions === 2 && churn.images === 0 && churn.attempts === 0 && churn.retries === 0 &&
+      clear(idle) && idle.intervals === 0 && results.every(({detached,configured,mounted,timerStable}) =>
+        off(detached) && off(configured) && detached.listeners === 1 && configured.listeners === 1 &&
+        mounted.intervals === 2 && mounted.listeners === 2 && timerStable) &&
+      off(end) && end.listeners === 0 && anchor && activeKept && frozen && resumed,
+      beforeMount,peak,churn,idle,results,end,anchor,activeKept,frozen,resumed};
+  }
+  async function probeBlink() {
+    const results = [];
+    const rows = [
+      {id:"a",entity:"sensor.a",label:"A",align:"center",blink_positive:true,blink_seconds:.5},
+      {id:"b",entity:"sensor.b",label:"B",align:"right",blink_positive:true,blink_seconds:.9,only_positive:true}
+    ];
+    for (const [type,layout] of [["streams","list"],["streams","carousel"],["stream","list"]]) {
+      const node = host.appendChild(document.createElement(`tracearr-${type}-card`));
+      node.setConfig({mode:layout,show_poster:false,show_avatar:false,header_show_bandwidth:true,header_entity_badges:rows,
+        header_metric_settings:{streams:{blink_positive:true,blink_seconds:1.4,align:"left"}}});
+      let push;
+      const conn = {subscribeMessage:async fn => {push=fn; return () => {};}};
+      const state = (a,b) => {node.hass={connection:conn,states:{"sensor.a":{state:a},"sensor.b":{state:b}}};};
+      state("7","5");
+      const publish = streams => push({entries:[{...entry,streams}]});
+      publish(entry.streams);
+      await frame();
+      const find = name => node.shadowRoot.querySelector(`.metric[title="${name}"]`);
+      const badges = () => [find("A"),find("B"),node.shadowRoot.querySelector(".align-left .blink-positive")];
+      const opacity = badge => +getComputedStyle(badge).opacity;
+      const check = (name,change) => {
+        const old = badges(), animations = old.map(b => b.getAnimations()[0]);
+        animations.forEach(a => {a.currentTime = a.effect.getTiming().duration / 2;});
+        const before = old.map(opacity);
+        change();
+        const current = badges(), after = current.map(opacity);
+        const same = current.map((b,i) => b === old[i] && b.getAnimations()[0] === animations[i]);
+        return {name,before,after,same,ok:same.every(Boolean) && after.every((v,i) => Math.abs(v-before[i]) < .04)};
+      };
+      const durations = badges().map(b => b.getAnimations()[0].effect.getTiming().duration);
+      const updates = [
+        check("sensor A positive change", () => state("70","5")),
+        check("sensor B positive change", () => state("70","50")),
+        check("session progress", () => publish(entry.streams.map(s => ({...s,progress_ms:14000})))),
+        check("session bitrate", () => publish(entry.streams.map(s => ({...s,bitrate:2100})))),
+        check("session removal", () => publish(entry.streams.slice(0,2)))
+      ];
+      const a = find("A"), animation = a.getAnimations()[0];
+      const streamsPulse = badges()[2].getAnimations()[0];
+      state("0","0");
+      const stopped = find("A")?.getAnimations().length === 0 && !find("B") && animation.playState === "idle";
+      state("1","2");
+      await frame();
+      const running = badges().every(b => b.getAnimations().length === 1) &&
+        badges()[2].getAnimations()[0] === streamsPulse;
+      const natural = find("A").getAnimations()[0];
+      natural.currentTime = 0;
+      const samples = [];
+      await new Promise(resolve => {
+        function collect() {
+          const t = natural.currentTime;
+          samples.push([t,opacity(find("A"))]);
+          if (t < 520) requestAnimationFrame(collect);
+          else resolve();
+        }
+        requestAnimationFrame(collect);
+      });
+      const descent = samples.filter(([t]) => t <= 250);
+      const ascent = samples.filter(([t]) => t >= 250 && t <= 500);
+      const monotone = (points,dir) => points.length >= 4 && points.every(([,v],i) =>
+        !i || dir * (v-points[i-1][1]) >= -.01);
+      const values = samples.map(([,v]) => v), range = [Math.min(...values),Math.max(...values)];
+      const smooth = monotone(descent,-1) && monotone(ascent,1) && range[0] < .27 && range[1] > .95;
+      results.push({type,layout,durations,updates,stopped,running,smooth,samples:samples.length,range,
+        ok:updates.every(r => r.ok) && durations.join() === "500,900,1400" && stopped && running && smooth});
+      node.remove();
+    }
+    // Counts are grouped in stream order; when it reverses, neither badge
+    // should jump to the start of its cycle (even without DOM moveBefore).
+    const node = host.appendChild(document.createElement("tracearr-streams-card"));
+    node.setConfig({header_show_server_counts:true,header_metric_settings:{server_counts:{blink_positive:true}},
+      show_poster:false,show_avatar:false});
+    let push;
+    const conn = {subscribeMessage:async fn => {push=fn; return () => {};}};
+    node.hass = {connection:conn};
+    const [a,b] = entry.streams.slice(0,2).map((s,i) => ({...s,server_id:`server-${i}`,server_name:`Server ${i}`}));
+    const publish = streams => push({entries:[{...entry,streams}]});
+    publish([a,b]);
+    const counts = () => [...node.shadowRoot.querySelectorAll('.metric[title^="Server "]')];
+    const old = counts();
+    const opacity = badge => +getComputedStyle(badge).opacity;
+    old.forEach(badge => { badge.getAnimations()[0].currentTime = 1000; });
+    const before = old.map(opacity);
+    publish([b,a]);
+    const current = counts(), after = current.map(opacity);
+    const reordered = {before,after,ok:current[0] === old[1] && current[1] === old[0] &&
+      after.every((v,i) => Math.abs(v-before[1-i]) < .04)};
+    node.remove();
+    return {ok:results.every(r => r.ok) && reordered.ok,results,reordered};
+  }
   async function measureMatrix() {
     for (const label of [false,true]) {
       longLabel = label; configure();
@@ -296,8 +474,9 @@
     el("result").textContent = JSON.stringify({ok:cases.every(row => row.ok),
       theme:matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light", cases}, null, 2);
   }
-  if (params.has("responsive")) {
-    probeResponsive().then(report => { el("result").textContent = JSON.stringify(report, null, 2); })
+  if (params.has("responsive") || params.has("lifecycle") || params.has("blink")) {
+    const probe = params.has("responsive") ? probeResponsive : params.has("lifecycle") ? probeLifecycle : probeBlink;
+    probe().then(report => { el("result").textContent = JSON.stringify(report, null, 2); })
       .catch(error => { el("result").textContent = JSON.stringify({ok:false,error:String(error),stack:error.stack}); });
   } else if (!params.has("lan-wan") && !params.has("visual")) {
     measureMatrix();
