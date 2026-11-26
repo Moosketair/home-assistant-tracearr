@@ -540,6 +540,7 @@ async def failure_views(b, entry, sim, ws, sub, *, sse):
     row, = (await ws.call("tracearr_ha/get"))["entries"]
     assert {s["id"]: s for s in row["streams"]} == sim.streams
     assert (row["connected"], row["sse_connected"], row["stats"]["total"]) == (False, sse, len(sim.streams))
+    assert row["streams_stale"] is not sse
     events = await ws.snapshots(sub)
     assert events and events[-1] == [row]
     reg = er.async_get(b.hass)
@@ -560,6 +561,7 @@ def test_ready_error_and_real_sse_recovery():
                 failed_ready.put_nowait(None)
 
         async with Tracearr().serve() as sim, core() as b, b.connect() as ws:
+            sim.change("started", "missed-stop")
             entry = await b.add(sim)
             coord = b.coord(entry)
             await ws.call("tracearr_ha/subscribe")
@@ -583,10 +585,91 @@ def test_ready_error_and_real_sse_recovery():
                 sim.change("started", "unconfirmed-live")
                 await observed(coord, lambda: "unconfirmed-live" in coord.streams)
                 await failure_views(b, entry, sim, ws, sub, sse=False)
+            # This stop happened without a usable source, so only the
+            # next accepted snapshot can recover the whole list.
+            sim.streams.pop("missed-stop")
             sim.streams["missed"] = sim.session("missed")
             del sim.errors["streams"]
             sim.event("ready", {})
             await observed(coord, lambda: coord.sse_connected and "missed" in coord.streams, timeout=12)
             assert coord.connected and coord.last_update_success and len(sim.clients) == 1
+            row, = (await ws.call("tracearr_ha/get"))["entries"]
+            assert not row["streams_stale"]
+            assert {stream["id"] for stream in row["streams"]} == {"unconfirmed-live", "missed"}
             await views(b, entry, sim, ws)
+    asyncio.run(run())
+
+
+def test_saturated_catchup_cannot_mark_stale_streams_fresh():
+    async def run():
+        async with Tracearr().serve() as sim, core() as b, b.connect() as ws:
+            sim.change("started", "missed-stop")
+            entry = await b.add(sim)
+            coord = b.coord(entry)
+            sim.errors["streams"] = (503, {})
+            await coord.async_refresh()
+            sim.raw(None)
+            await observed(coord, lambda: not coord.sse_connected)
+            assert not coord.connected
+            sim.streams.pop("missed-stop")
+            del sim.errors["streams"]
+
+            # The reconnect's real ready starts a REST snapshot, but the
+            # reconciliation bound is exceeded while /servers is held.
+            gate = sim.gates["servers"] = Gate()
+            try:
+                with patch.object(module, "_MAX_MUTATIONS", 1):
+                    await asyncio.wait_for(gate.entered.wait(), 12)
+                    sim.change("started", "a")
+                    sim.change("started", "b")
+                    await observed(coord, lambda: "b" in coord.streams)
+                    gate.release.set()
+                    await observed(coord, lambda: coord.connected)
+                row, = (await ws.call("tracearr_ha/get"))["entries"]
+                assert row["connected"] and not row["sse_connected"] and row["streams_stale"]
+                assert any(stream["id"] == "missed-stop" for stream in row["streams"])
+            finally:
+                gate.release.set()
+                sim.gates.pop("servers", None)
+            sim.event("ready", {})
+            await observed(coord, lambda: coord.sse_connected)
+            row, = (await ws.call("tracearr_ha/get"))["entries"]
+            assert not row["streams_stale"]
+            assert {stream["id"] for stream in row["streams"]} == {"a", "b"}
+            clean(coord)
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("resource", ["streams", "servers", "stream_identity"])
+def test_invalid_snapshot_cannot_clear_staleness(resource):
+    async def run():
+        async with Tracearr().serve() as sim, core() as b:
+            sim.change("started", "tv")
+            entry = await b.add(sim)
+            coord = b.coord(entry)
+            # A JSON error object or a stream row without identity must not
+            # be treated as an empty snapshot (which would retire "tv").
+            if resource == "stream_identity":
+                valid = sim.streams.pop("tv")
+                sim.streams["bad"] = {"state": "playing"}
+            else:
+                sim.errors[resource] = (200, {})
+            await coord.async_refresh()
+            assert not coord.connected
+            assert not coord.data["streams_stale"]  # SSE still confirmed
+            sim.raw(None)
+            await observed(coord, lambda: not coord.sse_connected)
+            await coord.async_refresh()
+            assert coord.data["streams_stale"]
+            assert list(coord.streams) == ["tv"]
+            assert isinstance(coord.last_exception, UpdateFailed)
+            if resource == "stream_identity":
+                sim.streams.clear()
+                sim.streams["tv"] = valid
+            else:
+                del sim.errors[resource]
+            await coord.async_refresh()
+            assert not coord.data["streams_stale"] and not coord.sse_connected
+
     asyncio.run(run())

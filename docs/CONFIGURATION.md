@@ -184,7 +184,9 @@ Dans les **options de l’intégration → Options avancées → Règles LAN/WAN
 
 ### Comportement sans lecture
 
-Dans **Comportement sans lecture**, choisissez entre **Afficher un message**, **En-tête uniquement** ou **Masquer complètement la carte**. En mode **Afficher un message**, `empty_message` personnalise le texte en l’absence de lecture visible ; si la connexion REST est indisponible, « Tracearr indisponible » prend alors sa place. Lorsqu’une lecture est encore en cache, la carte peut continuer à l’afficher et à estimer sa progression même si les deux connexions sont coupées.
+Dans **Comportement sans lecture**, choisissez entre **Afficher un message**, **En-tête uniquement** ou **Masquer complètement la carte**. En mode **Afficher un message**, `empty_message` personnalise le texte en l’absence de lecture visible tant que la source peut encore être actualisée.
+
+Si ni le polling REST ni le flux direct SSE ne fournissent de données suffisamment fiables, la carte affiche **« Tracearr indisponible — données non actualisées »** avec le nom de l’instance, même sans lecture visible ou avec l’en-tête masqué. Les panneaux, compteurs et débits conservés sont ceux des dernières lectures connues. Les temps affichés se figent, la barre devient grise et « Non actualisé » remplace l’heure de fin si celle-ci est activée et si la durée est connue. Une vraie pause reste identifiable. Un snapshot fiable retire l’avertissement, recale la progression sur la position reçue et retire les sessions terminées. Une panne d’un seul des deux transports ne déclenche pas cet avertissement si l’autre maintient les lectures à jour.
 
 ```yaml
 empty_mode: header_only  # message, header_only, hide

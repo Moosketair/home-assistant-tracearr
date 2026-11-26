@@ -1,4 +1,4 @@
-# État de reprise — livraison locale 3B.1, 26 novembre 2026
+# État de reprise — livraison locale 3B.2, 26 novembre 2026
 
 **2A définitivement validée** sur `942de6ffa8d33b0ee10319fa39938c3f587f35aa`. **2B définitivement clôturée** : verdict indépendant 2B.4 **VALIDÉ** sur `f918150fd8fc6fa6f44d309aac3d4387d063d83b`, confirmé par le mainteneur. Les deux régressions relevées par 2B.2 sont corrigées ; les limites d’ordre faute de révision commune REST/SSE sont acceptées. Résultats indépendants : 21 Python, 72 JS, 61 sur chacun des Core 2025.6.0 et 2026.11.3, aucun échec, skip ou xfail. Aucun nouvel audit 2B requis.
 
@@ -10,14 +10,16 @@
 
 **3.1 définitivement clôturée** sur `fcd3c836e7e3a6b5f9c787c03979a7a400d7a95a` (`fix/frontend-lifecycle-performance`). Le contre-audit 3.2 **VALIDÉ AVEC RÉSERVE NON BLOQUANTE** confirme le nettoyage des horloges et des ressources, l’absence d’accumulation au remontage, la continuité du clignotement et la préservation de la progression, de la pause et du carrousel. Il confirme aussi le diagnostic des exceptions internes SSE, la fermeture du flux et la poursuite du polling REST. Réserve acceptée : si une session disparaît entièrement d’un snapshot puis revient avec une position source ancienne, le compteur peut reculer temporairement. Une session simplement filtrée n’est pas concernée. Examen futur en [6A](ROADMAP.md#lot-6a--affichage-en-pause-et-couleurs-des-badges) ; aucun changement en 3B.1.
 
-**3B.1 livré localement, en attente de validation globale.** A7 et A9 sont corrigées, A8/A13/A14 rectifiées dans la documentation. A10 reste ouverte : la dernière lecture connue peut sembler avancer pendant une panne complète. L’impact sur la fiabilité du dashboard justifie un arbitrage avant publication, pas un report silencieux. Voir les [preuves 3B.1](RECETTE.md#3b1--consolidation-finale).
+**3B.1 validée par le mainteneur** sur `112ce00d517bd9c5b9efb1bf60b7a7fb70d1a7c3`. A7/A9 et les corrections documentaires A8/A13/A14 restent à confirmer au lot 4. Voir les [preuves 3B.1](RECETTE.md#3b1--consolidation-finale).
+
+**3B.2 livré localement.** Le mainteneur a autorisé A10 : un transport encore fiable suffit ; sans source actualisable, conserver les lectures, indiquer leur péremption et figer les temps, même si l’en-tête ou le message à vide sont masqués. La reprise nécessite un snapshot de lectures effectivement intégré et repart de la position reçue. A10 est corrigée, en attente du lot 4. Voir les [preuves 3B.2](RECETTE.md#3b2--indisponibilité-des-lectures-a10).
 
 | Repère | Valeur |
 |---|---|
 | Dépôt | `Moosketair/home-assistant-tracearr`, copie de travail `/media/fat/proton_drive/dev/home-assistant-tracearr` lors de l’audit |
 | Référence fonctionnelle | `main` = tag `v0.1.16` = `443ce3859d09b67ccfd589d326d032753dc11d64` à la date de l’audit |
-| Travail local | `fix/consolidation-final`, créée au SHA 3.1 validé ; SHA de livraison : `git rev-parse fix/consolidation-final` |
-| Environnement | 3B.1 : Debian, Node 22.23.5, CPython 3.13.5, banc isolé Core 2025.6.0 et 2026.11.3 ; aucun HA de production. |
+| Travail local | `fix/consolidation-final`, 3B.2 poursuivie au SHA 3B.1 validé ; SHA de livraison : `git rev-parse fix/consolidation-final` |
+| Environnement | 3B.2 : Debian, Node 22.23.5, Chromium 152, Firefox 140 ESR, banc isolé Core 2025.6.0 et 2026.11.3 ; aucun HA de production. |
 | Déploiement du mainteneur | HA Container géré par Dockge Enhanced, **non utilisé** ; aucune action distante de publication dans cette phase |
 | GitHub à la date de revue | Stable vérifiée sur le bon SHA, deux workflows verts sur ce SHA, une issue musique ouverte, aucune PR ouverte |
 
@@ -46,7 +48,7 @@
 | A7 — JSON refusant `unknown` | Corrigée en 3B.1, à valider | Aller-retour des options sur les deux Core ; aucune migration. |
 | A8 — compatibilité REST annoncée trop largement | Corrigée en documentation, à valider | `/streams` et `/servers` requis ; Tracearr 2.6.0 exclu, sans revendication de test runtime sur 2.7.0. |
 | A9 — clé révoquée non remplaçable en place | Corrigée en 3B.1, à valider | Réauthentification sur la même entrée vérifiée sur les deux Core ; interface réelle à vérifier. |
-| A10 — lecture périmée encore présentée comme active | Ouverte, potentiellement bloquante pour la publication | Panne complète confirmée ; arbitrer l’indication de péremption, le gel/reprise et les modes à vide, sans assimiler REST indisponible à SSE coupé. |
+| A10 — lecture périmée encore présentée comme active | Corrigée en 3B.2, à valider | Avertissement par source, gel et reprise sur snapshot fiable ; 2 Core et les deux navigateurs, dashboard réel encore à vérifier. |
 | A11 — débordement de badges | Corrigée et validée | 2E, matrice de largeurs, thèmes et moteurs. |
 | A12 — clavier dépendant du glissement souris | Corrigée et validée | 2E, flèches clavier en focus indépendantes du drag. |
 | A13 — exemple de compte individuel trompeur | Corrigée en documentation, à valider | Le moteur et le sélecteur utilisaient déjà `server_id:username` ; aucune réécriture YAML. |
@@ -54,6 +56,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite recommandée, sur autorisation : lot 4 sur un SHA identifié.** Rejouer la non-régression, obtenir HACS et hassfest sur ce SHA et faire une installation puis une mise à niveau HACS dans un HA jetable. Sur un vrai dashboard HA hors production : tester ressources storage/YAML, Sections, les deux cartes et leur éditeur, sauvegarde et relecture des options existantes, réauthentification FR/EN, sessions et coupures simulées, thèmes et clavier/tactile. Vérifier l’affichage réel de l’icône sans le confondre avec la validation HACS. Safari, longue durée, lecteurs physiques Plex/Jellyfin/Emby et proxy réel n’ont pas été éprouvés. Le lot 4 peut commencer sans correction d’A10, mais la décision d’acceptation ou de correction doit précéder la publication. Ne pas engager 6A/6B/6C.
+**Suite recommandée, sur autorisation : lot 4 sur un SHA identifié.** Rejouer la non-régression, obtenir HACS et hassfest sur ce SHA et faire une installation puis une mise à niveau HACS dans un HA jetable. Sur un vrai dashboard HA hors production : tester ressources storage/YAML, Sections, les deux cartes et leur éditeur, sauvegarde et relecture des options existantes, réauthentification FR/EN, sessions et coupures simulées (Tracearr et, séparément, le WS HA), thèmes et clavier/tactile. Vérifier l’affichage réel de l’icône sans le confondre avec la validation HACS. Safari, longue durée, lecteurs physiques Plex/Jellyfin/Emby et proxy réel n’ont pas été éprouvés. Ne pas engager 6A/6B/6C.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.

@@ -44,6 +44,89 @@ vm.runInNewContext(source, env);
 const Card = classes.get('tracearr-streams-card');
 assert.ok(Card, 'Lovelace custom element registered');
 
+test('A10 freezes the last displayed clocks only on complete outage and reanchors on recovery', () => {
+  for (const type of ['tracearr-streams-card', 'tracearr-stream-card']) {
+    const card = new (classes.get(type))();
+    time = 0;
+    card.isConnected = true;
+    card.setConfig({mode:'list', show_progress:true, show_end_time:true, show_remaining:true,
+      show_header:false, show_poster:false, show_avatar:false});
+    const stream = {id:'a',state:'playing',progress_ms:5000,duration_ms:120000,media_title:'Fixture'};
+    const entry = {id:'a', name:'Source A',streams:[stream]};
+    const publish = (connected, sse_connected, extra={}) => {
+      card._payload = {entries:[{...entry, connected, sse_connected,...extra}, {id:'b',connected:true}]};
+      card.render();
+      return card.shadowRoot.innerHTML;
+    };
+    publish(true,true);
+    assert.doesNotMatch(publish(false,true), /<[^>]*>Tracearr indisponible/);
+    assert.notEqual(card._tick,null);
+    assert.doesNotMatch(publish(true,false), /<[^>]*>Tracearr indisponible/);
+    for (let cycle=0; cycle<2; cycle++) {
+      const clock = card._positions.get('a');
+      const frozen = clock.lastRendered;
+      const html = publish(false,false);
+      assert.match(html,/Tracearr indisponible — données non actualisées.*Source A/);
+      assert.match(html,/Non actualisé/);
+      assert.doesNotMatch(html,/Fin à |En pause/);
+      assert.equal(card._tick,null);
+      time += 3000;
+      assert.equal(card._positionAt(card._positions.get('a')),frozen);
+      // HTTP success alone is insufficient if the streams snapshot was discarded.
+      assert.match(publish(true,false,{streams_stale:true}),/Tracearr indisponible — données non actualisées/);
+      assert.equal(card._positionAt(card._positions.get('a')),frozen);
+      assert.match(publish(false,false,{streams:[]}),/>Fixture</);
+      assert.equal(card._positions.size,1,'unconfirmed stop cannot retire the last known panel');
+      stream.progress_ms = cycle ? 40000 : 2000;
+      const recovered = publish(true,false,{streams_stale:false});
+      assert.match(recovered,/Fin à /);
+      assert.doesNotMatch(recovered,/Non actualisé/);
+      assert.equal(card._positions.get('a').lastRendered,stream.progress_ms);
+      assert.notEqual(card._tick,null);
+    }
+    stream.state = 'paused';
+    publish(true,true);
+    const paused = card._positions.get('a').lastRendered;
+    const stale = publish(false,false);
+    assert.match(stale,/En pause/);
+    assert.match(stale,/Non actualisé/);
+    time += 3000;
+    assert.equal(card._positionAt(card._positions.get('a')),paused);
+    assert.equal(card._tick,null);
+    entry.streams = [];
+    publish(true,false);
+    assert.equal(card._positions.size,0);
+    assert.equal(card._staleStreams,null);
+    card.disconnectedCallback();
+    assert.equal(card._tick,null);
+  }
+});
+
+test('A10 reports only the selected source even when empty, without overriding healthy empty modes', () => {
+  for (const type of ['tracearr-streams-card', 'tracearr-stream-card']) {
+    for (const empty_mode of ['hide','header_only','message']) {
+      const card = new (classes.get(type))();
+      card.isConnected = true;
+      const a = {id:'a',name:'Source A',connected:false,sse_connected:false,streams:[]};
+      const b = {id:'b',name:'Source B',connected:false,sse_connected:true,streams:[]};
+      card._payload = {entries:[a,b]};
+      card.setConfig({entry_id:'a',show_header:false,empty_mode,empty_message:'Aucun film'});
+      assert.notEqual(card.style.display,'none');
+      assert.match(card.shadowRoot.innerHTML,/role="status"[^>]*>Tracearr indisponible — données non actualisées.*Source A/);
+      assert.doesNotMatch(card.shadowRoot.innerHTML,/>Aucun film/);
+      card.setConfig({entry_id:'b',show_header:false,empty_mode,empty_message:'Aucun film'});
+      assert.doesNotMatch(card.shadowRoot.innerHTML,/>Tracearr indisponible/);
+      assert.equal(card.style.display === 'none',empty_mode === 'hide');
+      assert.equal(card.shadowRoot.innerHTML.includes('>Aucun film'),empty_mode === 'message');
+      // No HA payload is not evidence of a Tracearr outage.
+      card._payload = {entries:[]};
+      card.render();
+      assert.doesNotMatch(card.shadowRoot.innerHTML,/>Tracearr indisponible/);
+      card.disconnectedCallback();
+    }
+  }
+});
+
 function setup({count=3, visible=1, effect='none', duration=600}={}) {
   const card = new Card();
   const animations = [];

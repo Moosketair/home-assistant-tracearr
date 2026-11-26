@@ -10,12 +10,11 @@ Les phases 0 et 1.1 sont validées. **2A** est définitivement validée sur `942
 
 ## Ordre proposé après validation
 
-**3.1 clôturée** après le contre-audit 3.2 (validé avec réserve non bloquante) sur `fcd3c83`. **3B.1 livré localement** : A7 et A9 corrigées, A8/A13/A14 rectifiées dans les guides ou l’historique. A10 seule reste ouverte parmi les 14 anomalies ; voir [l’état de reprise](DEVELOPMENT_STATUS.md#état-des-14-anomalies-à-lentrée-du-lot-4).
+**3.1 clôturée** après le contre-audit 3.2 (validé avec réserve non bloquante) sur `fcd3c83`. **3B.1 validée** par le mainteneur : A7/A9 corrigées, A8/A13/A14 rectifiées dans les guides ou l’historique. **A10 corrigée en 3B.2** selon la décision du mainteneur : avertissement et gel par source sans données fiables, reprise uniquement sur un snapshot effectivement intégré. Ces corrections restent à confirmer au lot 4 ; voir [l’état de reprise](DEVELOPMENT_STATUS.md#état-des-14-anomalies-à-lentrée-du-lot-4).
 
 | Ordre | Lot proposé | Critère de sortie avant livraison |
 |---|---|---|
-| 4 | **Validation globale** : matrice Core minimum/stable, non-régression avec fixtures Plex/Jellyfin/Emby, installation/mise à niveau HACS et essai sur un vrai dashboard HA isolé. | Vérifier HACS et hassfest sur le SHA candidat ; vérifier les flows, options, ressources et cartes réels. Trancher A10 avant toute publication. |
-| À arbitrer | **A10 — données périmées** : convenir de l’indication « dernière lecture connue », des règles de gel et de reprise et du comportement à vide (`hide`, `header_only`, message). | Ne pas marquer périmé un flux encore alimenté par SSE sur une panne REST seule ; vérifier le mode REST seul sain, la panne des deux transports et la reprise. Accord requis avant modification de comportement. |
+| 4 | **Validation globale** : matrice Core minimum/stable, non-régression avec fixtures Plex/Jellyfin/Emby, installation/mise à niveau HACS et essai sur un vrai dashboard HA isolé. | Vérifier HACS et hassfest sur le SHA candidat ; vérifier les flows, options, ressources et cartes réels, dont A10 en panne complète et en reprise. |
 | Ultérieur | **Coût des dashboards** : étudier si nécessaire le trafic WS et les performances longue durée ; A5 est clôturée en 3.1. | Comparer abonnés, octets, temps de rendu et mémoire avant d’envisager d’autres optimisations. Pas de refonte globale sans mesures et tests d’équivalence. |
 | 6A | [**Affichage en pause et couleurs des badges du bandeau**](#lot-6a--affichage-en-pause-et-couleurs-des-badges) | Conserver les options de masquage et l’apparence des anciennes configurations par défaut. |
 | 6B | [**Badges techniques personnalisables**](#lot-6b--badges-techniques-personnalisables) : identité visuelle propre à Tracearr HA pour les panneaux de lecture. | Cinq styles avec aperçu dans l’éditeur ; rendu compact, lisible en thèmes clair et sombre ; style classique conservé par défaut. |

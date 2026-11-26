@@ -74,6 +74,7 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
         self.servers: dict[str, dict] = {}
         self.connected = False
         self.sse_connected = False
+        self._streams_reconciled = False
         self.last_sync: float | None = None
         self._sse_task: asyncio.Task | None = None
         self._poll_task: asyncio.Task | None = None
@@ -97,14 +98,24 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
                 # servers GET must not override that potentially newer response.
                 self._stream_changes = _RefreshChanges()
                 try:
-                    response = await self.client.streams()
-                    self._server_changes = _RefreshChanges()
-                    server_response = await self.client.servers()
-                    streams = {s["id"]: s for s in response.get("data", []) if isinstance(s, dict) and isinstance(s.get("id"), str)}
-                    servers = {s["server_id"]: s for s in server_response.get("data", []) if isinstance(s, dict) and isinstance(s.get("server_id"), str)}
+                    try:
+                        response = await self.client.streams()
+                        self._server_changes = _RefreshChanges()
+                        server_response = await self.client.servers()
+                    except ValueError:
+                        raise TracearrUnavailable("Invalid Tracearr JSON snapshot") from None
+                    stream_rows, server_rows = response.get("data"), server_response.get("data")
+                    if not isinstance(stream_rows, list) or not isinstance(server_rows, list):
+                        raise TracearrUnavailable("Invalid Tracearr snapshot envelope")
+                    if any(not isinstance(s, dict) or not isinstance(s.get("id"), str) or not s["id"]
+                           for s in stream_rows):
+                        raise TracearrUnavailable("Invalid Tracearr stream identity")
+                    streams = {s["id"]: s for s in stream_rows}
+                    servers = {s["server_id"]: s for s in server_rows if isinstance(s, dict) and isinstance(s.get("server_id"), str)}
                     # No await from reconciliation through HA's publication.
                     self.streams = self._stream_changes.merge(streams, self.streams)
                     self.servers = self._server_changes.merge(servers, self.servers)
+                    self._streams_reconciled = not self._stream_changes.overflow
                     self.connected = True
                     self.last_sync = time.time()
                     return self.snapshot()
@@ -112,7 +123,7 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
                     self._stream_changes = self._server_changes = None
         except (TracearrUnavailable, TracearrAuthError) as exc:
             self.connected = False
-            # HA retains the existing data on UpdateFailed, but listeners must
+            # HA retains the existing data on managed failures, but listeners must
             # see REST connectivity change alongside the still-live cache.
             self.data = self.snapshot()
             if isinstance(exc, TracearrAuthError):
@@ -128,6 +139,7 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
             "stats": stats(self.streams),
             "connected": self.connected,
             "sse_connected": self.sse_connected,
+            "streams_stale": not self.sse_connected and (not self.connected or not self._streams_reconciled),
             "last_sync": self.last_sync,
         }
 
@@ -172,7 +184,7 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
             ready_serial = self._ready_serial
             await self.async_refresh()
             if (self._sse_ready and not self.sse_connected and ready_serial == self._ready_serial
-                    and self.connected and self.last_update_success):
+                    and self.connected and self.last_update_success and self._streams_reconciled):
                 # Confirm an unconfirmed connection after a successful catch-up.
                 # A REST failure cannot clear an already confirmed SSE transport.
                 self.sse_connected = True

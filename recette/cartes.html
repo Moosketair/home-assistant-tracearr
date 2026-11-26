@@ -447,6 +447,99 @@
     node.remove();
     return {ok:results.every(r => r.ok) && reordered.ok,results,reordered};
   }
+  async function probeOutage(preview=false) {
+    card.remove();
+    host.style.width = "320px";
+    const [a,b] = entry.streams.slice(0,2).map((s,i) => ({
+      ...s, progress_ms:5000, state:i ? "paused" : "playing",
+    }));
+    const primary = {...entry, name:"Source A", sse_connected:true, streams:[a,b]};
+    const secondary = {...entry, id:"other", name:"Source B", sse_connected:true, streams:[a]};
+    let now = 0, active = 0;
+    const mount = (type, id, options) => {
+      const node = host.appendChild(document.createElement(`tracearr-${type}-card`));
+      node._now = () => now;
+      node.setConfig({entry_id:id,show_progress:true,show_remaining:true,show_end_time:true,
+        show_avatar:false,show_poster:false,header_show_bandwidth:true,carousel_autoplay:false,...options});
+      let push;
+      const conn = {subscribeMessage:async fn => {push=fn; active++; return () => active--;}};
+      node.hass = {connection:conn};
+      return {node,push,find:q => node.shadowRoot.querySelector(q)};
+    };
+    const group = mount("streams", primary.id, {mode:"carousel",carousel_visible:1,carousel_transition:"none",
+      header_metric_settings:{streams:{blink_positive:true}}});
+    const single = mount("stream", primary.id, {show_header:false});
+    const other = preview ? null : mount("stream", secondary.id, {show_header:false});
+    const publish = (rest, sse, extra={}) => {
+      const message = {entries:[{...primary,connected:rest,sse_connected:sse,...extra},secondary]};
+      for (const target of [group,single,other]) target?.push(message);
+    };
+    publish(true,true);
+    if (preview) {
+      group.find('[data-step="1"]').click();
+      publish(false,false);
+      return {ok:[group,single].every(target => target.find(".time-end")?.textContent === "Non actualisé")};
+    }
+    await frame();
+    const liveFill = getComputedStyle(single.find(".fill")).backgroundColor;
+    const track = group.find(".carousel");
+    const badge = group.find(".blink-positive"), pulse = badge?.getAnimations()[0];
+    const liveBadge = getComputedStyle(badge).backgroundColor;
+    const next = group.find('[data-step="1"]');
+    next.click();
+    await frame();
+    const index = group.node._carouselIndex, offset = track.scrollLeft;
+    const text = (target, q) => target.find(q)?.textContent || "";
+    const read = target => ({
+      alert:text(target, ".availability-status"), elapsed:text(target, ".time-current"),
+      remaining:text(target, ".time-remaining"), end:text(target, ".time-end"),
+      panels:[...target.node.shadowRoot.querySelectorAll(".stream")].map(panel => panel.dataset.session),
+      fill:target.find(".fill") && getComputedStyle(target.find(".fill")).backgroundColor,
+      overflow:target.find(".availability-status") ?
+        target.find(".availability-status").scrollWidth > target.find(".availability-status").clientWidth : null,
+    });
+    publish(false,true);
+    const sseOnly = !read(single).alert && single.node._tick !== null;
+    publish(true,false);
+    const restOnly = !read(single).alert && single.node._tick !== null;
+    publish(false,false);
+    await frame();
+    const stale = [read(group),read(single)];
+    const staleBadge = getComputedStyle(badge).backgroundColor !== liveBadge;
+    now = 3000;
+    [group,single,other].forEach(target => target.node._updateProgress());
+    const frozen = JSON.stringify(stale) === JSON.stringify([read(group),read(single)]) &&
+      [group,single].every(target => target.node._tick === null);
+    const pause = group.find(`[data-session="${b.id}"] .time-paused`)?.textContent === "En pause" &&
+      !single.find(".time-paused");
+    const isolated = !read(other).alert && read(other).elapsed === "0:08" && other.node._tick !== null;
+    publish(true,false,{streams_stale:true, streams:[]}); // failed catch-up; unconfirmed deltas are not a full list
+    const pending = JSON.stringify(stale) === JSON.stringify([read(group),read(single)]);
+    const anchor = group.find(".carousel") === track && offset > 0 && track.scrollLeft === offset &&
+      index === group.node._carouselIndex && badge === group.find(".blink-positive") && pulse === badge?.getAnimations()[0];
+    publish(true,false,{streams:[{...a,progress_ms:2000},b]});
+    const resumed = [group,single].every(target => !read(target).alert && read(target).elapsed === "0:02" &&
+      read(target).end.startsWith("Fin à ") && read(target).fill === liveFill);
+    publish(false,false);
+    publish(true,false,{streams:[]});
+    const stopped = [group,single].every(target => !target.find(".stream") &&
+      target.node._positions.size === 0 && target.node._staleStreams === null);
+    publish(false,false,{streams:[]});
+    const empty = ["hide","header_only","message"].every(empty_mode => {
+      for (const target of [group,single]) target.node.setConfig({entry_id:primary.id,show_header:false,empty_mode});
+      return [group,single].every(target => target.node.style.display !== "none" &&
+        !!text(target,".availability-status") && !target.find(".empty-message") && !target.find(".head"));
+    });
+    for (const target of [group,single,other]) target.node.remove();
+    const cleanup = active === 0 && [group,single,other].every(({node}) =>
+      node._positions.size === 0 && node._staleStreams === null && node._tick === null && node._carouselTimer === null);
+    return {ok:sseOnly && restOnly && stale.every(row => row.alert.endsWith("Source A") &&
+        row.end === "Non actualisé" && row.elapsed === "0:05" && row.remaining === "-1:55" &&
+        row.fill === "rgb(128, 128, 128)" && !row.overflow) &&
+        frozen && pause && isolated && pending && anchor && staleBadge && resumed && stopped && empty && cleanup,
+      theme:matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light", width:320,
+      stale,sseOnly,restOnly,frozen,pause,isolated,pending,anchor,staleBadge,resumed,stopped,empty,cleanup};
+  }
   async function measureMatrix() {
     for (const label of [false,true]) {
       longLabel = label; configure();
@@ -474,8 +567,9 @@
     el("result").textContent = JSON.stringify({ok:cases.every(row => row.ok),
       theme:matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light", cases}, null, 2);
   }
-  if (params.has("responsive") || params.has("lifecycle") || params.has("blink")) {
-    const probe = params.has("responsive") ? probeResponsive : params.has("lifecycle") ? probeLifecycle : probeBlink;
+  if (["outage","outage-preview","responsive","lifecycle","blink"].some(param => params.has(param))) {
+    const probe = params.has("outage") || params.has("outage-preview") ? () => probeOutage(params.has("outage-preview")) :
+      params.has("responsive") ? probeResponsive : params.has("lifecycle") ? probeLifecycle : probeBlink;
     probe().then(report => { el("result").textContent = JSON.stringify(report, null, 2); })
       .catch(error => { el("result").textContent = JSON.stringify({ok:false,error:String(error),stack:error.stack}); });
   } else if (!params.has("lan-wan") && !params.has("visual")) {

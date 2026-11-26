@@ -154,6 +154,9 @@
       color:var(--primary-text-color,#fff); height:100%; min-height:0; box-sizing:border-box; }
     .root { padding:14px; min-width:0; height:100%; box-sizing:border-box;
       overflow-y:auto; overflow-x:hidden; scrollbar-width:thin; }
+    .availability-status:not(:empty) { margin:0 0 10px; padding:6px 9px; border-radius:7px;
+      background:#fff1db; color:#843900; border-inline-start:3px solid #cc6800;
+      font-size:calc(var(--tr-font-size)*.88); font-weight:700; overflow-wrap:anywhere; }
     .head { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px;
       margin:0 0 12px; color:var(--primary-text-color,#fff); }
     .head h3 { flex:0 1 auto; margin:0; font-size:calc(var(--tr-font-size)*1.24); font-weight:700;
@@ -172,6 +175,8 @@
     .metric { display:inline-flex; align-items:center; gap:4px; padding:4px 9px; border-radius:20px;
       font-size:calc(var(--tr-font-size)*.80); font-weight:600; background:var(--pill-bg);
       color:var(--pill-text); box-sizing:border-box; min-width:0; max-width:100%; }
+    .root[data-stale] .metric:not([data-badge^="entity:"]) {
+      color:var(--primary-text-color,#fff); background:color-mix(in srgb,currentColor 14%,transparent); }
     .metric-text { min-width:0; overflow-wrap:anywhere; }
     .metric ha-icon { --mdc-icon-size:16px; flex:none; width:16px; height:16px; display:inline-flex; }
     .metric.blink-positive { animation:tracearr-badge-pulse var(--badge-blink,2s) ease-in-out infinite; }
@@ -241,6 +246,8 @@
       background:color-mix(in srgb,var(--shared-accent) 24%,transparent); }
     .fill { display:block; height:100%; background:var(--shared-accent);
       border-radius:7px; transition:width .3s linear; }
+    .root[data-stale] .progress { background:color-mix(in srgb,currentColor 14%,transparent); }
+    .root[data-stale] .fill { background:#808080; transition:none; }
     .times { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:5px 8px;
       font-size:calc(var(--tr-font-size)*.82); font-variant-numeric:tabular-nums; }
     /* Read elapsed / remaining as one unit; predicted end stays at the right. */
@@ -378,6 +385,7 @@
       this._headerResize = null;
       this._headerFrame = null;
       this._entryId = null;
+      this._staleStreams = null;
     }
     static getStubConfig() { return {...DEFAULTS}; }
     static getConfigElement() { return document.createElement("tracearr-card-editor"); }
@@ -398,7 +406,7 @@
       // Updating only the header prevents unrelated sensor changes from resetting
       // the carousel animation, scroll position or playback clocks.
       if (this._config.header_entity_badges?.length && this._renderFingerprint !== null &&
-          this.shadowRoot?.querySelector("ha-card")) this._refreshHeader(this._streams(this._entryData()));
+          this.shadowRoot?.querySelector("ha-card")) this._refreshHeader(this._streams(this._displayEntry(this._entryData())));
     }
     connectedCallback() {
       this.render();
@@ -422,6 +430,7 @@
       this.shadowRoot.innerHTML = "";
     }
     _resetStreamState() {
+      this._staleStreams = null;
       this._positions.clear();
       this._liveFingerprints.clear();
       this._images.clear();
@@ -470,8 +479,8 @@
       return {columns:12, min_columns:3, max_columns:12,
         rows:4, min_rows:2, max_rows:30};
     }
-    _setTimers(streams) {
-      const running = this.isConnected && (this._config.show_progress || this._config.show_end_time) &&
+    _setTimers(streams, stale=false) {
+      const running = !stale && this.isConnected && (this._config.show_progress || this._config.show_end_time) &&
         streams.some(s => s.state === "playing" && Number(s.duration_ms) > 0);
       if (running && this._tick === null) this._tick = setInterval(() => this._updateProgress(), 250);
       else if (!running && this._tick !== null) {
@@ -498,6 +507,23 @@
     _entryData() {
       const all = this._payload?.entries || [];
       return all.find(e => e.id === this._config.entry_id) || all[0] || null;
+    }
+    _streamsStale(entry) {
+      return entry?.streams_stale ?? (entry?.connected === false && entry?.sse_connected === false);
+    }
+    _displayEntry(entry) {
+      return this._staleStreams === null ? entry : {...entry, streams:this._staleStreams};
+    }
+    _availabilityText(entry, stale) {
+      return stale ? `Tracearr indisponible — données non actualisées${entry?.name ? ` · ${entry.name}` : ""}` : "";
+    }
+    _refreshAvailability(entry, stale) {
+      const root = this.shadowRoot.querySelector(".root");
+      const status = root?.querySelector(".availability-status");
+      if (!status) return;
+      root.toggleAttribute("data-stale",stale);
+      const text = this._availabilityText(entry,stale);
+      if (status.textContent !== text) status.textContent = text;
     }
     _mapping(entry, field) { return {...asMapping(entry?.[field]), ...asMapping(this._config[field])}; }
     _key(s) { return `${s.server_type}:${s.username}`; }
@@ -623,7 +649,7 @@
       const timer = setTimeout(() => {
         this._imageRetryTimers.delete(path);
         if (!this.isConnected) return;
-        const currentEntry = this._entryData();
+        const currentEntry = this._displayEntry(this._entryData());
         const current = currentEntry?.id === entry.id &&
           this._streams(currentEntry).find(item => String(item.id) === String(stream.id));
         if (!current || !(kind === "poster" ? (this._config.show_poster || this._config.stream_surface === "blur") : this._config.show_avatar)) return;
@@ -638,7 +664,7 @@
       const kind = img?.getAttribute?.("data-kind");
       if (kind !== "poster" && kind !== "avatar") return;
       const sessionId = img.closest?.(".stream")?.dataset?.session;
-      const entry = this._entryData();
+      const entry = this._displayEntry(this._entryData());
       const stream = entry?.streams?.find(s => String(s.id) === sessionId);
       if (!stream) return;
       const path = this._artworkPath(entry,stream,kind);
@@ -662,7 +688,7 @@
       const kind = img?.getAttribute?.("data-kind");
       if (kind !== "poster" && kind !== "avatar") return;
       const sessionId = img.closest?.(".stream")?.dataset?.session;
-      const entry = this._entryData();
+      const entry = this._displayEntry(this._entryData());
       const stream = entry?.streams?.find(s => String(s.id) === sessionId);
       if (!stream) return;
       const path = this._artworkPath(entry,stream,kind);
@@ -891,10 +917,10 @@
     _now() { return performance.now(); }
     _positionAt(clock, now=this._now()) {
       if (!clock) return 0;
-      const delta = clock.state === "playing" ? Math.max(0, now - clock.at) : 0;
+      const delta = !clock.stale && clock.state === "playing" ? Math.max(0, now - clock.at) : 0;
       return clock.duration > 0 ? Math.min(clock.duration, clock.progress + delta) : clock.progress + delta;
     }
-    _syncPosition(stream, now=this._now()) {
+    _syncPosition(stream, now=this._now(), stale=false) {
       const id = stream.id;
       const duration = Math.max(0, Number(stream.duration_ms) || 0);
       const source = Math.max(0, Math.min(duration || Infinity, Number(stream.progress_ms) || 0));
@@ -902,11 +928,19 @@
       // Session IDs can be reused; do not preserve an old film's clock.
       const media = [stream.started_at || "", stream.media_id || stream.rating_key || stream.media_title || ""].join("|");
       const old = this._positions.get(id);
-      if (!old || old.media !== media || (old.duration && duration && Math.abs(old.duration-duration) > 10000)) {
-        const fresh = {progress:source, at:now, duration, state, media,
+      if (!old || old.media !== media || (!stale && (old.stale ||
+          (old.duration && duration && Math.abs(old.duration-duration) > 10000)))) {
+        const fresh = {progress:source, at:now, duration, state, media, stale,
           lastRaw:source, lastRawAt:now, lastRendered:source};
         this._positions.set(id, fresh);
         return fresh;
+      }
+      if (stale) {
+        // Freeze the number the viewer actually saw, not an extrapolation
+        // since the last paint or a partial sample from an unconfirmed SSE.
+        old.progress = old.lastRendered;
+        old.stale = true;
+        return old;
       }
       const predicted = this._positionAt(old, now);
       const sinceRaw = Math.max(0, now - old.lastRawAt);
@@ -947,12 +981,14 @@
       const avatar = c.show_avatar ? this._image(entry,s,"avatar") : "";
       const name = this._name(entry,s);
       const mediaMarkup = this._mediaMarkup(s);
-      const clock = this._syncPosition(s);
+      const stale = this._streamsStale(entry);
+      const clock = this._syncPosition(s, undefined, stale);
       const displayPosition = Math.max(clock.lastRendered, this._positionAt(clock));
       const ratio = clock.duration > 0 ? 100 * Math.min(1, displayPosition / clock.duration) : 0;
       const timePair = playbackSeconds(displayPosition, clock.duration);
-      const endLabel = c.show_end_time && clock.state === "playing" && clock.duration > 0 ?
-        `<span class="time-end" data-id="${E(s.id)}">Fin à ${E(estimatedEnd(clock,displayPosition,Date.now()))}</span>` : "";
+      const endLabel = c.show_end_time && clock.duration > 0 ?
+        (stale ? `<span class="time-end">Non actualisé</span>` : clock.state === "playing" ?
+          `<span class="time-end" data-id="${E(s.id)}">Fin à ${E(estimatedEnd(clock,displayPosition,Date.now()))}</span>` : "") : "";
       const paused = s.state === "paused";
       const metaByKey = {};
       if (c.show_health && entry?.servers?.find(server => server.server_id === s.server_id)?.status === "down") metaByKey.health = (`<span class="chip warn">Serveur hors ligne</span>`);
@@ -1156,7 +1192,8 @@
     _liveSnapshot(stream, entry) {
       const {progress_ms, ...rest} = stream;
       return JSON.stringify({rest,health:entry?.servers?.find(x => x.server_id === stream.server_id)?.status,
-        showBitrate:this._config.show_bitrate && this._scopedBitrate(stream) !== null});
+         showBitrate:this._config.show_bitrate && this._scopedBitrate(stream) !== null,
+         stale:this._streamsStale(entry)});
     }
     _refreshHeader(streams) {
       const header = this._header(streams);
@@ -1168,7 +1205,11 @@
         template.innerHTML = header;
         layoutChanged = this._patchHeader(oldHeader, template.content.firstElementChild);
       } else if (oldHeader && !header) oldHeader.remove();
-      else if (header) this.shadowRoot.querySelector(".root")?.insertAdjacentHTML("afterbegin", header);
+      else if (header) {
+        const status = this.shadowRoot.querySelector(".availability-status");
+        if (status) status.insertAdjacentHTML("afterend", header);
+        else this.shadowRoot.querySelector(".root")?.insertAdjacentHTML("afterbegin", header);
+      }
       this._headerMarkup = header;
       if (layoutChanged) this._observeHeaderLayout();
     }
@@ -1314,16 +1355,21 @@
     }
 
     render() {
-      const entry = this._entryData();
+      let entry = this._entryData();
       const c = this._config;
       if (!this.shadowRoot) return;
-      const streams = this._streams(entry);
+      const stale = this._streamsStale(entry);
       const entryId = entry?.id ?? null;
       if (this._entryId !== entryId) {
         this._resetStreamState();
         this._entryId = entryId;
         this._renderFingerprint = null;
       }
+      // An unconfirmed reconnect can deliver deltas, not a complete list.
+      // Keep the last known panels until a reliable snapshot can replace them.
+      this._staleStreams = stale ? this._staleStreams ?? [...(entry.streams || [])] : null;
+      entry = this._displayEntry(entry);
+      const streams = this._streams(entry);
       this._pruneArtwork(entry, streams);
       // Keep a stable carousel shell while live SSE properties change. The
       // original full DOM rebuild used to teleport the slider without any
@@ -1339,7 +1385,7 @@
           streams.map(s => this._scopedBitrate(s) !== null) : undefined,
         aliases: entry?.aliases,
         avatars: entry?.avatars,
-        connected: entry?.connected,
+        stale: c.mode === "carousel" && streams.length ? undefined : stale,
       });
       // Refresh each stream's clock even if the rest of the card is unchanged.
       // Crucially, do NOT reset its anchor on every incoming SSE progress event.
@@ -1350,12 +1396,13 @@
       const visibleIds = new Set(streams.map(stream => stream.id));
       for (const id of this._positions.keys()) {
         if (!active.has(id)) this._positions.delete(id);
-        else if (!visibleIds.has(id)) this._syncPosition(active.get(id), now);
+        else if (!visibleIds.has(id)) this._syncPosition(active.get(id), now, stale);
       }
-      for (const stream of streams) this._syncPosition(stream, now);
-      this._setTimers(streams);
+      for (const stream of streams) this._syncPosition(stream, now, stale);
+      this._setTimers(streams, stale);
       if (fingerprint === this._renderFingerprint && this.shadowRoot.querySelector("ha-card")) {
         if (c.mode === "carousel") this._updateCarouselLive(entry, streams);
+        this._refreshAvailability(entry, stale);
         this._updateProgress();
         return;
       }
@@ -1364,7 +1411,7 @@
       const oldScroll = carousel?.scrollLeft || 0;
       const previousAnchor = carousel?.querySelectorAll(".stream")?.[this._carouselIndex]?.dataset?.session;
       this._stopCarouselAnimation();
-      if (c.empty_mode === "hide" && !streams.length) {
+      if (!stale && c.empty_mode === "hide" && !streams.length) {
         this.shadowRoot.innerHTML = `<style>${style}</style>`;
         this._headerMarkup = "";
         this._liveFingerprints.clear();
@@ -1381,8 +1428,8 @@
       // Always conceal the native scrollbar; navigation remains via buttons,
       // touch swipe, optional mouse drag and keyboard arrow keys.
       const classes = `streams ${E(c.mode)}`;
-      const emptyText = entry && !entry.connected ? "Tracearr indisponible" : String(c.empty_message ?? "Aucune lecture en cours");
-      const body = !streams.length && c.empty_mode === "header_only" ? "" :
+      const emptyText = String(c.empty_message ?? "Aucune lecture en cours");
+      const body = !streams.length && (stale || c.empty_mode === "header_only") ? "" :
         `<div class="${classes}" ${c.mode === "carousel" ? `tabindex="0" role="region" aria-label="Lectures en carrousel"` : ""} style="--carousel-visible:${visible}">${items || `<div class="empty-message">${E(emptyText)}</div>`}</div>`;
       const nav = c.mode === "carousel" && c.carousel_show_arrows && streams.length > 1 ? `<div class="carousel-nav"><button class="nav" data-step="-1" aria-label="Précédent">❮</button><span>${streams.length} lectures</span><button class="nav" data-step="1" aria-label="Suivant">❯</button></div>` : "";
       const shell = this.shadowRoot.querySelector("ha-card");
@@ -1400,9 +1447,11 @@
         root.insertAdjacentHTML("beforeend",body + nav);
       } else {
         this._headerMarkup = this._header(streams);
-        this.shadowRoot.innerHTML = `<style>${style}</style><ha-card style="${shellStyle}"><div class="${rootClasses}">${this._headerMarkup}${body}${nav}</div></ha-card>`;
+        const status = this._availabilityText(entry,stale);
+        this.shadowRoot.innerHTML = `<style>${style}</style><ha-card style="${shellStyle}"><div class="${rootClasses}"${stale ? " data-stale" : ""}><div class="availability-status" role="status">${E(status)}</div>${this._headerMarkup}${body}${nav}</div></ha-card>`;
         this._observeHeaderLayout();
       }
+      this._refreshAvailability(entry, stale);
       const newCarousel = this.shadowRoot.querySelector(".streams.carousel");
       if (newCarousel) {
         const cards = [...newCarousel.querySelectorAll(".stream")];

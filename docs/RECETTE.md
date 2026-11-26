@@ -267,6 +267,20 @@ Les validations officielles 0 à 2E restent acquises ; seules les non-régressio
 
 Les preuves des lots 0 à 3.2 restent acquises. Pas de campagne globale, d’installation HACS ni d’essai sur un vrai dashboard ; voir la [préparation du lot 4](DEVELOPMENT_STATUS.md#état-des-14-anomalies-à-lentrée-du-lot-4).
 
+### 3B.2 — indisponibilité des lectures (A10)
+
+**Avant (`112ce00`).** La sonde 3B.1 est reproduite : 5 → 8 s en 3 s sur les deux types de cartes, sans avertissement et avec « Fin à … ». Les deux tests Node A10 échouent sur le parent ; `?outage` à 320 px renvoie `ok:false` en clair sous Chromium et Firefox. Sur chacun des deux Core, le parent confirme à tort un SSE après saturation du rattrapage et considère un objet JSON sans tableau `data` comme un succès.
+
+**Après.** À 320 px, le film en lecture reste à 0:05 / −1:55, la vraie pause reste visible, l’heure de fin cède la place à « Non actualisé », et la barre est grise. L’avertissement orange nomme la source, précède les compteurs et débits désaturés et reste visible à vide même sans en-tête. Une carte ciblant une autre entrée continue à 0:08 au même instant. Les deltas non confirmés ne retirent pas les panneaux ; un échantillon fiable à 0:02 recale la lecture et recalcule la fin. Un snapshot fiable vide retire la session et son horloge. Les coupures successives puis le démontage ne laissent pas de tick, d’état figé ou d’abonnement superflu. L’ancre et le cycle du badge de carrousel restent en place.
+
+| Contrôle exécuté | Résultat |
+|---|---|
+| `node --check …/tracearr-card.js`, `node --test tests/test_carousel.cjs` (Node 22.23.5) | Syntaxe valide, 81 réussites, dont les deux scénarios A10. |
+| Venv isolés avec les versions épinglées du banc ; `pytest -p no:cacheprovider -c recette/pytest.ini -q recette -k 'spec_race or spec_transport or spec_reauth or internal_sse_failure'` | 44 réussites par Core 2025.6.0 / Python 3.13.18 et Core 2026.11.3 / Python 3.14.10, 62 désélectionnés ; avertissements du banc et des dépendances. Transitions REST/SSE et WS HA, rattrapage saturé, snapshot incomplet/invalide, arrêt réel manqué puis retrouvé, réconciliation et réauthentification. |
+| `recette/cartes.html?outage`, `?blink`, `?lifecycle`, `?responsive`, `?lan-wan` | Cinq sondes vertes sous Chromium 152.0.7977.82 et Firefox 140.15.0esr, dans les deux thèmes ; 78 mesures responsive par combinaison. `?outage-preview&visual` montre les deux cartes figées pour les captures. |
+
+Les validations antérieures restent acquises ; la campagne globale n’a pas été relancée. Le banc ne vérifie ni l’installation HACS ni le shell d’un vrai dashboard HA. La détection dépend des échecs/confirmations des producteurs, pas du silence SSE ; aucun nouvel indicateur pour une perte du WebSocket HA lui-même, qui reste distincte d’une panne Tracearr.
+
 ## Recette visuelle légère
 
 `recette/cartes.html` monte le JS distribué, avec une source WS de carte synthétique. Les métriques sont mesurées sur les éléments réels du Shadow DOM. Sous Chromium (152.0.7977.82 pendant la validation) :
