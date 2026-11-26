@@ -46,6 +46,139 @@ vm.runInNewContext(source, env);
 const Card = classes.get('tracearr-streams-card');
 assert.ok(Card, 'Lovelace custom element registered');
 
+function technicalPanel(config, stream={}, type='tracearr-streams-card') {
+  const card = new (classes.get(type))();
+  card.setConfig({show_server:false,show_device:false,show_poster:false,show_avatar:false,
+    show_codecs:true,...config});
+  const html = card._streamCard({}, {id:'technical',state:'paused',...stream});
+  return html.match(/<div class="meta">.*<\/div>(?=\s*<\/div>)/)?.[0] || '';
+}
+
+const techFixture = {
+  resolution:'4K',source_video_width:3840,source_video_height:2160,
+  source_video_details:{dynamicRange:'HDR10+'},source_video_codec:'HEVC',
+  source_audio_codec:'truehd',source_audio_details:{atmos:true},source_audio_channels:8,
+  transcode_info:{sourceContainer:'mkv',streamContainer:'mp4'},is_transcode:true,
+  video_decision:'transcode',audio_decision:'copy',
+  stream_video_codec:'h264',stream_video_codec_display:'H.264',stream_audio_codec_display:'TrueHD',
+  stream_video_details:{width:1920,height:1080},
+};
+
+test('6B classic preserves the exact footer markup and historical ordering', () => {
+  const config = {show_bitrate:true,footer_field_order:'codecs,bitrate,quality'};
+  const stream = {...techFixture,bitrate:4500};
+  const expected = '<div class="meta"><span>H.264 / TrueHD</span><span aria-hidden="true">·</span><span class="chip">4.5 Mb/s</span><span aria-hidden="true">·</span><span class="chip">4K</span></div>';
+  assert.equal(technicalPanel(config,stream),expected);
+  assert.equal(technicalPanel({...config,technical_badge_style:'classic',technical_badge_layout:'compact'},stream,
+    'tracearr-stream-card'),expected);
+  assert.equal(technicalPanel({show_quality:false,show_codecs:false},stream),'');
+});
+
+test('6B four enhanced styles share the same formats and only Technical shows available details', () => {
+  for (const style of ['premium','cinema','minimal','technical']) {
+    const html = technicalPanel({technical_badge_style:style},techFixture);
+    assert.match(html,new RegExp(`technical tech-${style}`));
+    for (const label of ['4K','HDR10\\+','H\\.264','ATMOS','TRUEHD','7\\.1','MKV']) assert.match(html,new RegExp(`>${label}</strong>`));
+    assert.equal(html.includes('<span class="tech-detail">3840 × 2160'),style==='technical');
+    assert.doesNotMatch(html,/data-tech="bitrate"|<span class="tech-detail"><\/span>/);
+  }
+});
+
+test('6B matches explicit premium formats only; unknown text is neutral and escaped', () => {
+  const config = {technical_badge_style:'premium'};
+  for (const codec of ['TRUEHD','E-AC-3','DTS']) {
+    const html = technicalPanel(config,{resolution:'4K',source_video_codec:'HEVC',
+      source_video_details:{dynamicRange:'HDR'},source_audio_codec:codec});
+    assert.match(html,/>HDR<\/strong>/);
+    assert.doesNotMatch(html,/ATMOS|DTS:X|Dolby Vision|HDR10|data-tech="audio_format"/);
+  }
+  const html = technicalPanel(config,{source_audio_codec:'DTS',source_audio_details:{profile:'DTS:X'},
+    source_video_details:{dynamicRange:'Dolby Vision'},source_video_codec:'<img onerror="x">'});
+  assert.match(html,/>DTS:X<\/strong>/);
+  assert.match(html,/>DV<\/strong>/);
+  assert.match(html,/--tech-color:#8894a3[^>]*><span class="tech-part"><strong>&lt;img onerror=&quot;x&quot;&gt;/);
+  assert.doesNotMatch(html,/<img/);
+  assert.equal(technicalPanel(config,{stream_video_codec:'*',source_audio_channels:0,source_video_details:{dynamicRange:'Unknown'}}),'');
+});
+
+test('6B scopes colors to known format IDs and retains them when disabled', () => {
+  const card = new Card();
+  const config = {technical_badge_style:'cinema',technical_badge_custom_colors:{'4k':'#FFFFFF',hdr10plus:'red',hevc:'#ff0000;border:0',bogus:'#222222'}};
+  card.setConfig(config);
+  assert.deepEqual(JSON.parse(JSON.stringify(card._config.technical_badge_custom_colors)),{'4k':'#ffffff'});
+  assert.match(technicalPanel(config,techFixture),/--tech-color:#ffffff;--tech-contrast:#000000/);
+  const disabled = {...config,technical_badge_colors:false};
+  assert.doesNotMatch(technicalPanel(disabled,techFixture),/--tech-color:#ffffff/);
+  card.setConfig(disabled);
+  assert.equal(card._config.technical_badge_custom_colors['4k'],'#ffffff');
+  assert.match(technicalPanel({...config,technical_badge_custom_colors:{}},techFixture),/--tech-color:#dcab40/);
+  const compare = technicalPanel({...config,technical_transcode_mode:'source_to_destination',
+    technical_badge_custom_colors:{'4k':'#ffffff','1080p':'#000000'}},techFixture);
+  assert.match(compare,/--tech-color:#ffffff;--tech-contrast:#000000".*<strong>4K<.*→.*--tech-color:#000000;--tech-contrast:#FFFFFF".*<strong>1080p</);
+});
+
+test('6B category switches inherit the old toggles and layouts omit empty groups', () => {
+  const config = {technical_badge_style:'premium',technical_badge_order:'container,channels,video_codec,resolution',
+    show_codecs:false,show_quality:false,technical_badge_visibility:{video_codec:true,hdr:false,audio_format:false}};
+  const compact = technicalPanel(config,techFixture);
+  assert.match(compact,/data-layout="compact".*data-tech="container".*data-tech="channels".*data-tech="video_codec"/);
+  assert.doesNotMatch(compact,/data-tech-group|data-tech="resolution"|data-tech="audio_codec"|data-tech="hdr"/);
+  const separate = technicalPanel({...config,technical_badge_layout:'separate',
+    technical_badge_visibility:{...config.technical_badge_visibility,channels:false}},techFixture);
+  assert.match(separate,/data-layout="separate".*data-tech-group="general".*data-tech-group="video"/);
+  assert.doesNotMatch(separate,/data-tech-group="audio"/);
+});
+
+test('6B transcodes compare confirmed output and distinguish unknown destinations visibly', () => {
+  const config = {technical_badge_style:'technical',technical_transcode_mode:'source_to_destination'};
+  const stream = {...techFixture,audio_decision:'transcode',stream_audio_codec:'eac3',
+    stream_audio_details:{channels:6},stream_video_details:{...techFixture.stream_video_details,dynamicRange:'SDR'}};
+  const comparison = technicalPanel(config,stream);
+  assert.match(comparison,/Full HD.*<strong>4K<\/strong>.*→.*<strong>1080p<\/strong>/);
+  assert.match(comparison,/Dolby TrueHD → Dolby Digital Plus/);
+  assert.match(comparison,/Surround 7\.1 → Surround 5\.1/);
+  assert.match(comparison,/Matroska → MPEG-4 Part 14/);
+  assert.match(comparison,/HDR10\+ \(source ; destination inconnue\)/);
+  assert.match(comparison,/Dolby Atmos \(source ; destination inconnue\)/);
+  assert.doesNotMatch(comparison,/>SDR<\/strong>|→\s*<\/strong>/);
+  const destination = technicalPanel({...config,technical_transcode_mode:'destination'},stream);
+  assert.doesNotMatch(destination,/→|<strong>4K|<strong>TRUEHD|<strong>7\.1|<strong>MKV/);
+  assert.match(destination,/<strong>1080p<.*<strong>E-AC-3<.*<strong>5\.1</);
+  for (const server_type of ['plex','jellyfin','emby']) {
+    const equal = technicalPanel(config,{...stream,server_type,stream_video_codec:'h265',
+      stream_audio_codec:'truehd',stream_video_details:null,stream_audio_details:{channels:8},transcode_info:null});
+    assert.doesNotMatch(equal,/→/);
+    assert.match(equal,/H\.265 \/ HEVC \(source ; destination inconnue\)/);
+    assert.match(equal,/Dolby TrueHD \(source ; destination inconnue\)/);
+    assert.match(equal,/Surround 7\.1" title="Canaux audio : Surround 7\.1"/);
+  }
+  const direct = technicalPanel(config,{...stream,is_transcode:false,video_decision:'directplay',audio_decision:'directplay',
+    transcode_info:{sourceContainer:'mkv'}});
+  assert.match(direct,/<strong>4K<.*<strong>HEVC<.*<strong>TRUEHD</);
+  assert.doesNotMatch(direct,/→|tech-source|<strong>1080p/);
+});
+
+test('6B preview and both cards use identical badge markup from the saved config', () => {
+  const Editor = classes.get('tracearr-card-editor');
+  const config = {technical_badge_style:'technical',technical_badge_layout:'separate',technical_transcode_mode:'source_to_destination',
+    technical_badge_custom_colors:{'1080p':'#aabbcc'},show_codecs:true,show_server:false,show_device:false,grid_options:{columns:4}};
+  const editor = new Editor();
+  editor.setConfig(JSON.parse(JSON.stringify(config)));
+  const preview = editor._technicalPreview().match(/<div class="meta">.*<\/div>(?=<\/div>)/)[0];
+  for (const type of ['tracearr-streams-card','tracearr-stream-card']) {
+    assert.equal(technicalPanel(editor._config,techFixture,type),preview);
+  }
+  assert.match(editor.shadowRoot.innerHTML,/data-section="technical"/);
+  assert.match(editor.shadowRoot.innerHTML,/data-subdetail="technical-colors"/);
+  assert.deepEqual(editor._config.grid_options,{columns:4});
+  editor.hass = {language:'en'};
+  assert.match(editor.shadowRoot.innerHTML,/Destination only/);
+  assert.match(editor._technicalPreview(),/Dynamic range \(HDR \/ SDR\)/);
+  editor.setConfig({...config,technical_badge_style:'classic'});
+  assert.doesNotMatch(editor.shadowRoot.innerHTML,/data-field="technical_badge_colors"/);
+  assert.equal(editor._config.technical_badge_custom_colors['1080p'],'#aabbcc');
+});
+
 test('A10 freezes the last displayed clocks only on complete outage and reanchors on recovery', () => {
   for (const type of ['tracearr-streams-card', 'tracearr-stream-card']) {
     const card = new (classes.get(type))();

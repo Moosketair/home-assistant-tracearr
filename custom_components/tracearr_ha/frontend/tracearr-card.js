@@ -131,6 +131,308 @@
     const luminance = linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
     return luminance > 0.179 ? "#000000" : "#FFFFFF";
   };
+
+  // Public /streams and full SSE events share this vocabulary. Do not read
+  // library metadata or infer premium variants from their base codecs.
+  const TECH_STYLES = ["classic","premium","cinema","minimal","technical"];
+  const TECH_GROUPS = {
+    resolution:"video", hdr:"video", video_codec:"video",
+    audio_format:"audio", audio_codec:"audio", channels:"audio",
+    container:"general", bitrate:"general",
+  };
+  const TECH_FIELDS = Object.keys(TECH_GROUPS);
+  const TECH_LABELS = {
+    resolution:["Résolution","Resolution"], hdr:["Plage dynamique (HDR / SDR)","Dynamic range (HDR / SDR)"],
+    video_codec:["Codec vidéo","Video codec"], audio_format:["Format audio","Audio format"],
+    audio_codec:["Codec audio","Audio codec"], channels:["Canaux audio","Audio channels"],
+    container:["Conteneur","Container"], bitrate:["Débit du flux","Stream bitrate"],
+  };
+  const TECH_STYLE_LABELS = [
+    ["Classique","Classic"],["Premium","Premium"],["Cinéma","Cinema"],
+    ["Minimaliste","Minimalist"],["Technique","Technical"],
+  ];
+  const techEnglish = hass => !!hass?.language && !/^fr(?:[-_]|$)/i.test(hass.language);
+  const TECH_FOOTER_FIELDS = ["quality","codecs","bitrate"];
+  const TECH_COLORS = {
+    gold:"#dcab40", blue:"#5991e8", gray:"#8894a3", purple:"#a779e8",
+    orange:"#e88d43", cyan:"#43b7dc", green:"#46be93", teal:"#3bb8ad",
+  };
+  const TECH_FORMATS = new Map();
+  const TECH_ALIASES = new Map();
+  function techFormat(category, id, short, name, color="gray", aliases=[]) {
+    const format = {id, short, name, category, color:TECH_COLORS[color]};
+    TECH_FORMATS.set(id,format);
+    for (const alias of [id, short, ...aliases]) TECH_ALIASES.set(`${category}:${alias.toLowerCase()}`,format);
+  }
+  techFormat("resolution","8k","8K","8K Ultra HD","gold",["4320p"]);
+  techFormat("resolution","4k","4K","4K Ultra HD","gold",["2160p","uhd"]);
+  techFormat("resolution","1440p","1440p","Quad HD","blue",["qhd"]);
+  techFormat("resolution","1080p","1080p","Full HD","blue",["fhd","2k"]);
+  techFormat("resolution","720p","720p","HD","gray",["hd"]);
+  techFormat("resolution","480p","480p","480p");
+  techFormat("resolution","sd","SD",["Définition standard","Standard definition"]);
+  techFormat("hdr","dv","DV","Dolby Vision","purple",["dolby vision","dovi"]);
+  techFormat("hdr","hdr10plus","HDR10+","HDR10+","orange");
+  techFormat("hdr","hdr10","HDR10","HDR10","orange");
+  techFormat("hdr","hdr","HDR",["HDR (type non précisé)","HDR (type unspecified)"],"orange");
+  techFormat("hdr","hlg","HLG","Hybrid Log-Gamma","orange");
+  techFormat("hdr","sdr","SDR","Standard Dynamic Range");
+  techFormat("video_codec","h264","H.264","H.264 / AVC","gray",["avc","avc1","x264","h.264 (avc)"]);
+  techFormat("video_codec","hevc","HEVC","H.265 / HEVC","teal",["h265","h.265","x265","hev1","hvc1","h.265 (hevc)"]);
+  techFormat("video_codec","av1","AV1","AOMedia Video 1","teal",["av01"]);
+  techFormat("video_codec","vp9","VP9","VP9","teal");
+  techFormat("video_codec","vp8","VP8","VP8");
+  techFormat("video_codec","mpeg2","MPEG-2","MPEG-2 Video","gray",["mpeg2video"]);
+  techFormat("video_codec","mpeg4","MPEG-4","MPEG-4 Part 2");
+  techFormat("video_codec","mpeg1","MPEG-1","MPEG-1 Video");
+  techFormat("video_codec","vc1","VC-1","VC-1");
+  techFormat("audio_format","atmos","ATMOS","Dolby Atmos","purple",["dolby atmos"]);
+  techFormat("audio_format","dtsx","DTS:X","DTS:X","cyan",["dts-x","dts:x ma","dts:x profile 2"]);
+  techFormat("audio_codec","truehd","TRUEHD","Dolby TrueHD","green",["dolby truehd"]);
+  techFormat("audio_codec","eac3","E-AC-3","Dolby Digital Plus","gray",["eac-3","e-ac-3","dd+","dolby digital plus"]);
+  techFormat("audio_codec","ac3","AC-3","Dolby Digital","gray",["ac-3","dolby digital"]);
+  techFormat("audio_codec","dts","DTS","DTS Digital Surround","cyan",["dca"]);
+  techFormat("audio_codec","dtshd","DTS-HD","DTS-HD","cyan",["dts-hd"]);
+  techFormat("audio_codec","dtshd_ma","DTS-HD MA","DTS-HD Master Audio","cyan",["dca-ma","dts-hd master audio","dts-hd-ma","dtshd-ma"]);
+  techFormat("audio_codec","dtshd_hra","DTS-HD HRA","DTS-HD High Resolution Audio","cyan",["dts-hd high resolution audio"]);
+  techFormat("audio_codec","flac","FLAC","Free Lossless Audio Codec","green");
+  techFormat("audio_codec","alac","ALAC","Apple Lossless Audio Codec","green");
+  techFormat("audio_codec","pcm","PCM","Pulse-Code Modulation","green",["lpcm","pcm_s16le","pcm_s24le","pcm_s32le"]);
+  techFormat("audio_codec","aac","AAC","Advanced Audio Coding");
+  techFormat("audio_codec","opus","OPUS","Opus");
+  techFormat("audio_codec","mp3","MP3","MPEG Audio Layer III");
+  techFormat("audio_codec","vorbis","VORBIS","Vorbis");
+  techFormat("channels","mono","MONO","Mono","gray",["1.0"]);
+  techFormat("channels","stereo","2.0",["Stéréo","Stereo"],"gray",["stéréo"]);
+  techFormat("channels","5.1","5.1",["Surround 5.1","5.1 surround"]);
+  techFormat("channels","7.1","7.1",["Surround 7.1","7.1 surround"]);
+  techFormat("container","mkv","MKV","Matroska","gray",["matroska"]);
+  techFormat("container","mp4","MP4","MPEG-4 Part 14");
+  techFormat("container","mpegts","MPEG-TS","MPEG Transport Stream","gray",["ts"]);
+  techFormat("container","webm","WEBM","WebM");
+  techFormat("container","avi","AVI","Audio Video Interleave");
+  techFormat("container","mov","MOV","QuickTime File Format");
+  techFormat("container","m2ts","M2TS","MPEG-2 Transport Stream");
+  techFormat("container","flv","FLV","Flash Video");
+
+  const techText = value => typeof value === "string" && !/^(?:\*|—|-|n\/a|unknown|null)$/i.test(value.trim()) ? value.trim() : "";
+  const techLookup = (category,value) => TECH_ALIASES.get(`${category}:${techText(value).toLowerCase()}`);
+  function techValue(category, raw, extra="") {
+    const text = techText(raw);
+    if (!text) return null;
+    const format = techLookup(category,text);
+    return {...(format || {short:text, name:text}), extra};
+  }
+  const techCount = n => Number.isSafeInteger(n) && n > 0 ? n : 0;
+  function techResolution(label, width, height) {
+    const w = techCount(width), h = techCount(height);
+    // Match Tracearr's dimension tiers, including cropped widescreen.
+    const tier = w >= 6400 || h >= 4000 ? "8K" : w >= 3800 || h >= 2000 ? "4K" :
+      w >= 2500 || h >= 1400 ? "1440p" : w >= 1800 || h >= 1000 ? "1080p" :
+      w >= 1200 || h >= 700 ? "720p" : w >= 700 || h >= 400 ? "480p" : w || h ? "SD" : "";
+    return techValue("resolution",techText(label) || tier,w && h ? `${w} × ${h}` : "");
+  }
+  function techChannels(display, count, layout) {
+    const n = techCount(count);
+    // A real layout takes precedence. Otherwise use the same channel-count
+    // convention as Tracearr (5.1/7.1 are conventional labels, not measured layouts).
+    const explicit = techText(layout);
+    const named = techLookup("channels",explicit) || /^\d+\.\d+(?:\.\d+)?$/.test(explicit);
+    const label = named ? explicit : techText(display) ||
+      ({1:"Mono",2:"Stereo",6:"5.1",8:"7.1"}[n] || (n ? `${n} ch` : explicit));
+    return techValue("channels",label,explicit && explicit.toLowerCase() !== label.toLowerCase() ? explicit : "");
+  }
+  function normalizeTechnical(result) {
+    if (!TECH_STYLES.includes(result.technical_badge_style)) result.technical_badge_style = "classic";
+    if (result.technical_badge_layout !== "separate") result.technical_badge_layout = "compact";
+    if (!["destination","source_to_destination"].includes(result.technical_transcode_mode)) delete result.technical_transcode_mode;
+    if (typeof result.technical_badge_colors !== "boolean") delete result.technical_badge_colors;
+    const visibility = Object.fromEntries(TECH_FIELDS.filter(key => key !== "bitrate" &&
+      typeof result.technical_badge_visibility?.[key] === "boolean").map(key => [key,result.technical_badge_visibility[key]]));
+    const colors = Object.fromEntries([...TECH_FORMATS.keys()].flatMap(key => {
+      const value = optionalColor(result.technical_badge_custom_colors?.[key]);
+      return value ? [[key,value.toLowerCase()]] : [];
+    }));
+    delete result.technical_badge_visibility;
+    if (Object.keys(visibility).length) result.technical_badge_visibility = visibility;
+    delete result.technical_badge_custom_colors;
+    if (Object.keys(colors).length) result.technical_badge_custom_colors = colors;
+    if (typeof result.technical_badge_order === "string" &&
+        result.technical_badge_order.split(",").some(key => TECH_FIELDS.includes(key.trim())))
+      result.technical_badge_order = normalizedOrder(result.technical_badge_order,TECH_FIELDS).join(",");
+    else delete result.technical_badge_order;
+  }
+  const legacyTechnical = c => c.technical_badge_style === "classic" && c.technical_badge_layout !== "separate" &&
+    !c.technical_transcode_mode && !c.technical_badge_visibility && !c.technical_badge_order;
+  function techVisible(c,key) {
+    return c.technical_badge_visibility?.[key] ?? (key === "resolution" ? c.show_quality :
+      key === "video_codec" || key === "audio_codec" ? c.show_codecs :
+      key === "bitrate" ? c.show_bitrate : c.technical_badge_style !== "classic");
+  }
+  const sameTech = (a,b) => (a.id || a.short.toLowerCase()) === (b.id || b.short.toLowerCase());
+  function technicalValues(s,c,bitrate) {
+    const sourceAudio = s.source_audio_details;
+    const streamAudio = s.stream_audio_details;
+    const streamVideo = s.stream_video_details;
+    const info = s.transcode_info;
+    const sourceAudioCodec = techText(s.source_audio_codec) || s.source_audio_codec_display;
+    const streamAudioCodec = techText(s.stream_audio_codec) || s.stream_audio_codec_display;
+    const videoCodec = techValue("video_codec",techText(s.stream_video_codec) || s.stream_video_codec_display);
+    const codecOnly = raw => techLookup("audio_format",raw) ? null : raw;
+    const audioCodec = techValue("audio_codec",codecOnly(streamAudioCodec));
+    const profile = techText(sourceAudio?.profile);
+    const explicitAudioFormat = [profile,sourceAudioCodec].find(raw => techLookup("audio_format",raw));
+    const source = {
+      resolution:techResolution(s.resolution,s.source_video_width,s.source_video_height),
+      hdr:techValue("hdr",s.source_video_details?.dynamicRange),
+      video_codec:techValue("video_codec",techText(s.source_video_codec) || s.source_video_codec_display,s.source_video_details?.profile),
+      audio_format:techValue("audio_format",sourceAudio?.atmos === true ? "Atmos" : explicitAudioFormat),
+      audio_codec:techValue("audio_codec",codecOnly(sourceAudioCodec),profile && !explicitAudioFormat ? profile : ""),
+      channels:techChannels(s.audio_channels_display,s.source_audio_channels,sourceAudio?.channelLayout),
+      container:techValue("container",info?.sourceContainer),
+    };
+    // Plex and Jellyfin/Emby can publish source codec as stream codec when
+    // output is missing. An equal codec during a transcode is ambiguous.
+    const confirmedCodec = (before,after) => after && (!before || !sameTech(before,after)) ? after : null;
+    const streamAudioFormat = techLookup("audio_format",streamAudioCodec);
+    const output = {
+      resolution:techResolution(null,streamVideo?.width,streamVideo?.height),
+      video_codec:confirmedCodec(source.video_codec,videoCodec),
+      audio_codec:confirmedCodec(source.audio_codec,audioCodec),
+      audio_format:confirmedCodec(source.audio_format,streamAudioFormat),
+      channels:techChannels(null,streamAudio?.channels),
+      container:techValue("container",info?.streamContainer),
+      // Output HDR is copied or assumed by the supported adapters; there is
+      // no independent output HDR or Atmos/DTS:X flag in this contract.
+    };
+    const anyTranscode = s.is_transcode || s.video_decision === "transcode" || s.audio_decision === "transcode";
+    const order = c.technical_badge_order ? c.technical_badge_order.split(",") : TECH_FIELDS;
+    return order.flatMap(key => {
+      if (!techVisible(c,key)) return [];
+      if (key === "bitrate") return bitrate === null ? [] :
+        [{key, value:{short:`${(bitrate/1000).toFixed(1)} Mb/s`,name:["Débit du flux","Stream bitrate"]}}];
+      const before = source[key];
+      if (!c.technical_transcode_mode) {
+        // Preserve source resolution and the old stream codec preference.
+        const value = (key === "video_codec" ? videoCodec : key === "audio_codec" ? audioCodec : null) ||
+          before || (key === "audio_format" && !anyTranscode ? streamAudioFormat : null);
+        return value ? [{key,value}] : [];
+      }
+      const group = TECH_GROUPS[key];
+      const changes = group === "general" ? anyTranscode || info?.containerDecision === "transcode" || !!output.container :
+        codecState(s[`${group}_decision`]) !== "direct" && anyTranscode;
+      if (!changes) {
+        const value = before || (key === "video_codec" ? videoCodec : key === "audio_codec" ? audioCodec : output[key]);
+        return value ? [{key,value}] : [];
+      }
+      const after = output[key];
+      if (!after) return before ? [{key,value:before,sourceOnly:true}] : [];
+      return [{key,value:after,before:c.technical_transcode_mode === "source_to_destination" && before && !sameTech(before,after) ? before : null}];
+    });
+  }
+  const technicalStyle = `
+    .technical { --tech-surface:#f3f5f8; --tech-ink:#141c28; }
+    @media (prefers-color-scheme:dark) { :host(:not([data-tech-light])) .technical {
+      --tech-surface:#252e3b; --tech-ink:#f6f8fc; } }
+    :host([data-tech-dark]) .technical,.surface-blur .technical {
+      --tech-surface:#252e3b; --tech-ink:#f6f8fc; }
+    .technical,.tech-row { display:flex; flex-wrap:wrap; align-items:center; gap:.35em; min-width:0; max-width:100%; }
+    .technical { flex:0 1 100%; }
+    .technical[data-layout="separate"] .tech-row { flex:0 1 100%; }
+    :is(.tech-badge,.tech-swatch) { --tech-color:#8894a3; box-sizing:border-box; display:inline-flex; flex-wrap:wrap;
+      align-items:center; gap:.14em .37em; min-width:0; max-width:100%; overflow-wrap:anywhere;
+      padding:.24em .55em; border:1px solid transparent; border-radius:.48em; line-height:1.2;
+      font-weight:700; background:var(--tech-surface); color:var(--tech-ink); }
+    .tech-badge.tech-comparison { padding:0; border:0; }
+    .tech-part { display:inline-grid; min-width:0; max-width:100%; }
+    .tech-detail { font-size:.84em; font-weight:500; }
+    .tech-source { font-size:.84em; font-weight:500; }
+    .tech-premium :is(.tech-badge:not(.tech-comparison),.tech-swatch) { background:color-mix(in srgb,var(--tech-color) 14%,var(--tech-surface));
+      border-color:var(--tech-color); color:color-mix(in srgb,var(--tech-color) 23%,var(--tech-ink)); }
+    .tech-cinema :is(.tech-badge:not(.tech-comparison),.tech-swatch) { background:var(--tech-color); color:var(--tech-contrast,#000);
+      border-radius:.28em; padding-inline:.58em; }
+    .tech-minimal :is(.tech-badge:not(.tech-comparison),.tech-swatch) { border-inline-start:.22em solid var(--tech-color); border-radius:.2em; }
+    .tech-technical :is(.tech-badge:not(.tech-comparison),.tech-swatch) { border-color:color-mix(in srgb,var(--tech-color) 55%,var(--tech-surface));
+      border-radius:.32em; align-items:start; }
+    .tech-technical .tech-part strong { color:color-mix(in srgb,var(--tech-color) 23%,var(--tech-ink)); }
+    .tech-classic :is(.tech-badge,.tech-swatch) { border-radius:7px; font-weight:600; }
+  `;
+  function renderTechnical(s,c,bitrate,en=false) {
+    if (legacyTechnical(c)) {
+      return {
+        quality:c.show_quality && s.resolution ? `<span class="chip">${E(s.resolution)}</span>` : "",
+        bitrate:bitrate !== null ? `<span class="chip">${E((bitrate/1000).toFixed(1))} Mb/s</span>` : "",
+        codecs:c.show_codecs && (s.stream_video_codec_display || s.stream_audio_codec_display) ?
+          `<span>${E([s.stream_video_codec_display,s.stream_audio_codec_display].filter(Boolean).join(" / "))}</span>` : "",
+      };
+    }
+    const values = technicalValues(s,c,bitrate);
+    if (!values.length) return {};
+    const pick = text => Array.isArray(text) ? text[Number(en)] : text;
+    const mode = c.technical_badge_style;
+    const paint = item => {
+      const {key,value,before,sourceOnly} = item;
+      const paintColor = format => {
+        const color = mode !== "classic" && c.technical_badge_colors !== false && format.id ?
+          c.technical_badge_custom_colors?.[format.id] || format.color : TECH_COLORS.gray;
+        return `style="--tech-color:${color};--tech-contrast:${contrastColor(color)}"`;
+      };
+      const detail = format => techText(format.extra);
+      const full = format => `${pick(format.name)}${detail(format) ? ` (${detail(format)})` : ""}`;
+      const label = `${pick(TECH_LABELS[key])} : ${before ? `${full(before)} → ` : ""}${full(value)}${sourceOnly ?
+        (en ? " (source; output unknown)" : " (source ; destination inconnue)") : ""}`;
+      const part = format => `<span class="tech-part"><strong>${E(format.short)}</strong>${
+        mode === "technical" && detail(format) ? `<span class="tech-detail">${E(detail(format))}</span>` : ""}</span>`;
+      const swatch = format => `<span class="tech-swatch" ${paintColor(format)}>${part(format)}</span>`;
+      return `<span class="tech-badge${before ? " tech-comparison" : ""}" data-tech="${key}" role="img" aria-label="${E(label)}" title="${E(label)}"${
+        before ? "" : ` ${paintColor(value)}`}>` +
+        `${before ? `${swatch(before)}<span aria-hidden="true">→</span>${swatch(value)}` : part(value)}${
+          sourceOnly ? '<span class="tech-source">· source</span>' : ""}</span>`;
+    };
+    const rows = c.technical_badge_layout === "separate" ? [...new Set(values.map(item => TECH_GROUPS[item.key]))].map(group =>
+      `<div class="tech-row" data-tech-group="${group}">${values.filter(item => TECH_GROUPS[item.key] === group).map(paint).join("")}</div>`).join("") :
+      values.map(paint).join("");
+    return {technical:`<div class="technical tech-${mode}" data-layout="${c.technical_badge_layout}">${rows}</div>`};
+  }
+  function metaMarkup(metaByKey, order) {
+    const footer = normalizedOrder(order,FOOTER_FIELDS);
+    let inserted = false;
+    const parts = footer.flatMap(key => {
+      if (metaByKey.technical && TECH_FOOTER_FIELDS.includes(key)) {
+        if (inserted) return [];
+        inserted = true;
+        return [{key:"technical",html:metaByKey.technical}];
+      }
+      return metaByKey[key] ? [{key,html:metaByKey[key]}] : [];
+    });
+    return parts.length ? `<div class="meta">${parts.map(({key,html},i) =>
+      (i && key !== "technical" && parts[i-1].key !== "technical" ? '<span aria-hidden="true">·</span>' : "") + html).join("")}</div>` : "";
+  }
+  function syncTechTheme(el, hass) {
+    el.toggleAttribute?.("data-tech-dark",hass?.themes?.darkMode === true);
+    el.toggleAttribute?.("data-tech-light",hass?.themes?.darkMode === false);
+  }
+  function themeAccent(el) {
+    // Use the theme's true RGB value for legible foreground contrast.
+    try {
+      if (typeof getComputedStyle !== "function") return "#00BCD4";
+      const raw = getComputedStyle(el).getPropertyValue("--accent-color").trim() ||
+        getComputedStyle(document.documentElement).getPropertyValue("--accent-color").trim();
+      if (readRgb(raw)) return raw;
+      const helper = document.createElement("span");
+      helper.style.color = raw || "#00BCD4";
+      (el.shadowRoot || el).appendChild(helper);
+      const resolved = getComputedStyle(helper).color;
+      helper.remove();
+      if (readRgb(resolved)) return resolved;
+    } catch (_) { /* detached element or browser without computed styles */ }
+    return "#00BCD4";
+  }
+  function streamPalette(el, mode, customColor, serverType) {
+    const raw = mode === "server" ? SERVER_ACCENTS[String(serverType||"").toLowerCase()] :
+      mode === "custom" ? validColor(customColor) : null;
+    return {bg:raw || "var(--accent-color,#00BCD4)",text:contrastColor(raw || themeAccent(el))};
+  }
   const asMapping = (input) => {
     if (input && typeof input === "object") return input;
     const result = {};
@@ -307,6 +609,7 @@
       result.series_show_episode_number = !!config.series_show_season_episode;
     result.movie_field_order = normalizedOrder(result.movie_field_order, MOVIE_FIELDS).join(",");
     result.footer_field_order = normalizedOrder(result.footer_field_order, FOOTER_FIELDS).join(",");
+    normalizeTechnical(result);
     // Place the newly separated episode number after season in old saved orders.
     const oldOrder = String(result.series_field_order || "").split(",").map(x => x.trim());
     if (!oldOrder.includes("episode_number")) {
@@ -369,8 +672,9 @@
       // Capture image events inside the shadow root; <img> errors do not bubble.
       this.shadowRoot.addEventListener?.("error", event => this._onArtworkError(event), true);
       this.shadowRoot.addEventListener?.("load", event => this._onArtworkLoad(event), true);
-      this._config = {...DEFAULTS};
+      this._config = normalizeConfig({});
       this._hass = null;
+      this._techEnglish = false;
       this._payload = {entries: []};
       this._subscription = null;
       this._images = new Map();
@@ -406,6 +710,12 @@
     }
     set hass(hass) {
       this._hass = hass;
+      syncTechTheme(this,hass);
+      const en = techEnglish(hass);
+      if (en !== this._techEnglish) {
+        this._techEnglish = en;
+        if (this.isConnected && !legacyTechnical(this._config)) this.render();
+      }
       if (!this.isConnected) return;
       if (this._subscription?.connection !== (hass?.connection || undefined)) this._subscribe(hass?.connection);
       // Entity badges read the current HA state, independent of Tracearr SSE.
@@ -703,33 +1013,9 @@
       if (timer !== undefined) clearTimeout(timer);
       this._imageRetryTimers.delete(path);
     }
-    _themeAccent() {
-      // Use the theme's true RGB value for legible foreground contrast.
-      // The CSS var itself remains the color source so theme changes propagate.
-      try {
-        if (typeof getComputedStyle !== "function") return "#00BCD4";
-        const style = getComputedStyle(this);
-        const raw = style.getPropertyValue("--accent-color").trim() ||
-          getComputedStyle(document.documentElement).getPropertyValue("--accent-color").trim();
-        if (readRgb(raw)) return raw;
-        if (typeof document.createElement === "function") {
-          const helper = document.createElement("span");
-          helper.style.color = raw || "#00BCD4";
-          (this.shadowRoot || this).appendChild(helper);
-          const resolved = getComputedStyle(helper).color;
-          helper.remove();
-          if (readRgb(resolved)) return resolved;
-        }
-      } catch (_) { /* detached editor preview or browser without computed styles */ }
-      return "#00BCD4";
-    }
     _palette(serverType, forceTheme=false) {
       const mode = forceTheme && this._config.accent_color_mode === "server" ? "theme" : this._config.accent_color_mode;
-      const raw = mode === "server" ? SERVER_ACCENTS[String(serverType||"").toLowerCase()] :
-        mode === "custom" ? validColor(this._config.accent_custom_color) : null;
-      const cssColor = raw || "var(--accent-color,#00BCD4)";
-      const foreground = contrastColor(raw || this._themeAccent());
-      return {bg:cssColor, text:foreground};
+      return streamPalette(this,mode,this._config.accent_custom_color,serverType);
     }
     _headerPalette(serverType) {
       const mode = this._config.header_badge_color_mode || "inherit";
@@ -739,10 +1025,7 @@
       return this._paletteForMode("theme", serverType);
     }
     _paletteForMode(mode, serverType, customColor) {
-      const raw = mode === "server" ? SERVER_ACCENTS[String(serverType || "").toLowerCase()] :
-        mode === "custom" ? validColor(customColor) : null;
-      const bg = raw || "var(--accent-color,#00BCD4)";
-      return {bg, text:contrastColor(raw || this._themeAccent())};
+      return streamPalette(this,mode,customColor,serverType);
     }
     _mediaFields(stream) {
       const c = this._config;
@@ -1004,13 +1287,9 @@
       if (c.show_health && entry?.servers?.find(server => server.server_id === s.server_id)?.status === "down") metaByKey.health = (`<span class="chip warn">Serveur hors ligne</span>`);
       if (c.show_server) metaByKey.server = `<span>${E(s.server_name || s.server_type || "")}</span>`;
       if (c.show_device && (s.device || s.player)) metaByKey.device = `<span>${E(s.device || s.player)}</span>`;
-      if (c.show_quality && s.resolution) metaByKey.quality = `<span class="chip">${E(s.resolution)}</span>`;
       // The separate video/audio icons take the place of the old text badge.
       const bitrate = c.show_bitrate ? this._scopedBitrate(s) : null;
-      if (bitrate !== null)
-        metaByKey.bitrate = `<span class="chip">${E((bitrate/1000).toFixed(1))} Mb/s</span>`;
-      if (c.show_codecs && (s.stream_video_codec_display || s.stream_audio_codec_display)) metaByKey.codecs = `<span>${E([s.stream_video_codec_display,s.stream_audio_codec_display].filter(Boolean).join(" / "))}</span>`;
-      const meta = normalizedOrder(c.footer_field_order, FOOTER_FIELDS).map(k => metaByKey[k]).filter(Boolean);
+      Object.assign(metaByKey,renderTechnical(s,c,bitrate,this._techEnglish));
       const accent = SERVER_ACCENTS[String(s.server_type || "").toLowerCase()] || "var(--tr-accent)";
       const palette = this._palette(s.server_type);
       const sharedStyle = `--shared-accent:${palette.bg};--pill-bg:${palette.bg};--pill-text:${palette.text};--tr-stream-blur:${clamp(c.stream_blur,0,50,26)}px;--tr-stream-overlay:${clamp(c.stream_overlay,25,95,72)/100};--tr-edge-width:${clamp(c.stream_accent_width,2,8,4)}px`;
@@ -1035,7 +1314,7 @@
           ${mediaMarkup}
           ${c.show_progress ? `<div class="progress"><span class="fill" data-id="${E(s.id)}" style="width:${ratio.toFixed(2)}%"></span></div>` : ""}
           ${showTimes || paused ? `<div class="times">${showTimes ? `<span class="time-left"><span class="time-current" data-id="${E(s.id)}">${formattedSeconds(timePair.elapsed)}</span>${c.show_remaining && c.show_progress ? `<span class="time-separator">/</span><span class="time-remaining" data-id="${E(s.id)}">-${formattedSeconds(timePair.remaining)}</span>` : ""}</span>` : ""}${rightTime}</div>` : ""}
-          ${meta.length ? `<div class="meta">${meta.join("<span aria-hidden=\"true\">·</span>")}</div>` : ""}
+          ${metaMarkup(metaByKey,c.footer_field_order)}
         </div>
       </article>`;
     }
@@ -1203,7 +1482,7 @@
       const {progress_ms, ...rest} = stream;
       return JSON.stringify({rest,health:entry?.servers?.find(x => x.server_id === stream.server_id)?.status,
          showBitrate:this._config.show_bitrate && this._scopedBitrate(stream) !== null,
-         stale:this._streamsStale(entry)});
+         stale:this._streamsStale(entry), technicalEnglish:!legacyTechnical(this._config) && this._techEnglish});
     }
     _refreshHeader(streams) {
       const header = this._header(streams);
@@ -1396,6 +1675,7 @@
         aliases: entry?.aliases,
         avatars: entry?.avatars,
         stale: c.mode === "carousel" && streams.length ? undefined : stale,
+        technicalEnglish:c.mode !== "carousel" && !legacyTechnical(c) && this._techEnglish,
       });
       // Refresh each stream's clock even if the rest of the card is unchanged.
       // Crucially, do NOT reset its anchor on every incoming SSE progress event.
@@ -1458,7 +1738,7 @@
       } else {
         this._headerMarkup = this._header(streams);
         const status = this._availabilityText(entry,stale);
-        this.shadowRoot.innerHTML = `<style>${style}</style><ha-card style="${shellStyle}"><div class="${rootClasses}"${stale ? " data-stale" : ""}><div class="availability-status" role="status">${E(status)}</div>${this._headerMarkup}${body}${nav}</div></ha-card>`;
+        this.shadowRoot.innerHTML = `<style>${style}${technicalStyle}</style><ha-card style="${shellStyle}"><div class="${rootClasses}"${stale ? " data-stale" : ""}><div class="availability-status" role="status">${E(status)}</div>${this._headerMarkup}${body}${nav}</div></ha-card>`;
         this._observeHeaderLayout();
       }
       this._refreshAvailability(entry, stale);
@@ -1529,13 +1809,20 @@
       border-radius:7px; padding:8px; color:var(--primary-text-color);
       background:var(--secondary-background-color,transparent); cursor:pointer; text-align:left; }
     .badge-color { display:grid; gap:8px; }
+    .tech-preview { min-width:0; padding:10px; border-radius:7px;
+      background:var(--secondary-background-color,transparent); font-size:.86em; }
+    .tech-preview .meta { display:flex; flex-wrap:wrap; align-items:center; gap:5px; }
+    .tech-preview .chip { padding:3px 7px; border-radius:7px; background:var(--pill-bg); color:var(--pill-text); font-weight:600; }
+    .tech-reset { font:inherit; color:inherit; background:transparent; border:1px solid var(--divider-color,#888);
+      border-radius:6px; padding:6px 8px; cursor:pointer; }
+    .tech-reset:disabled { opacity:.5; cursor:default; }
     .range-row { display:flex; gap:12px; align-items:center; }
     .range-row input[type=range] { flex:1; min-width:0; accent-color:var(--accent-color); }
     .range-row output { min-width:50px; text-align:right; font-variant-numeric:tabular-nums; }
   `;
   class TracearrCardEditor extends HTMLElement {
     constructor() {
-      super(); this.attachShadow({mode:"open"}); this._config={...DEFAULTS};
+      super(); this.attachShadow({mode:"open"}); this._config=normalizeConfig({});
       this._payload={entries:[]}; this._openSections=new Set(["global","source"]);
       this._openSubdetails=new Set();
     }
@@ -1546,7 +1833,10 @@
       this.render();
     }
     set hass(hass) {
+      const languageChanged = techEnglish(hass) !== techEnglish(this._hass);
       this._hass=hass;
+      syncTechTheme(this,hass);
+      if (languageChanged) { this._captureOpenSections(); this.render(); }
       this.shadowRoot?.querySelectorAll("ha-entity-picker[data-badge-index]").forEach(p => { p.hass = hass; });
       if (hass?.connection && this._connection !== hass.connection) {
         this._connection=hass.connection;
@@ -1582,11 +1872,11 @@
       const value = Math.round(clamp(this._config[name],min,max,min));
       return `<label>${E(label)}<span class="range-row"><input type="range" min="${min}" max="${max}" step="1" data-field="${E(name)}" value="${value}"><output data-range-output="${E(name)}">${value} ${E(unit)}</output></span></label>`;
     }
-    _orderEditor(configKey, fields, labels=MEDIA_LABELS) {
+    _orderEditor(configKey, fields, labels=MEDIA_LABELS, rowLabel, en=false) {
       const order = normalizedOrder(this._config[configKey], fields);
       return `<div class="order-list">${order.map((field,index) => {
         const label = labels[field] || field;
-        return `<div class="order-row"><span>${E(label)}</span><div class="move-controls"><button type="button" data-order="${E(configKey)}" data-index="${index}" data-direction="-1" ${index===0?"disabled":""} aria-label="Monter ${E(label)}">↑</button><button type="button" data-order="${E(configKey)}" data-index="${index}" data-direction="1" ${index===order.length-1?"disabled":""} aria-label="Descendre ${E(label)}">↓</button></div></div>`;
+        return `<div class="order-row">${rowLabel ? rowLabel(field,label) : `<span>${E(label)}</span>`}<div class="move-controls"><button type="button" data-order="${E(configKey)}" data-index="${index}" data-direction="-1" ${index===0?"disabled":""} aria-label="${en?"Move up:":"Monter"} ${E(label)}">↑</button><button type="button" data-order="${E(configKey)}" data-index="${index}" data-direction="1" ${index===order.length-1?"disabled":""} aria-label="${en?"Move down:":"Descendre"} ${E(label)}">↓</button></div></div>`;
       }).join("")}</div>`;
     }
     _headerOrderEditor() {
@@ -1608,11 +1898,67 @@
         <option value="right" ${align==="right"?"selected":""}>Droite</option>
       </select></label>`;
     }
+    _colorInput(label,color,attr,disabled=false) {
+      return `<label>${E(label)}<input type="color" ${attr} value="${E(validColor(color))}" ${disabled ? "disabled" : ""}></label>`;
+    }
     _normalColorEditor(color, attr) {
       return `<div class="badge-color"><label>Couleur normale<select ${attr}>` +
         `<option value="inherit" ${color ? "" : "selected"}>Palette par défaut</option>` +
         `<option value="custom" ${color ? "selected" : ""}>Couleur particulière</option></select></label>` +
-        `<label>Couleur normale personnalisée<input type="color" ${attr} value="${E(validColor(color))}" ${color ? "" : "disabled"}></label></div>`;
+        this._colorInput("Couleur normale personnalisée",color,attr,!color)+`</div>`;
+    }
+    _technicalPreview() {
+      const c = this._config;
+      const en = techEnglish(this._hass);
+      const palette = legacyTechnical(c) ? streamPalette(this,c.accent_color_mode,c.accent_custom_color,"plex") : null;
+      const example = {resolution:"4K", source_video_width:3840, source_video_height:2160,
+        source_video_details:{dynamicRange:"HDR10+"}, source_video_codec:"HEVC",
+        source_audio_codec:"truehd", source_audio_details:{atmos:true}, source_audio_channels:8,
+        transcode_info:{sourceContainer:"mkv",streamContainer:"mp4"}, is_transcode:true,
+        video_decision:"transcode", audio_decision:"copy",
+        stream_video_codec:"h264", stream_video_codec_display:"H.264", stream_audio_codec_display:"TrueHD",
+        stream_video_details:{width:1920,height:1080}};
+      return `<div class="tech-preview${c.stream_surface === "blur" ? " surface-blur" : ""}"${palette ? ` style="--pill-bg:${palette.bg};--pill-text:${palette.text}"` : ""}>${
+        metaMarkup(renderTechnical(example,c,c.show_bitrate ? 4200 : null,en),c.footer_field_order) ||
+        `<small>${en ? "No visible technical information" : "Aucune information technique visible"}</small>`}</div>`;
+    }
+    _technicalEditor() {
+      const c = this._config, en = techEnglish(this._hass);
+      const t = (fr,eng) => en ? eng : fr;
+      const labels = Object.fromEntries(TECH_FIELDS.map(key => [key,TECH_LABELS[key][Number(en)]]));
+      const order = this._orderEditor("technical_badge_order",TECH_FIELDS,labels,
+        (key,label) => `<label class="check"><input type="checkbox" ${
+          key === "bitrate" ? 'data-field="show_bitrate"' : key === "resolution" && legacyTechnical(c) ? 'data-field="show_quality"' : `data-tech-visible="${key}"`} ${
+          techVisible(c,key) ? "checked" : ""}>${E(label)}</label>`,en);
+      const colorEditor = c.technical_badge_style === "classic" ? "" :
+        `<label class="check"><input type="checkbox" data-field="technical_badge_colors" ${c.technical_badge_colors !== false ? "checked" : ""}>${t("Couleurs par format","Format colors")}</label>` +
+        (c.technical_badge_colors === false ? "" : this._subgroup("technical-colors",t("Couleurs avancées","Advanced colors"),
+          `<button type="button" class="tech-reset" data-tech-reset="all"${c.technical_badge_custom_colors ? "" : " disabled"}>${t("Réinitialiser toutes les couleurs","Reset all colors")}</button>` +
+          TECH_FIELDS.map(key => {
+            const formats = [...TECH_FORMATS.values()].filter(format => format.category === key);
+            return formats.length ? this._subgroup(`technical-colors-${key}`,labels[key],formats.map(({id,short,name,color}) => {
+              const current = c.technical_badge_custom_colors?.[id];
+              const full = Array.isArray(name) ? name[Number(en)] : name;
+              return this._colorInput(`${short} — ${full}`,current || color,`data-tech-color="${id}"`) +
+                `<button type="button" class="tech-reset" data-tech-reset="${id}"${current ? "" : " disabled"}>${t("Réinitialiser","Reset")} ${E(short)}</button>`;
+            }).join("")) : "";
+          }).join("")));
+      return this._select("technical_badge_style",t("Style","Style"),TECH_STYLES.map((key,i) => [key,TECH_STYLE_LABELS[i][Number(en)]])) +
+        this._select("technical_badge_layout",t("Disposition","Layout"),[["compact",t("Compacte","Compact")],["separate",t("Séparée","Separate")]]) +
+        this._select("technical_transcode_mode",t("Présentation du transcodage","Transcode display"),[
+          ...(!c.technical_transcode_mode ? [["",t("Choisir un mode…","Choose a mode…")]] : []),
+          ["destination",t("Destination uniquement","Destination only")],
+          ["source_to_destination",t("Source → destination","Source → destination")],
+        ]) +
+        (legacyTechnical(c) ? `<small>${t("Le rendu historique suit l’ordre du bandeau jusqu’à la première personnalisation des catégories.",
+          "The legacy display follows the footer order until you customize the categories.")}</small>` : "") +
+        this._subgroup("technical-order",t("Informations affichées et ordre","Visible information and order"),order) + colorEditor +
+        `<div class="group-label">${t("Aperçu — exemple transcodé","Preview — transcoding example")}</div>${this._technicalPreview()}`;
+    }
+    _footerOrderFields() {
+      if (legacyTechnical(this._config)) return FOOTER_FIELDS;
+      const anchor = normalizedOrder(this._config.footer_field_order,FOOTER_FIELDS).find(key => TECH_FOOTER_FIELDS.includes(key));
+      return FOOTER_FIELDS.filter(key => !TECH_FOOTER_FIELDS.includes(key) || key === anchor);
     }
     _metricBadgeEditor() {
       const rows = this._config.header_metric_settings || {};
@@ -1730,13 +2076,14 @@
         `<small>Ordre d'affichage de toutes les informations :</small>`+
         this._orderEditor("series_field_order",SERIES_FIELDS)+
         `<small>Les réglages d'année sont indépendants entre films et séries.</small>`;
+      const footerFields = this._footerOrderFields();
+      const footerLabels = legacyTechnical(c) ? FOOTER_LABELS :
+        {...FOOTER_LABELS,[footerFields.find(key => TECH_FOOTER_FIELDS.includes(key))]:techEnglish(this._hass) ? "Technical badges" : "Badges techniques"};
       const footer=this._checks([
         ["show_server","Nom du serveur"],["show_device","Appareil / lecteur"],
-        ["show_quality","Résolution"],["show_bitrate","Débit du flux"],
-        ["show_codecs","Codecs"],["show_health","État du serveur"],
+        ["show_health","État du serveur"],
       ])+`<small>Ordre des informations du bandeau (champs masqués inclus) :</small>`+
-        this._orderEditor("footer_field_order", FOOTER_FIELDS, FOOTER_LABELS)+
-        `<small>Les badges de résolution et de débit adoptent la palette globale avec une écriture blanche ou noire automatique.</small>`;
+        this._orderEditor("footer_field_order", footerFields, footerLabels);
       const network=this._select("bitrate_scope","Débits à afficher (sur les flux et dans l'en-tête)",[
           ["both","Tous les débits"],["local","Flux locaux uniquement"],["remote","Flux distants uniquement"]])+
         `<label>Exceptions pour cette carte (facultatif, priorité sur les réglages de l’intégration)<textarea data-field="network_locations" placeholder="plex:alice=remote&#10;device:Apple TV=local">${E(c.network_locations||"")}</textarea></label>`+
@@ -1766,13 +2113,14 @@
       const usersSection=`<label>Alias propres à cette carte<textarea data-field="aliases">${E(c.aliases||"")}</textarea></label>`+
         `<label>Avatars propres à cette carte (URLs HTTPS)<textarea data-field="avatars">${E(c.avatars||"")}</textarea></label>`+
         `<small>Pour modifier tous les utilisateurs, utilisez la liste dans Paramètres → Appareils et services → Tracearr HA → Configurer.</small>`;
-      this.shadowRoot.innerHTML=`<style>${editorStyle}</style><div class="editor">${[
+      this.shadowRoot.innerHTML=`<style>${editorStyle}${technicalStyle}</style><div class="editor">${[
         this._group("global","Affichage général",globalDisplay),
         this._group("source","Choix des lectures et filtres",source),
         ...(!isIndividual ? [this._group("carousel","Navigation et carrousel",carousel)] : []),
         this._group("header","En-tête et badges",header),
         this._group("media","Titres, saisons et années",media),
         this._group("footer","Bandeau d'informations du flux",footer),
+        this._group("technical",techEnglish(this._hass) ? "Technical badges" : "Badges techniques",this._technicalEditor()),
         this._group("network","Débit local / distant",network),
         this._group("users","Réglages avancés par carte",usersSection),
       ].join("")}</div>`;
@@ -1783,7 +2131,12 @@
           const value=el.type==="checkbox" ? el.checked :
             (el.type==="number" || el.type==="range") ? Number(el.value) : el.value;
           this._config={...this._config,[name]:value};
-          this.dispatchEvent(new CustomEvent("config-changed",{detail:{config:this._config},bubbles:true,composed:true}));
+          if (name.startsWith("technical_") || name === "show_bitrate" || name === "show_quality") {
+            this._updateTechnicalEditor(`[data-field="${name}"]`);
+          } else {
+            if (["stream_surface","accent_color_mode","accent_custom_color"].includes(name)) this._refreshTechnicalPreview();
+            this._emit();
+          }
         };
         el.addEventListener("change",fn);
         if (el.type === "range") el.addEventListener("input", () => {
@@ -1791,6 +2144,35 @@
           if (output) output.textContent = `${el.value} ${name === "stream_overlay" ? "%" : "px"}`;
         });
       });
+      this.shadowRoot.querySelectorAll("[data-tech-visible]").forEach(input => input.addEventListener("change",() => {
+        const key = input.dataset.techVisible;
+        this._config = {...this._config,technical_badge_visibility:{...this._config.technical_badge_visibility,[key]:input.checked}};
+        this._updateTechnicalEditor(`[data-tech-visible="${key}"]`);
+      }));
+      this.shadowRoot.querySelectorAll("[data-tech-color]").forEach(input => {
+        const key = input.dataset.techColor;
+        input.addEventListener("input",() => {
+          const color = optionalColor(input.value);
+          if (!color) return;
+          const saved = this._config;
+          this._config = {...saved,technical_badge_custom_colors:{...saved.technical_badge_custom_colors,[key]:color}};
+          this._refreshTechnicalPreview();
+          this._config = saved;
+        });
+        input.addEventListener("change",() => {
+          const color = optionalColor(input.value);
+          if (!color) return;
+          this._config = {...this._config,technical_badge_custom_colors:{...this._config.technical_badge_custom_colors,[key]:color}};
+          this._updateTechnicalEditor(`[data-tech-color="${key}"]`);
+        });
+      });
+      this.shadowRoot.querySelectorAll("[data-tech-reset]").forEach(btn => btn.addEventListener("click",() => {
+        const key = btn.dataset.techReset;
+        const colors = key === "all" ? {} : {...this._config.technical_badge_custom_colors};
+        delete colors[key];
+        this._config = {...this._config,technical_badge_custom_colors:colors};
+        this._updateTechnicalEditor(key === "all" ? '[data-subdetail="technical-colors"] > summary' : `[data-tech-color="${key}"]`);
+      }));
       // HA's native searchable entity picker; each badge can display any domain.
       this.shadowRoot.querySelectorAll("ha-entity-picker[data-badge-index]").forEach(picker => {
         const index=Number(picker.dataset.badgeIndex);
@@ -1876,17 +2258,46 @@
         const key=btn.dataset.order;
         const allowed= key==="movie_field_order" ? MOVIE_FIELDS :
           key==="series_field_order" ? SERIES_FIELDS :
-          key==="footer_field_order" ? FOOTER_FIELDS :
+          key==="footer_field_order" ? footerFields :
+          key==="technical_badge_order" ? TECH_FIELDS :
           [...HEADER_FIELDS, ...(this._config.header_entity_badges || []).map(row => `entity:${row.id}`)];
         const order=normalizedOrder(this._config[key],allowed);
         const index=Number(btn.dataset.index), next=index+Number(btn.dataset.direction);
         if (index<0 || index>=order.length || next<0 || next>=order.length) return;
         [order[index],order[next]]=[order[next],order[index]];
+        let savedOrder = order;
+        if (key === "footer_field_order" && allowed !== FOOTER_FIELDS) {
+          // Keep the other legacy slots saved but after the chosen group
+          // anchor, so they cannot take its place when it moves down.
+          let i = 0;
+          const anchor = allowed.find(field => TECH_FOOTER_FIELDS.includes(field));
+          const previous = normalizedOrder(this._config[key],FOOTER_FIELDS);
+          savedOrder = previous.map(field => allowed.includes(field) ? order[i++] : field);
+          const earlier = savedOrder.slice(0,savedOrder.indexOf(anchor)).filter(field => !allowed.includes(field));
+          savedOrder = savedOrder.filter(field => !earlier.includes(field));
+          savedOrder.splice(savedOrder.indexOf(anchor)+1,0,...earlier);
+        }
+        this._config={...this._config,[key]:savedOrder.join(",")};
+        if (key === "technical_badge_order") {
+          this._updateTechnicalEditor(`[data-order="${key}"][data-index="${next}"]:not(:disabled)`);
+          return;
+        }
         this._captureOpenSections();
-        this._config={...this._config,[key]:order.join(",")};
         this.render();
-        this.dispatchEvent(new CustomEvent("config-changed",{detail:{config:this._config},bubbles:true,composed:true}));
+        this._emit();
       }));
+    }
+    _refreshTechnicalPreview() {
+      const preview = this.shadowRoot.querySelector(".tech-preview");
+      if (preview) preview.outerHTML = this._technicalPreview();
+    }
+    _updateTechnicalEditor(focus) {
+      this._captureOpenSections();
+      this._config = {...this._config};
+      normalizeTechnical(this._config);
+      this.render();
+      this.shadowRoot.querySelector(focus)?.focus();
+      this._emit();
     }
   }
   customElements.define("tracearr-streams-card",TracearrStreamsCard);
