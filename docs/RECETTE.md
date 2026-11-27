@@ -467,3 +467,15 @@ La matrice REST compare GET(A), GET(B), GET(C) et GET vide ; A et B réutilisent
 **Suites exécutées sur le candidat :** `spec_music_audit.py`, `spec_race.py`, `spec_generation.py` et `spec_websocket.py` ensemble : **128 réussis par Core** (2025.6.0 et 2026.11.3), dont reload, reconnexion, péremption, bornage et récupération REST. `node --check` puis `node --test tests/test_carousel.cjs` : **114 réussis**. Aucun échec ni saut sur ces sélections. Les contrôles SHA‑256/proxy, la classification et le contrat amont sont réutilisés, pas réaudités. Pas de campagne navigateur, Sections ou HACS.
 
 **Réserves P3 explicitement conservées :** si l’amont renvoie 404 pendant que la révision devient périmée, la réponse d’erreur peut ne pas inclure `Cache-Control: no-store`. Une requête sans révision commencée sur une vidéo peut finir avec une réponse cacheable après passage à une piste. Aucun changement d’image dans ce lot.
+
+## 6C.4 — Présentation musicale
+
+**Base :** `5c3612c1db81d522833cf13b1a37833235095251`, validée en 6C.3.E (**PASS AVEC RÉSERVES**). Les [trois P3 acceptés](DEVELOPMENT_STATUS.md) ne sont pas corrigés dans ce lot. Les quatre nouveaux cas Node ciblés échouent sur la base : métadonnées/illustration/temps et badges pour chacune des deux cartes.
+
+**Candidat :** syntaxe JS validée et **118 tests Node réussis**, sans échec ni saut. Couverture : champs complets/partiels, séparateurs, nombres invalides, masquage et ordre, illustration de remplacement, styles, fréquence, débit audio distinct, confiance source/sortie, absence de vidéo et d’heure de fin pour une piste, configurations vidéo historiques.
+
+**Chromium 152.0.7977.82 :** [neuf captures du module réel](../recette/preuves/6c.4/README.md) sous thèmes clair et sombre, avec un abonnement et une signature d’image simulés sur origine interceptée. Validation de 16 combinaisons de largeurs **réelles de carte** (250, 320, 520 et 760 px), mode normal/compact et badges compacts/séparés ; texte long, pas de débordement mesuré, dimensions d’affiches historiques et hauteur `rows: auto` intactes. Deux changements de morceau et d’illustration sous le même ID conservent le conteneur et la position du carrousel. `rows: auto` est contrôlé sur le Web Component ; ce n’est pas une nouvelle recette d’un dashboard Sections dans un vrai Core.
+
+**Planche de preuve :** l’original 600 × 600 est rasterisé une fois. Les sources verticale 400 × 600 et horizontale 600 × 400 sont des découpes centrées des mêmes pixels, sans recréation de l’illustration. Vérification des dimensions naturelles, du carré CSS, du centrage et des pixels rendus par comparaison aux recadrages attendus. Le carré reçu reste entier ; le frontend ne restaure pas les bords déjà perdus. Les cas sans référence ou en HTTP 404 affichent le remplacement musical.
+
+**Périmètre :** pas de Core, de campagne de réconciliation, de test du vrai proxy ou de nouvelle recette HACS. Les validations 6C.3 sont réutilisées pour l’horloge, les signatures et la réconciliation ; la recette visuelle vérifie leur intégration au rendu, pas le transport. Aucun changement README, aucune publication ni ouverture de 6C.5.

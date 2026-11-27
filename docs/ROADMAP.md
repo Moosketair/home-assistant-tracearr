@@ -96,7 +96,7 @@ Réponse à la [demande #2](https://github.com/Moosketair/home-assistant-tracear
 - **Pochettes :** emplacement carré, largeur commune aux affiches via le réglage de taille existant, fond Cinéma réutilisé. Montrer intégralement une source carrée ; recadrer les autres ratios au centre pour remplir le carré, sans déformation. Illustration de remplacement carrée adaptée à la musique si l’image manque. Ne pas modifier les affiches vidéo ; accepter automatiquement une future image carrée publique. Ne pas reconstruire d’URL privée ni élargir le proxy.
 - **Badges :** cinq styles réutilisés. Format/codec, fréquence d’échantillonnage et canaux activés par défaut pour la musique ; débit audio et conteneur facultatifs. Même confiance source/destination et déduplication qu’en `v0.1.18`, aucune information vidéo pour les pistes. Le débit audio dédié n’est pas le débit global du flux. Ne pas déduire profondeur de bits, Hi‑Res, fréquence de sortie ou garantie lossless.
 
-**Découpage :** 6C.3 livre les fondations techniques et leur [recette](RECETTE.md#6c3--fondations-techniques-musicales), sans nouveau rendu musical, réglage ou filtre par type. 6C.4 traitera la présentation et les pochettes ; 6C.5 les filtres et réglages. 6E reste séparé.
+**Découpage :** les [fondations 6C.3](RECETTE.md#6c3--fondations-techniques-musicales) sont validées après 6C.3.E. La [présentation 6C.4](RECETTE.md#6c4--présentation-musicale) est livrée localement, en attente de validation visuelle. 6C.5 reste réservé aux filtres et réglages, 6C.6 à la recette de publication et 6E à la refonte générale.
 
 #### Évolutions amont envisagées — non soumises
 

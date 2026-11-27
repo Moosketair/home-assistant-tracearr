@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tracearr HA · Recette musicale 6C.4</title>
+<style>
+  :root {
+    color-scheme:dark; font:15px system-ui,sans-serif; background:#080a13; color:#edf1fc;
+    --primary-text-color:#edf1fc; --secondary-text-color:#b9c4db; --divider-color:#ffffff26;
+    --card-background-color:#111521; --secondary-background-color:#1c2436; --accent-color:#a5abf4;
+    --ha-card-border-radius:18px;
+  }
+  :root.light {
+    color-scheme:light; background:#e9eef8; color:#1d293e;
+    --primary-text-color:#1d293e; --secondary-text-color:#4f5f75; --divider-color:#22365829;
+    --card-background-color:#fafbff; --secondary-background-color:#ecf1fa; --accent-color:#3658a8;
+  }
+  body { margin:0; }
+  main { width:min(100%, 990px); margin:auto; box-sizing:border-box; padding:26px 24px; }
+  main.single { max-width:730px; }
+  header { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 16px; justify-content:space-between; margin-bottom:15px; }
+  h1,h2,figure { margin:0; }
+  h1 { font-size:24px; }
+  header span,h2,figcaption { color:var(--secondary-text-color); font-size:13px; }
+  h2,figcaption { margin-bottom:7px; }
+  section + section { margin-top:10px; }
+  .proof { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+  .proof img.reference { display:block; width:auto; height:152px; max-width:100%; object-fit:contain; }
+  @media (max-width:680px) { .proof { grid-template-columns:1fr; } }
+</style>
+<main id="capture"><header><h1>Tracearr HA</h1><span id="caption"></span></header><div id="mount"></div></main>
+<script src="../custom_components/tracearr_ha/frontend/tracearr-card.js"></script>
+<script>
+  // Like readme_showcase.html: only the HA surface, subscription and signer are
+  // simulated. Every panel, artwork element and badge comes from the real bundle.
+  customElements.define("ha-card", class extends HTMLElement {
+    constructor() {
+      super();
+      this.attachShadow({mode:"open"}).innerHTML = `<style>:host{display:block;
+        background:var(--card-background-color);border:1px solid var(--divider-color)}</style><slot></slot>`;
+    }
+  });
+  const params = new URLSearchParams(location.search);
+  const view = params.get("view") || "mixte";
+  const light = view === "clair";
+  document.documentElement.classList.toggle("light",light);
+  document.querySelector("main").classList.toggle("single",["direct","transcodage","pause","styles","clair"].includes(view));
+  document.querySelector("#caption").textContent = {
+    mixte:"Films, séries et musique", musique:"Plusieurs lectures musicales", direct:"Musique · Lecture directe",
+    transcodage:"Musique · Transcodage audio", pause:"Musique · Lecture en pause", carousel:"Carrousel mixte",
+    styles:"Les cinq styles techniques", clair:"Musique · Thème clair", pochettes:"Même illustration · différences de recadrage",
+    largeur:"Carte mixte · Recette de largeur",
+  }[view];
+  const art = name => `${location.origin}/showcase-art/${name}.svg`;
+  const revision = key => key.toString(16).padStart(64,"0");
+  const poster = (key,id) => ({
+    poster_url:`/api/v1/images/proxy?fixture=${id}`, poster_revision:revision(key),
+  });
+  const row = (id, server_type, username, title, extra) => ({
+    id, server_id:server_type, server_type, server_name:{plex:"Plex",jellyfin:"Jellyfin",emby:"Emby"}[server_type],
+    username, media_title:title, media_type:"movie", state:"playing", started_at:"2026-01-01T12:00:00Z",
+    rating_key:id, duration_ms:6840000, progress_ms:2432000, year:2025, video_decision:"directplay",
+    audio_decision:"directplay", is_transcode:false, bitrate:18400, device:"Salon", ...extra,
+  });
+  const movie = row("film","plex","Nova","The Quiet Orbit",{
+    poster_url:art("orbit"), user_avatar_url:art("orbit-avatar"), resolution:"4K",
+    stream_video_codec_display:"HEVC", stream_audio_codec_display:"E-AC-3", source_audio_channels:6,
+  });
+  const episode = row("episode","emby","Rowan","Une lueur à marée basse",{
+    media_type:"episode", poster_url:art("tide"), user_avatar_url:art("tide-avatar"),
+    show_title:"Where the Tide Sleeps", season_number:2, episode_number:4,
+    resolution:"1080p", stream_video_codec_display:"AV1", stream_audio_codec_display:"Opus", bitrate:3900,
+  });
+  const direct = row("direct","jellyfin","Quinn","Les balises de minuit",{
+    media_type:"track", ...poster(2,"direct"), user_avatar_url:art("glass-avatar"),
+    artist_name:"Méridien Zéro", album_name:"Atlas nocturne", year:2024, track_number:3, disc_number:1,
+    duration_ms:253000, progress_ms:89000, device:"Lecteur réseau", video_decision:null, bitrate:921,
+    source_audio_codec:"FLAC", stream_audio_codec:"FLAC", source_audio_channels:2,
+    source_audio_details:{sampleRate:44100,bitrate:902}, transcode_info:{sourceContainer:"FLAC"},
+  });
+  const transcode = {...direct,id:"convert",rating_key:"convert",...poster(3,"convert"),
+    media_title:"Latitude 07", artist_name:"Les Ondes courtes", album_name:"Signaux de traverse",
+    year:2023, bitrate:196, is_transcode:true, audio_decision:"transcode", stream_audio_codec:"AAC",
+    source_audio_details:{sampleRate:48000,bitrate:815}, stream_audio_details:{channels:2},
+    transcode_info:{sourceContainer:"FLAC",streamContainer:"MPEGTS"},device:"Téléphone"};
+  const paused = {...direct,id:"pause",server_type:"emby",server_id:"emby",server_name:"Emby",username:"Rowan",
+    ...poster(1,"pause"), user_avatar_url:art("tide-avatar"), state:"paused", bitrate:256,
+    media_title:"Lumière de veille",artist_name:"Studio Sillage",album_name:"Horizon de papier",
+    source_audio_codec:"AAC",stream_audio_codec:"AAC",device:"Casque"};
+  const config = {
+    title:"Lectures en cours",show_end_time:true,show_bitrate:true,show_codecs:true,show_health:false,
+    font_size:16, poster_size:118,accent_color_mode:"server",header_show_bandwidth:true,header_show_paused:true,
+    header_show_transcodes_total:true,technical_badge_style:"premium",technical_transcode_mode:"source_to_destination",
+    stream_surface:light ? "soft" : "blur",stream_overlay:55,stream_blur:21,sort:"user",
+  };
+  const host = document.querySelector("#mount");
+  const clients = new Map();
+  const payload = streams => ({entries:[{id:"music-test",connected:true,sse_connected:true,servers:[],streams}]});
+  function mount(parent,type,streams,options={}) {
+    const card = parent.appendChild(document.createElement(`tracearr-${type}-card`));
+    card.setConfig({...config,...options});
+    card.layout = "grid";
+    card.hass = {language:"fr",themes:{darkMode:!light},states:{},connection:{
+      subscribeMessage:async callback => {
+        clients.set(card,callback);
+        callback(payload(streams));
+        return () => clients.delete(card);
+      },
+      sendMessagePromise:async request => {
+        if (request.type !== "auth/sign_path") throw Error("Signature attendue");
+        return {path:request.path};
+      },
+    }};
+    return card;
+  }
+  const single = (streams,options) => mount(host,"stream",streams,options);
+  const mixed = [movie,episode,direct];
+  window.musicBench = {
+    startChanges() {
+      const card = host.querySelector("tracearr-streams-card");
+      window.oldCarousel = card.shadowRoot.querySelector(".carousel");
+      window.oldScroll = window.oldCarousel.scrollLeft;
+      clients.get(card)(payload([movie,episode,{...direct,...poster(4,"direct"),
+        rating_key:"horizontal",media_title:"Passage au signal suivant",progress_ms:100}]));
+    },
+    secondChange() {
+      const card = host.querySelector("tracearr-streams-card");
+      clients.get(card)(payload([movie,episode,{...direct,...poster(1,"direct"),
+        rating_key:"final",media_title:"Signal final",progress_ms:180}]));
+    },
+  };
+  if (view === "styles") {
+    for (const [style,label] of [["classic","Classique"],["premium","Premium"],["cinema","Cinéma"],
+      ["minimal","Minimaliste"],["technical","Technique"]]) {
+      const group = host.appendChild(document.createElement("section"));
+      group.appendChild(document.createElement("h2")).textContent = label;
+      mount(group,"stream",[direct],{show_header:false,compact:true,technical_badge_style:style,
+        technical_badge_layout:style === "technical" ? "separate" : "compact"});
+    }
+  } else if (view === "pochettes") {
+    host.className = "proof";
+    for (const [name,label] of [["original","Original carré · 600 × 600"],
+      ["vertical","Source verticale · recadrage amont de l’original · 400 × 600"]]) {
+      const figure = host.appendChild(document.createElement("figure"));
+      figure.appendChild(document.createElement("figcaption")).textContent = label;
+      const image = figure.appendChild(document.createElement("img"));
+      image.className = "reference";
+      image.src = `/music-art/${name}.png`;
+    }
+    for (const [id,key,label] of [["vertical",2,"Carte · source verticale"],["original",1,"Carte · source carrée"],
+      ["horizontal",4,"Carte · source horizontale"],["absent",0,"Carte · source absente"],
+      ["error",9,"Carte · source inaccessible"]]) {
+      const figure = host.appendChild(document.createElement("figure"));
+      figure.appendChild(document.createElement("figcaption")).textContent = label;
+      mount(figure,"stream",[{...direct,...(key ? poster(key,id) : {poster_url:null,poster_revision:null})}],
+        {show_header:false,poster_size:200});
+    }
+  } else if (view === "direct") single([direct],{poster_size:165,technical_badge_style:"technical"});
+  else if (view === "transcodage") single([transcode],{poster_size:165,technical_badge_style:"technical",
+    technical_badge_layout:"separate",music_badge_visibility:{audio_bitrate:true,container:true}});
+  else if (view === "pause") single([paused],{poster_size:155});
+  else if (view === "clair") single([direct],{poster_size:155,technical_badge_layout:"separate"});
+  else if (view === "musique") mount(host,"streams",[direct,transcode,paused],{});
+  else if (view === "carousel") mount(host,"streams",mixed,{mode:"carousel",carousel_visible:2,carousel_transition:"none"});
+  else if (view === "largeur") mount(host,"streams",[movie,episode,{...direct,
+    media_title:"À travers le dernier intervalle entre deux balises de navigation",
+    album_name:"UneArchiveDeNuitAuNomExceptionnellementLongSansSéparateursDeMots"}],
+    {compact:params.has("compact"),technical_badge_layout:params.has("separate") ? "separate" : "compact",
+      poster_size:params.has("compact") ? 118 : 100,show_year:false});
+  else mount(host,"streams",mixed,{});
+</script>
+</html>

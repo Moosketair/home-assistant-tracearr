@@ -1,4 +1,8 @@
-# État de reprise — corrections résiduelles 6C.3.D
+# État de reprise — présentation musicale 6C.4
+
+**6C.4 livré localement pour validation visuelle.** Branche `feature/6c-music-support` depuis `5c3612c1db81d522833cf13b1a37833235095251`. Les deux cartes existantes rendent les pistes automatiquement, sans nouveaux menus ni filtres. Voir [recette 6C.4](RECETTE.md#6c4--présentation-musicale) et [les neuf captures Chromium](../recette/preuves/6c.4/README.md). Aucun changement backend, stat, version ou visuel public. Attendre la validation du mainteneur avant 6C.5.
+
+**6C.3 définitivement validé par le mainteneur** sur `5c3612c1db81d522833cf13b1a37833235095251`, contre-audit 6C.3.E : **PASS AVEC RÉSERVES**. Réconciliation REST/SSE et horloge confirmées. Trois P3 acceptés sans correction en 6C.4 : position musicale pouvant rester plafonnée après une durée temporairement incohérente pendant une pause ; 404 amont pouvant manquer de `no-store` si la révision expire en vol ; URL non révisée commencée sur une vidéo pouvant servir une réponse cacheable après passage à une piste.
 
 **6C.3.D livré localement, dernier contrôle indépendant attendu.** 6C.3.C a rendu **FAIL** sur `dad7b83f46b65576b1a1a706a7c6b8dcc33756ef` : cinq anomalies closes, trois partiellement corrigées relevant de deux mécanismes. Branche `feature/6c-music-support` : `2122837515c7ea4364c57c4d3e18737b30a72412` pour les arrêts pendant un GET, `e03238569b799fe248c1ce37565b07587f6cb254` pour l’ancre de progression et les preuves d’identité. Voir [matrice avant/après et réserves P3](RECETTE.md#6c3d--arrêts-successifs-et-horloge-musicale). Aucun changement de version ni publication.
 
@@ -93,6 +97,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** arrêt à la livraison locale de 6C.3.D. Attendre la confirmation indépendante ciblée sur ces deux mécanismes et la validation du mainteneur ; 6C.4, 6C.5 et 6E restent dans la [feuille de route](ROADMAP.md) et nécessitent des autorisations distinctes.
+**Suite :** arrêt à la livraison locale de 6C.4. Attendre la validation visuelle du mainteneur ; 6C.5, 6C.6 et 6E nécessitent des autorisations distinctes.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.
