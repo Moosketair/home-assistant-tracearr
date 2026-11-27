@@ -188,3 +188,63 @@ def test_partial_streams_from_two_servers_are_never_coalesced():
             sim.streams["same"] = expected
             await views(bench, entry, sim, ws)
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("media_type", ["track", "movie", "episode"])
+@pytest.mark.parametrize("initial,rest,events,expected", [
+    ("A", "A", "-A +B -B", None),
+    ("A", "B", "-A +B -B", None),
+    ("A", "C", "-A +B -B", "C"),
+    ("B", "A", "-A", "B"),
+    ("B", "A", "-A ~A ~B", "B"),
+    ("B", "C", "-A", "C"),
+    ("B", "C", "-A ~B", "C"),
+    ("B", None, "-A", None),  # A late stop alone doesn't assert B is still present.
+    ("B", "A", "-A -B", None),
+    ("A", "A", "-A +B -A ~A -B +C", "C"),
+    ("A", "A", "-A +B -B -X", None),  # stop with no stream/server/start evidence
+    ("A", "C", "-A +B -B -X", None),  # no positive exclusion possible
+    ("A", "E", "-A +B -B +C -C +D -D +E -E +F -F", None),
+    ("A", "A", "-A +B -B +C -C +D -D +E -E +F ~A", "F"),
+    ("A", "E", "-A +B -B +C -C +D -D +E -E +F ~E", "F"),
+    ("A", "E", "-A +B -B +C -C +D -D +E -E +F -F +G -G +H -H +I -I +J ~E", "J"),
+], ids=["first-stopped", "last-stopped", "distinct", "late", "late-and-updates",
+        "late-distinct", "late-distinct-update", "late-empty-rest", "late-then-stop", "reopen",
+        "ambiguous", "ambiguous-distinct", "overflow", "evicted-update", "overflow-update",
+        "evicted-from-both"])
+def test_6c3d_stop_window(media_type, initial, rest, events, expected):
+    async def run():
+        async with Tracearr().serve() as sim, core() as bench, bench.connect() as ws:
+            # A and B are two plays of the *same* item with distinct starts.
+            plays = {name: sim.session("reuse", media_type=media_type,
+                                       rating_key="ab" if name in "AB" else name,
+                                       started_at=f"2026-01-01T12:{i:02}:00Z",
+                                       progress_ms=i * 100, media_title=f"Titre {name}")
+                     for i, name in enumerate("ABCDEFGHIJ")}
+            sim.streams["reuse"] = plays[initial]
+            entry = await bench.add(sim)
+            coord = bench.coord(entry)
+            sim.streams = {"reuse": plays[rest]} if rest else {}
+            async with held(sim, coord):
+                alive = initial
+                for operation, name in events.split():
+                    if operation == "-":
+                        sim.event("stream.stopped", {"id": "reuse", "stream": plays.get(name)})
+                        if name == alive or name == "X":
+                            alive = None
+                    else:
+                        kind = "stream.started" if operation == "+" else "stream.updated"
+                        sim.event(kind, plays[name])
+                        if operation == "+":
+                            alive = name
+                    sim.health("down" if sim.servers[0]["status"] == "up" else "up")
+                    await observed(coord, lambda: coord.servers[sim.servers[0]["server_id"]]["status"]
+                                   == sim.servers[0]["status"])
+                    assert coord.streams == ({"reuse": plays[alive]} if alive else {})
+            sim.streams = {"reuse": plays[expected]} if expected else {}
+            await views(bench, entry, sim, ws)
+            # This exclusion was scoped to the completed GET, not future RESTs.
+            sim.streams["reuse"] = plays["C"]
+            await coord.async_refresh()
+            await views(bench, entry, sim, ws)
+    asyncio.run(run())

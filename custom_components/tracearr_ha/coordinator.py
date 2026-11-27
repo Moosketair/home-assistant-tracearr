@@ -30,75 +30,95 @@ _MAX_PRIOR_PLAYS = 4
 
 
 class _RowChange(NamedTuple):
-    fields: dict
+    fields: dict | None  # None: stopped; {}: only a late stop for another incarnation.
     replace: bool
     new_play: bool
     identity: PlaybackIdentity
-    prior: tuple[PlaybackIdentity, ...]
+    prior: dict[PlaybackIdentity, bool]  # True if explicitly stopped during this GET.
     prior_overflow: bool
+    stop_overflow: bool
+
+    def excludes(self, rest: PlaybackIdentity) -> bool:
+        return self.stop_overflow or any(
+            stopped and not play.incompatible(rest) for play, stopped in self.prior.items()
+        )
+
+    def stopped_match(self, identity: PlaybackIdentity) -> bool:
+        return any(stopped and play.matches_stopped_play(identity) for play, stopped in self.prior.items())
 
 
 class _RefreshChanges:
     """Coalesce overlapping mutations, never retain an event history."""
 
     def __init__(self, *, streams: bool = False) -> None:
-        self.rows: dict[str, _RowChange | None] = {}
-        self.stopped: dict[str, _RowChange] = {}
+        self.rows: dict[str, _RowChange] = {}
         self.streams = streams
         self.overflow = False
 
     def record(self, key: str, fields: dict | None, *, replace: bool = False,
                new_play: bool = False, identity: PlaybackIdentity = PlaybackIdentity(),
-               previous_plays: tuple[PlaybackIdentity, ...] = ()) -> None:
+               previous_plays: tuple[PlaybackIdentity, ...] = (), late_stop: bool = False) -> None:
         if self.overflow:
             return
         if key not in self.rows and len(self.rows) >= _MAX_MUTATIONS:
             self.rows.clear()
-            self.stopped.clear()
             self.overflow = True
             return
-        previous = self.rows.get(key) or self.stopped.get(key)
-        prior = previous.prior if previous else ()
-        prior = tuple(dict.fromkeys((*prior, *previous_plays)))
-        truncated = len(prior) > _MAX_PRIOR_PLAYS or bool(previous and previous.prior_overflow)
-        prior = prior[:_MAX_PRIOR_PLAYS]
+        previous = self.rows.get(key)
+        prior = previous.prior if previous else {}
+        truncated = bool(previous and previous.prior_overflow)
+        stop_overflow = bool(previous and previous.stop_overflow)
+        proofs = (*previous_plays, identity) if fields is None else previous_plays
+        for play in proofs:
+            stopped = fields is None and play == identity
+            if play in prior or len(prior) < _MAX_PRIOR_PLAYS:
+                prior[play] = stopped or prior.get(play, False)
+            else:
+                truncated = True
+                stop_overflow |= stopped
+        if late_stop:
+            # Negative evidence about the REST row, not a mutation of the
+            # active row. Keep any coalesced fields for that active play.
+            self.rows[key] = (previous._replace(prior_overflow=truncated, stop_overflow=stop_overflow)
+                              if previous else _RowChange({}, False, False, PlaybackIdentity(),
+                                                           prior, truncated, stop_overflow))
+            return
         if fields is None:
-            self.stopped[key] = _RowChange({}, True, False, identity, prior, truncated)
-            self.rows[key] = None
+            self.rows[key] = _RowChange(None, True, False, identity, prior, truncated, stop_overflow)
         else:
             compatible = previous is not None and not previous.identity.incompatible(identity)
-            keep = compatible and not (replace or new_play)
+            keep = compatible and previous.fields is not None and not (replace or new_play)
             if keep:
                 previous.fields.update(fields)
             self.rows[key] = _RowChange(
                 previous.fields if keep else dict(fields),
                 replace or bool(previous and previous.replace),
                 new_play or bool(previous and previous.new_play),
-                previous.identity.continued_with(identity) if keep else identity, prior, truncated,
+                previous.identity.continued_with(identity) if keep else identity, prior, truncated, stop_overflow,
             )
-            self.stopped.pop(key, None)
-
-    def was_stopped(self, key: str) -> bool:
-        return key in self.rows and self.rows[key] is None
 
     def merge(self, incoming: dict[str, dict], live: dict[str, dict]) -> dict[str, dict]:
         if self.overflow:
             # Never partially protect a snapshot. Retry at the next REST cycle.
             return live
         for key, change in self.rows.items():
-            if change is None:
-                fetched = incoming.get(key)
-                if not fetched or not self.stopped[key].identity.incompatible(PlaybackIdentity.from_row(fetched)):
+            fetched = incoming.get(key)
+            rest = PlaybackIdentity.from_row(fetched) if self.streams and fetched is not None else None
+            if rest is not None and change.excludes(rest):
+                # Reject this GET's row, not the ID. A distinct live play can
+                # survive an obsolete snapshot even without a concurrent start.
+                if key in live:
+                    incoming[key] = live[key]
+                else:
                     incoming.pop(key, None)
-            else:
+                continue
+            if change.fields:
                 # After stop/start the live row belongs to the new incarnation;
                 # the in-flight REST row may still describe the stopped one.
                 current = live.get(key)
-                fetched = incoming.get(key)
                 base = current if change.replace or fetched is None else fetched
                 fields = change.fields
-                if self.streams and fetched is not None:
-                    rest = PlaybackIdentity.from_row(fetched)
+                if rest is not None:
                     known = change.identity
                     same_media = known.same_media(rest)
                     music = "track" in (known.media_type, rest.media_type)
@@ -113,7 +133,9 @@ class _RefreshChanges:
                             base = {**current, **(stream_join_fields(fetched) if same_media is True else {})}
                     elif boundary and known.other_server(rest):
                         base = current
-                    elif not boundary and (known.other_server(rest) or (music and known.incompatible(rest))):
+                    elif not boundary and (known.other_server(rest) or (
+                        (music or any(change.prior.values())) and known.incompatible(rest)
+                    )):
                         # Never move a delta onto a different server or known track/play.
                         continue
                     if music and same_media is True and fields.get("media_id") is None and base and base.get("media_id"):
@@ -367,14 +389,18 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
         identity = mutation.identity or PlaybackIdentity()
         now = time.monotonic()
         retired = self._stopped_plays.recent(key, now)
-        was_stopped = changes is not None and changes.was_stopped(key)
+        window = changes.rows.get(key) if changes is not None else None
+        was_stopped = window is not None and window.fields is None
         if mutation.kind == "stream.stopped":
             self._stopped_plays.remember(key, identity, now)
             if current is not None and previous.incompatible(identity):
-                return  # An identified late stop belongs to a different play.
+                if changes is not None:
+                    changes.record(key, None, identity=identity, late_stop=True)
+                return
         else:
-            if not previous.matches_stopped_play(identity) and any(
-                play.matches_stopped_play(identity) for _, play in retired
+            if not previous.matches_stopped_play(identity) and (
+                (window and window.stopped_match(identity))
+                or any(play.matches_stopped_play(identity) for _, play in retired)
             ):
                 return
             if mutation.kind != "stream.started":
@@ -382,6 +408,8 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
                     play.incompatible(identity) for _, play in retired
                 )):
                     return  # An ambiguous delta cannot reopen a recently retired ID.
+                if window and window.stop_overflow and previous.incompatible(identity):
+                    return  # Cannot rule out a forgotten stop. Wait for start or REST.
         reopen = mutation.kind == "stream.started" and current is None and bool(retired)
         if mutation.fields is None:
             self._stream_identities.pop(key, None)
@@ -390,9 +418,7 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
         if changes is not None:
             scope = identity if mutation.new_play or reopen else previous.continued_with(identity)
             prior = ()
-            if mutation.fields is None:
-                prior = (previous if current is not None else identity,)
-            elif reopen:
+            if reopen:
                 prior = tuple(play for _, play in retired)
             elif mutation.new_play and current is not None:
                 prior = (previous,)
