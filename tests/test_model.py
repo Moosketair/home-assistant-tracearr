@@ -149,4 +149,4 @@ def test_music_same_track_late_full_update_cannot_undo_seek_progress():
         "type": "stream.updated",
         "data": {**old, "media_id": None, "genres": None, "library_id": None, "progress_ms": 3800},
     })
-    assert streams[sid] == {**old, "media_id": None, "progress_ms": 4400}
+    assert streams[sid] == {**old, "progress_ms": 4400}
