@@ -2,6 +2,10 @@
 
 Les changements sont classés par version publique. Les préversions et les anciennes notes restent consultables ci-dessous. Les [GitHub Releases](https://github.com/Moosketair/home-assistant-tracearr/releases) permettent de télécharger une version précise.
 
+## Non publié
+
+- Les badges des pistes transcodées n’affichent plus de caractéristiques source comme des destinations confirmées. La comparaison regroupe format et codec audio quand les deux sont visibles (par ex. ATMOS → AAC), et le style Technique utilise des libellés secondaires plus courts.
+
 ## 0.1.18-beta.1 — Préversion de test
 
 Cette bêta est destinée aux essais volontaires. **La version stable recommandée reste `v0.1.17`.**

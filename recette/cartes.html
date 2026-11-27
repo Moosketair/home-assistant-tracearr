@@ -627,6 +627,44 @@
     return {ok:rows.every(row=>row.ok) && livePreview,rows,livePreview,
       theme:matchMedia("(prefers-color-scheme:dark)").matches ? "dark" : "light"};
   }
+  async function probeTranscoding() {
+    card.remove();
+    host.style.width="480px";
+    const audio = {...technicalStream,media_title:"Fixture · audio transcodé",video_decision:"copy",
+      source_video_details:{dynamicRange:"Dolby Vision"},stream_video_codec:"HEVC",
+      source_audio_codec:"EAC3",source_audio_channels:2,audio_channels_display:"Stereo",
+      source_audio_details:{atmos:true,profile:"dolby digital plus + dolby atmos",bitrate:768},
+      audio_decision:"transcode",stream_audio_codec:"AAC",stream_audio_details:{channels:2,bitrate:256}};
+    const video = {...technicalStream,media_title:"Fixture · vidéo transcodée",
+      source_video_details:{dynamicRange:"Dolby Vision"},
+      stream_video_details:{width:1920,height:1080,dynamicRange:"SDR"}};
+    const rows=[];
+    for (const [kind,stream] of [["audio",audio],["video",video]]) {
+      for (const mode of ["destination","source_to_destination"]) {
+        const section=host.appendChild(document.createElement("section"));
+        section.dataset.example=kind+"-"+mode;
+        const title=section.appendChild(document.createElement("h3"));
+        title.textContent=mode==="destination" ? "Destination uniquement" : "Source → destination";
+        const {card:node}=mountTechnical(section,{technical_badge_style:"technical",show_poster:false,
+          technical_badge_layout:"separate",technical_transcode_mode:mode},stream,kind==="audio" ? "streams" : "stream");
+        await frame();
+        const block=node.shadowRoot.querySelector(".technical");
+        const labels=[...block.querySelectorAll(".tech-badge")].map(b=>[b.dataset.tech,
+          [...b.querySelectorAll("strong")].map(x=>x.textContent).join(" → ")]);
+        const values=Object.fromEntries(labels);
+        const compare=mode!=="destination";
+        const ok=kind==="audio" ? values.hdr==="DV" && values.channels==="2.0" &&
+          (compare ? values.audio_format==="ATMOS → AAC" && !values.audio_codec :
+            values.audio_codec==="AAC" && !values.audio_format) :
+          values.resolution===(compare ? "4K → 1080p" : "1080p") &&
+          values.video_codec===(compare ? "HEVC → H.264" : "H.264") &&
+          values.hdr===(compare ? "DV" : undefined) && values.audio_format==="ATMOS";
+        const geometry=technicalGeometry(block,[...block.querySelectorAll(".tech-badge")]);
+        rows.push({kind,mode,labels,ok:ok && geometry.overflow<=1 && !geometry.overlap && !geometry.clipping});
+      }
+    }
+    return {ok:rows.every(row=>row.ok),rows};
+  }
   async function probeTechnical(visual) {
     card.remove();
     host.style.width = visual ? "720px" : "320px";
@@ -747,7 +785,9 @@
       await frame();
       const preview = find(".tech-preview .technical");
       const previewGeometry = technicalGeometry(preview,[...preview.querySelectorAll(".tech-badge")]);
-      const {card:node}=mountTechnical(host,saved,technicalStream,type);
+      const previewStream={...technicalStream,source_audio_codec:"eac3",audio_decision:"transcode",
+        stream_audio_details:{channels:2},stream_audio_codec:"aac",stream_audio_codec_display:"AAC"};
+      const {card:node}=mountTechnical(host,saved,previewStream,type);
       const panel = node.shadowRoot.querySelector(".technical");
       const match = preview.innerHTML === panel.innerHTML;
       node.remove();
@@ -931,8 +971,8 @@
     el("result").textContent = JSON.stringify({ok:cases.every(row => row.ok),
       theme:matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light", cases}, null, 2);
   }
-  if (["technical","technical-finish","technical-preview","pause-colors","pause-colors-preview","outage","outage-preview","responsive","lifecycle","blink"].some(param => params.has(param))) {
-    const probe = params.has("technical-finish") ? probeTechnicalFinish :
+  if (["transcoding","technical","technical-finish","technical-preview","pause-colors","pause-colors-preview","outage","outage-preview","responsive","lifecycle","blink"].some(param => params.has(param))) {
+    const probe = params.has("transcoding") ? probeTranscoding : params.has("technical-finish") ? probeTechnicalFinish :
       params.has("technical") || params.has("technical-preview") ? () => probeTechnical(params.get("technical-preview")) :
       params.has("pause-colors") || params.has("pause-colors-preview") ? () => probePauseColors(params.has("pause-colors-preview")) :
       params.has("outage") || params.has("outage-preview") ? () => probeOutage(params.has("outage-preview")) :

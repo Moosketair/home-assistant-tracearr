@@ -308,6 +308,17 @@
       // no independent output HDR or Atmos/DTS:X flag in this contract.
     };
     const anyTranscode = s.is_transcode || s.video_decision === "transcode" || s.audio_decision === "transcode";
+    const compare = c.technical_transcode_mode === "source_to_destination";
+    const changed = key => {
+      const group = TECH_GROUPS[key];
+      return group === "general" ? anyTranscode || info?.containerDecision === "transcode" || !!output.container :
+        codecState(s[`${group}_decision`]) !== "direct" && anyTranscode;
+    };
+    // A premium source profile and its base codec describe the same track.
+    // Fold a known transition to a standard codec into the format slot only
+    // when both categories are visible. Neither switch reveals the other.
+    const groupedAudio = compare && changed("audio_format") && source.audio_format && !output.audio_format &&
+      output.audio_codec && techVisible(c,"audio_format") && techVisible(c,"audio_codec");
     const order = c.technical_badge_order ? c.technical_badge_order.split(",") : TECH_FIELDS;
     return order.flatMap(key => {
       if (!techVisible(c,key)) return [];
@@ -320,16 +331,20 @@
           before || (key === "audio_format" && !anyTranscode ? streamAudioFormat : null);
         return value ? [{key,value}] : [];
       }
-      const group = TECH_GROUPS[key];
-      const changes = group === "general" ? anyTranscode || info?.containerDecision === "transcode" || !!output.container :
-        codecState(s[`${group}_decision`]) !== "direct" && anyTranscode;
-      if (!changes) {
+      if (groupedAudio && key === "audio_codec") return [];
+      if (groupedAudio && key === "audio_format") {
+        const codec = source.audio_codec;
+        return [{key,value:output.audio_codec,before:{...before,
+          secondary:codec?.short,
+          extra:[codec?.short,profile].filter(Boolean).join(" · ")}}];
+      }
+      if (!changed(key)) {
         const value = before || (key === "video_codec" ? videoCodec : key === "audio_codec" ? audioCodec : output[key]);
         return value ? [{key,value}] : [];
       }
       const after = output[key];
-      if (!after) return before ? [{key,value:before,sourceOnly:true}] : [];
-      return [{key,value:after,before:c.technical_transcode_mode === "source_to_destination" && before && !sameTech(before,after) ? before : null}];
+      if (!after) return compare && before ? [{key,value:before,sourceOnly:true}] : [];
+      return [{key,value:after,before:compare && before && !sameTech(before,after) ? before : null}];
     });
   }
   const technicalStyle = `
@@ -385,7 +400,12 @@
       const label = `${pick(TECH_LABELS[key])} : ${before ? `${full(before)} → ` : ""}${full(value)}${sourceOnly ?
         (en ? " (source; output unknown)" : " (source ; destination inconnue)") : ""}`;
       const part = format => {
-        const subtitle = mode === "technical" && (detail(format) || pick(format.description));
+        // Prefer a short, known codec label over long adapter profile text.
+        // The full profile remains in the accessible label and tooltip.
+        const codec = format.category === "audio_codec" || format.category === "video_codec";
+        const measured = !codec || !c.technical_transcode_mode;
+        const subtitle = mode === "technical" && (format.secondary || (measured && detail(format)) ||
+          pick(format.description));
         return `<span class="tech-part"><strong>${E(format.short)}</strong>${
           subtitle ? `<span class="tech-detail">${E(subtitle)}</span>` : ""}</span>`;
       };
@@ -1928,10 +1948,10 @@
       const palette = legacyTechnical(c) ? streamPalette(this,c.accent_color_mode,c.accent_custom_color,"plex") : null;
       const example = {resolution:"4K", source_video_width:3840, source_video_height:2160,
         source_video_details:{dynamicRange:"HDR10+"}, source_video_codec:"HEVC",
-        source_audio_codec:"truehd", source_audio_details:{atmos:true}, source_audio_channels:8,
+        source_audio_codec:"eac3", source_audio_details:{atmos:true}, source_audio_channels:8,
         transcode_info:{sourceContainer:"mkv",streamContainer:"mp4"}, is_transcode:true,
-        video_decision:"transcode", audio_decision:"copy",
-        stream_video_codec:"h264", stream_video_codec_display:"H.264", stream_audio_codec_display:"TrueHD",
+        video_decision:"transcode", audio_decision:"transcode", stream_audio_details:{channels:2},
+        stream_video_codec:"h264", stream_video_codec_display:"H.264", stream_audio_codec:"aac", stream_audio_codec_display:"AAC",
         stream_video_details:{width:1920,height:1080}};
       return `<div class="tech-preview${c.stream_surface === "blur" ? " surface-blur" : ""}"${palette ? ` style="--pill-bg:${palette.bg};--pill-text:${palette.text}"` : ""}>${
         metaMarkup(renderTechnical(example,c,c.show_bitrate ? 4200 : null,en),c.footer_field_order) ||

@@ -69,6 +69,96 @@ const techFixture = {
   stream_video_details:{width:1920,height:1080},
 };
 
+// Projection of formatActiveStream (raw codecs + public display fields and
+// nested track details), with fictitious identity and track measurements.
+const atmosphere = {
+  server_type:'plex', is_transcode:true, video_decision:'copy', audio_decision:'transcode',
+  resolution:'4K', source_video_width:3840, source_video_height:2160,
+  source_video_codec:'HEVC', stream_video_codec:'HEVC',
+  source_video_details:{dynamicRange:'Dolby Vision'},
+  source_audio_codec:'EAC3', source_audio_codec_display:'EAC3',
+  source_audio_details:{atmos:true,profile:'dolby digital plus + dolby atmos',bitrate:768},
+  source_audio_channels:2, audio_channels_display:'Stereo',
+  stream_audio_codec:'AAC', stream_audio_codec_display:'AAC', stream_audio_details:{channels:2,bitrate:256},
+  transcode_info:{sourceContainer:'MKV',streamContainer:'MP4',containerDecision:'transcode'},
+  bitrate:8000,
+};
+const badges = html => Object.fromEntries([...html.matchAll(/data-tech="([^"]+)"[^>]+>(.*?)(?=<span class="tech-badge|<\/div>|$)/g)]
+  .map(([,key,body])=>[key,[...body.matchAll(/<strong>(.*?)<\/strong>/g)].map(([,label])=>label)]));
+
+for (const style of ['classic','premium','cinema','minimal','technical']) {
+  test(`6D.4 ${style}: audio visibility, grouping and unchanged video`, () => {
+    for (const type of ['tracearr-streams-card','tracearr-stream-card']) {
+      for (const mode of ['destination','source_to_destination']) for (const layout of ['compact','separate']) {
+        for (const format of [true,false]) for (const codec of [true,false]) {
+          const html = technicalPanel({technical_badge_style:style,technical_transcode_mode:mode,
+            technical_badge_layout:layout,show_bitrate:true,
+            technical_badge_visibility:{audio_format:format,audio_codec:codec,hdr:true,channels:true}},atmosphere,type);
+          const result = badges(html), compare = mode === 'source_to_destination';
+          assert.deepEqual(result.hdr,['DV']);
+          assert.deepEqual(result.resolution,['4K']);
+          assert.deepEqual(result.video_codec,['HEVC']);
+          assert.deepEqual(result.channels,['2.0']);
+          assert.deepEqual(result.bitrate,['8.0 Mb/s']);
+          assert.deepEqual(result.audio_format,compare && format ? (codec ? ['ATMOS','AAC'] : ['ATMOS']) : undefined);
+          assert.deepEqual(result.audio_codec,codec && !(compare && format) ?
+            (compare ? ['E-AC-3','AAC'] : ['AAC']) : undefined);
+          assert.doesNotMatch(html,/>[^<]*(?:source|src\.|dolby digital plus \+ dolby atmos)[^<]*</i);
+          if (compare && format && codec && style === 'technical') {
+            assert.match(html,/>ATMOS<\/strong><span class="tech-detail">E-AC-3</);
+            assert.match(html,/dolby digital plus \+ dolby atmos/i); // Tooltip retains the profile.
+          }
+        }
+      }
+    }
+  });
+}
+
+test('6D.4: video, audio and container trust are independent', () => {
+  const config = {technical_badge_style:'technical',technical_transcode_mode:'destination'};
+  const comparison = {...config,technical_transcode_mode:'source_to_destination'};
+  for (const [hdr,output,codec] of [['Dolby Vision','SDR','HEVC'],['Dolby Vision','HDR10','AV1'],['HDR10+','HDR10','HEVC']]) {
+    const stream = {...atmosphere,video_decision:'transcode',audio_decision:'copy',
+      source_video_details:{dynamicRange:hdr},source_video_codec:codec,stream_video_codec:'H264',
+      stream_video_details:{width:1920,height:1080,dynamicRange:output}};
+    assert.deepEqual(badges(technicalPanel(config,stream)).resolution,['1080p']);
+    assert.deepEqual(badges(technicalPanel(comparison,stream)).video_codec,[codec,'H.264']);
+    assert.deepEqual(badges(technicalPanel(comparison,stream)).resolution,['4K','1080p']);
+    assert.equal(badges(technicalPanel(config,stream)).hdr,undefined); // Public output HDR is not independently confirmed.
+    assert.deepEqual(badges(technicalPanel(comparison,stream)).hdr,[hdr === 'Dolby Vision' ? 'DV' : hdr]);
+    assert.deepEqual(badges(technicalPanel(config,stream)).audio_format,['ATMOS']);
+    for (const audio_decision of ['copy','transcode']) {
+      const both = {...stream,audio_decision,source_audio_codec:'TRUEHD',source_audio_details:{},stream_audio_codec:'AC3',
+        source_audio_channels:8,audio_channels_display:'7.1',stream_video_codec:codec};
+      const after = badges(technicalPanel(config,both));
+      assert.equal(after.video_codec,undefined); // Equal raw codec is an adapter fallback as well as a possible true result.
+      assert.deepEqual(after.resolution,['1080p']);
+      assert.deepEqual(after.audio_codec,[audio_decision === 'copy' ? 'TRUEHD' : 'AC-3']);
+      if (audio_decision === 'transcode') {
+        assert.deepEqual(badges(technicalPanel(comparison,both)).channels,['7.1','2.0']);
+        assert.deepEqual(badges(technicalPanel(comparison,both)).audio_codec,['TRUEHD','AC-3']);
+      }
+    }
+  }
+  const remux = {...atmosphere,is_transcode:false,video_decision:'copy',audio_decision:'copy'};
+  assert.deepEqual(badges(technicalPanel(comparison,remux)).container,['MKV','MP4']);
+  assert.deepEqual(badges(technicalPanel(comparison,remux)).audio_codec,['E-AC-3']);
+  const direct = {...remux,video_decision:'directplay',audio_decision:'directplay',transcode_info:{sourceContainer:'MKV'}};
+  assert.deepEqual(badges(technicalPanel(config,direct)).container,['MKV']);
+  const dts = {...atmosphere,source_audio_codec:'DTS-HD MA',source_audio_details:{}};
+  assert.deepEqual(badges(technicalPanel(comparison,dts)).audio_codec,['DTS-HD MA','AAC']);
+  const unknown = {...atmosphere,stream_audio_codec:'EAC3',stream_audio_codec_display:'EAC3',
+    stream_audio_details:null,transcode_info:{sourceContainer:'MKV'}};
+  assert.equal(badges(technicalPanel(config,unknown)).channels,undefined);
+  assert.equal(badges(technicalPanel(config,unknown)).container,undefined);
+  assert.equal(badges(technicalPanel(config,unknown)).audio_format,undefined);
+  assert.equal(badges(technicalPanel(config,unknown)).audio_codec,undefined);
+  const fallback = technicalPanel(comparison,unknown);
+  assert.deepEqual(badges(fallback).audio_format,['ATMOS']);
+  assert.match(fallback,/Dolby Atmos \(source ; destination inconnue\)/);
+  assert.doesNotMatch(fallback,/→/);
+});
+
 test('6B classic preserves the exact footer markup and historical ordering', () => {
   const config = {show_bitrate:true,footer_field_order:'codecs,bitrate,quality'};
   const stream = {...techFixture,bitrate:4500};
@@ -110,8 +200,11 @@ test('6B.2 unknown output has no visible source label or comparison arrow in any
       transcode_info:null};
     for (const type of ['tracearr-streams-card','tracearr-stream-card']) {
       const html = technicalPanel(config,stream,type);
-      assert.match(html,/4K Ultra HD .*destination inconnue/);
-      assert.match(html,/HDR10\+ \(source ; destination inconnue\)/);
+      if (mode === 'destination') assert.doesNotMatch(html,/data-tech="(?:resolution|hdr|video_codec)"/);
+      else {
+        assert.match(html,/4K Ultra HD .*destination inconnue/);
+        assert.match(html,/HDR10\+ \(source ; destination inconnue\)/);
+      }
       assert.doesNotMatch(html,/>[^<]*(?:source|src\.)[^<]*<|→/i);
     }
   }
@@ -168,11 +261,10 @@ test('6B transcodes compare confirmed output and distinguish unknown destination
     stream_audio_details:{channels:6},stream_video_details:{...techFixture.stream_video_details,dynamicRange:'SDR'}};
   const comparison = technicalPanel(config,stream);
   assert.match(comparison,/Full HD.*<strong>4K<\/strong>.*→.*<strong>1080p<\/strong>/);
-  assert.match(comparison,/Dolby TrueHD → Dolby Digital Plus/);
+  assert.match(comparison,/Dolby Atmos \(TRUEHD\) → Dolby Digital Plus/);
   assert.match(comparison,/Surround 7\.1 → Surround 5\.1/);
   assert.match(comparison,/Matroska → MPEG-4 Part 14/);
   assert.match(comparison,/HDR10\+ \(source ; destination inconnue\)/);
-  assert.match(comparison,/Dolby Atmos \(source ; destination inconnue\)/);
   assert.doesNotMatch(comparison,/>SDR<\/strong>|→\s*<\/strong>/);
   const destination = technicalPanel({...config,technical_transcode_mode:'destination'},stream);
   assert.doesNotMatch(destination,/→|<strong>4K|<strong>TRUEHD|<strong>7\.1|<strong>MKV/);
@@ -199,7 +291,9 @@ test('6B preview and both cards use identical badge markup from the saved config
   editor.setConfig(JSON.parse(JSON.stringify(config)));
   const preview = editor._technicalPreview().match(/<div class="meta">.*<\/div>(?=<\/div>)/)[0];
   for (const type of ['tracearr-streams-card','tracearr-stream-card']) {
-    assert.equal(technicalPanel(editor._config,techFixture,type),preview);
+    const example = {...techFixture,source_audio_codec:'eac3',audio_decision:'transcode',
+      stream_audio_details:{channels:2},stream_audio_codec:'aac',stream_audio_codec_display:'AAC'};
+    assert.equal(technicalPanel(editor._config,example,type),preview);
   }
   assert.match(editor.shadowRoot.innerHTML,/data-section="technical"/);
   assert.match(editor.shadowRoot.innerHTML,/data-subdetail="technical-colors"/);
@@ -208,7 +302,11 @@ test('6B preview and both cards use identical badge markup from the saved config
   assert.match(editor.shadowRoot.innerHTML,/Destination only/);
   assert.match(editor._technicalPreview(),/Dynamic range \(HDR \/ SDR\)/);
   assert.match(editor._technicalPreview(),/>Dynamic HDR</);
+  assert.match(editor._technicalPreview(),/Dolby Atmos \(E-AC-3\) → Advanced Audio Coding/);
   assert.doesNotMatch(editor._technicalPreview(),/>[^<]*source[^<]*</i);
+  editor.setConfig({...config,technical_transcode_mode:'destination'});
+  assert.doesNotMatch(editor._technicalPreview(),/data-tech="(?:hdr|audio_format)"/);
+  assert.match(editor._technicalPreview(),/>AAC<\/strong>/);
   editor.setConfig({...config,technical_badge_style:'classic'});
   assert.doesNotMatch(editor.shadowRoot.innerHTML,/data-field="technical_badge_colors"/);
   assert.equal(editor._config.technical_badge_custom_colors['1080p'],'#aabbcc');
