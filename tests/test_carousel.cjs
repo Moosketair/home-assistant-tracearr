@@ -89,6 +89,29 @@ test('6C.3: same-track REST enrichment does not reset music clock; track switch 
   }
 });
 
+test('6C.3.B P2.3: a missing music key cannot hide the next track from either clock', () => {
+  for (const type of ['tracearr-streams-card','tracearr-stream-card']) {
+    const card = new (classes.get(type))();
+    const a = {...music.plex,media_id:null,progress_ms:3600};
+    const clock = card._syncPosition(a,0);
+    assert.equal(card._syncPosition({...a,rating_key:null},100),clock);
+    const b = {...a,rating_key:'102',progress_ms:100};
+    assert.equal(card._positionAt(card._syncPosition(b,200),200),100);
+  }
+});
+
+test('6C.3.B P3 duration: a same-track correction preserves the known clock', () => {
+  const card = new Card();
+  const a = {...music.plex,progress_ms:3600};
+  const clock = card._syncPosition(a,0);
+  assert.equal(card._syncPosition({...a,duration_ms:35000},200),clock);
+  assert.equal(card._positionAt(clock,200),3800);
+  assert.equal(clock.duration,35000);
+  const movie = {...a,id:'movie',media_type:'movie'};
+  const historical = card._syncPosition(movie,0);
+  assert.notEqual(card._syncPosition({...movie,duration_ms:35000},200),historical);
+});
+
 test('6C.3: a reused music session signs a distinct poster URL and ignores the old signature', async () => {
   const card = new Card();
   card.setConfig({show_poster:true,show_avatar:false});

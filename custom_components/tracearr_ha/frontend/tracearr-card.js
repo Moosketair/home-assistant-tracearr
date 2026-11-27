@@ -84,11 +84,15 @@
     key:identityText(s.rating_key), canonical:identityText(s.media_id),
     started:identityText(s.started_at),
   });
-  function musicPlaybackChanged(old, next) {
+  function sameMusicMedia(old, next) {
     const differs = key => old[key] && next[key] && old[key] !== next[key];
-    if (differs("type") || differs("server") || differs("started") || differs("key")) return true;
-    if (old.server && next.server && old.key && next.key) return false;
-    return !!differs("canonical");
+    if (differs("type") || differs("server") || differs("key")) return false;
+    if (old.server && next.server && old.key && next.key) return true;
+    return old.canonical && next.canonical ? old.canonical === next.canonical : null;
+  }
+  function musicPlaybackChanged(old, next) {
+    return sameMusicMedia(old,next) === false ||
+      !!(old.started && next.started && old.started !== next.started);
   }
   // Opaque cache key for the existing signed HA path, never an upstream URL
   // or a security check. Distinct artwork must not share a browser cache key.
@@ -1296,10 +1300,12 @@
       const media = [stream.started_at || "", stream.media_id || stream.rating_key || stream.media_title || ""].join("|");
       const identity = playbackIdentity(stream);
       const old = this._positions.get(id);
-      const changed = old && (isMusicTrack(stream) || old.identity?.type === "track" ?
-        musicPlaybackChanged(old.identity || {},identity) : old.media !== media);
+      const music = isMusicTrack(stream) || old?.identity?.type === "track";
+      const previous = old?.identity || {};
+      const changed = old && (music ? musicPlaybackChanged(previous,identity) : old.media !== media);
+      const sameTrack = music && sameMusicMedia(previous,identity) === true;
       if (!old || changed || (!stale && (old.stale ||
-          (old.duration && duration && Math.abs(old.duration-duration) > 10000)))) {
+          (!sameTrack && old.duration && duration && Math.abs(old.duration-duration) > 10000)))) {
         const fresh = {progress:source, at:now, duration, state, media, identity, stale,
           lastRaw:source, lastRawAt:now, lastRendered:source};
         this._positions.set(id, fresh);
@@ -1337,8 +1343,12 @@
       old.at = now;
       old.duration = duration;
       old.state = state;
+      if (music) {
+        for (const key of Object.keys(identity)) identity[key] ||= previous[key];
+      }
       old.identity = identity;
       if (seek) old.lastRendered = old.progress;
+      else if (sameTrack && duration > 0) old.lastRendered = Math.min(old.lastRendered,duration);
       if (source !== old.lastRaw) {
         old.lastRaw = source;
         old.lastRawAt = now;
