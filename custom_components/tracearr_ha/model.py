@@ -93,6 +93,7 @@ class StreamMutation(NamedTuple):
     kind: str
     fields: dict | None
     join_nulls: tuple[str, ...] = ()
+    new_music_play: bool = False
 
     def apply(self, streams: dict[str, dict]) -> bool:
         """Update the live cache without treating placeholders as edits."""
@@ -100,8 +101,44 @@ class StreamMutation(NamedTuple):
             return streams.pop(self.key, None) is not None
         if self.kind == "stream.progress" and (self.key not in streams or not self.fields):
             return False
-        streams[self.key] = {**dict.fromkeys(self.join_nulls), **streams.get(self.key, {}), **self.fields}
+        current = streams.get(self.key, {})
+        if self.new_music_play:
+            # On repeat, only the library enrichment can be carried over.
+            current = stream_join_fields(current) if same_music_media(current, self.fields) else {}
+        streams[self.key] = {**dict.fromkeys(self.join_nulls), **current, **self.fields}
         return True
+
+
+def stream_join_fields(row: dict) -> dict:
+    return {key: row[key] for key in _REST_JOIN_FIELDS if key in row}
+
+
+def _identity_value(row: dict, key: str) -> str | None:
+    value = row.get(key)
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def same_music_media(left: dict, right: dict) -> bool | None:
+    """Compare only supplied identities, never titles or playback position."""
+    types = _identity_value(left, "media_type"), _identity_value(right, "media_type")
+    if "track" not in types:
+        return None
+    servers = _identity_value(left, "server_id"), _identity_value(right, "server_id")
+    if (all(types) and types[0] != types[1]) or (all(servers) and servers[0] != servers[1]):
+        return False
+    keys = _identity_value(left, "rating_key"), _identity_value(right, "rating_key")
+    if all(keys) and (all(servers) or keys[0] != keys[1]):
+        return keys[0] == keys[1]
+    ids = _identity_value(left, "media_id"), _identity_value(right, "media_id")
+    return ids[0] == ids[1] if all(ids) else None
+
+
+def music_play_restarted(left: dict, right: dict) -> bool:
+    """Two distinct reported starts, not a clock to order REST against SSE."""
+    if left.get("media_type") != "track" and right.get("media_type") != "track":
+        return False
+    old, new = _identity_value(left, "started_at"), _identity_value(right, "started_at")
+    return bool(old and new and old != new)
 
 
 def stream_mutation(streams: dict[str, dict], event: dict) -> StreamMutation | None:
@@ -117,7 +154,10 @@ def stream_mutation(streams: dict[str, dict], event: dict) -> StreamMutation | N
         return None
     if kind == "stream.stopped":
         return StreamMutation(session_id, kind, None)
+    current = streams.get(session_id, {})
     if kind == "stream.progress":
+        if same_music_media(current, payload) is False:
+            return None  # A supplied server ID contradicted the live track.
         fields = {k: payload[k] for k in _PROGRESS_FIELDS if k in payload}
         return StreamMutation(session_id, kind, fields) if fields and _valid_stream_fields(fields) else None
     # formatActiveStream without the REST join always supplies these nulls.
@@ -126,17 +166,22 @@ def stream_mutation(streams: dict[str, dict], event: dict) -> StreamMutation | N
     fields = {k: v for k, v in payload.items() if k not in join_nulls}
     if len(fields) <= 1 or not _valid_stream_fields(fields):
         return None
-    if kind == "stream.updated" and "progress_ms" in fields:
+    same_music = same_music_media(current, fields)
+    new_music_play = (same_music is False or music_play_restarted(current, fields)
+                      or (not current and fields.get("media_type") == "track"))
+    if kind == "stream.updated" and "progress_ms" in fields and not new_music_play:
         # A trailing full update must not regress live progress, nor turn
         # the cached position into a new mutation against the REST result.
-        current = streams.get(session_id, {})
         new = {**current, **fields}
-        same_media = (current.get("media_id") or current.get("rating_key") or current.get("media_title")) == (new.get("media_id") or new.get("rating_key") or new.get("media_title"))
+        same_media = same_music is True or (
+            (current.get("media_id") or current.get("rating_key") or current.get("media_title"))
+            == (new.get("media_id") or new.get("rating_key") or new.get("media_title"))
+        )
         position = current.get("progress_ms", 0)
         if (same_media and current.get("state") == new.get("state") == "playing"
                 and _valid_measurement(position) and position > fields["progress_ms"]):
             del fields["progress_ms"]
-    return StreamMutation(session_id, kind, fields, join_nulls)
+    return StreamMutation(session_id, kind, fields, join_nulls, new_music_play)
 
 
 def apply_event(streams: dict[str, dict], event: dict) -> bool:

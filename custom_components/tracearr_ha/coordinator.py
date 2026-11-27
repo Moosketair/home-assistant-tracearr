@@ -13,7 +13,14 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import TracearrAuthError, TracearrClient, TracearrRateLimited, TracearrUnavailable
-from .model import snapshot_rows, stats, stream_mutation
+from .model import (
+    music_play_restarted,
+    same_music_media,
+    snapshot_rows,
+    stats,
+    stream_join_fields,
+    stream_mutation,
+)
 
 _LOGGER = logging.getLogger(__name__)
 _MAX_MUTATIONS = 4096
@@ -22,6 +29,7 @@ _MAX_MUTATIONS = 4096
 class _RowChange(NamedTuple):
     fields: dict
     replace: bool
+    new_music_play: bool
 
 
 class _RefreshChanges:
@@ -31,7 +39,8 @@ class _RefreshChanges:
         self.rows: dict[str, _RowChange | None] = {}
         self.overflow = False
 
-    def record(self, key: str, fields: dict | None, *, replace: bool = False) -> None:
+    def record(self, key: str, fields: dict | None, *, replace: bool = False,
+               new_music_play: bool = False) -> None:
         if self.overflow:
             return
         if key not in self.rows and len(self.rows) >= _MAX_MUTATIONS:
@@ -40,10 +49,14 @@ class _RefreshChanges:
             return
         if fields is None:
             self.rows[key] = None
-        elif not replace and (previous := self.rows.get(key)) is not None:
-            previous.fields.update(fields)
         else:
-            self.rows[key] = _RowChange(dict(fields), replace)
+            previous = self.rows.get(key)
+            if previous is not None and not (replace or new_music_play):
+                previous.fields.update(fields)
+            else:
+                # Reset the coalesced fields too; none belong to the next play.
+                self.rows[key] = _RowChange(dict(fields), replace or bool(previous and previous.replace),
+                                            new_music_play)
 
     def was_stopped(self, key: str) -> bool:
         return key in self.rows and self.rows[key] is None
@@ -58,7 +71,21 @@ class _RefreshChanges:
             else:
                 # After stop/start the live row belongs to the new incarnation;
                 # the in-flight REST row may still describe the stopped one.
-                base = live.get(key) if change.replace else incoming.get(key, live.get(key))
+                current = live.get(key)
+                fetched = incoming.get(key)
+                base = current if change.replace or fetched is None else fetched
+                if not change.replace and current is not None and fetched is not None:
+                    same_music = same_music_media(current, fetched)
+                    restarted = music_play_restarted(current, fetched)
+                    if change.new_music_play:
+                        if same_music is not True:
+                            base = current
+                        elif restarted:
+                            base = {**current, **stream_join_fields(fetched)}
+                    elif same_music is False or restarted:
+                        # The delta was applied to a different live track/play.
+                        # Let REST supply its own row rather than mixing tracks.
+                        continue
                 if base is not None:  # Progress/health alone cannot create a row.
                     incoming[key] = {**base, **change.fields}
         return incoming
@@ -276,6 +303,7 @@ class TracearrCoordinator(DataUpdateCoordinator[dict]):
             was_stopped = changes.was_stopped(mutation.key)
             if was_stopped and mutation.kind not in ("stream.started", "stream.stopped"):
                 return  # An update/progress cannot undo a known overlapping stop.
-            changes.record(mutation.key, mutation.fields, replace=was_stopped)
+            changes.record(mutation.key, mutation.fields, replace=was_stopped,
+                           new_music_play=mutation.new_music_play)
         if mutation.apply(self.streams):
             self._emit()

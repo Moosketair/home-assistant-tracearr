@@ -1,5 +1,6 @@
 """Tests using only the pure Python model, no Home Assistant required."""
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ path = Path(__file__).resolve().parents[1] / "custom_components/tracearr_ha/mode
 spec = importlib.util.spec_from_file_location("tracearr_model", path)
 model = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model)
+MUSIC = json.loads((Path(__file__).parent / "fixtures/music_streams.json").read_text())
 
 
 def test_transcodes():
@@ -65,3 +67,59 @@ def test_snapshot_rows_preserve_optional_values_and_empty_collection():
 def test_snapshot_rows_reject_invalid_essential_values(rows):
     with pytest.raises(ValueError, match="^Invalid Tracearr streams row$"):
         model.snapshot_rows({"data": rows})
+
+
+@pytest.mark.parametrize("server", MUSIC)
+def test_music_metadata_survives_snapshot_full_update_and_progress(server):
+    row = {**MUSIC[server], "track_number": "atypique", "artist_name": None}
+    sid = row["id"]
+    streams = model.snapshot_rows({"data": [row]})
+    assert streams[sid] == row
+    assert model.apply_event(streams, {
+        "type": "stream.updated", "data": {**row, "artist_name": "", "genres": None, "library_id": None},
+    })
+    assert model.apply_event(streams, {
+        "type": "stream.progress", "data": {"id": sid, "state": "paused", "progress_ms": 900, "bitrate": None},
+    })
+    assert streams[sid] == {**row, "artist_name": "", "state": "paused", "progress_ms": 900, "bitrate": None}
+
+
+def test_music_transition_drops_old_fields_even_with_same_title_and_canonical_id():
+    old = MUSIC["plex"]
+    sid = old["id"]
+    streams = {sid: old}
+    new = {
+        "id": sid, "server_id": old["server_id"], "media_type": "track", "media_id": old["media_id"],
+        "rating_key": "102", "media_title": old["media_title"], "artist_name": "Artiste suivant",
+        "progress_ms": 100, "state": "playing", "genres": None, "library_id": None,
+    }
+    assert model.apply_event(streams, {"type": "stream.updated", "data": new})
+    assert streams[sid] == new  # No stale album, duration, artwork or enrichment.
+    assert old["genres"] == ["Instrumental"]
+
+
+def test_music_repeat_restarts_with_observed_new_start_time():
+    old = MUSIC["plex"]
+    sid = old["id"]
+    streams = {sid: old}
+    repeated = {**old, "started_at": "2026-11-27T12:00:12.000Z", "progress_ms": 0}
+    assert model.apply_event(streams, {
+        "type": "stream.updated", "data": {**repeated, "genres": None, "library_id": None},
+    })
+    assert streams[sid] == repeated
+
+
+def test_music_same_track_late_full_update_cannot_undo_seek_progress():
+    old = MUSIC["plex"]
+    sid = old["id"]
+    streams = {sid: old}
+    # A new, lower position is allowed on progress, not on a trailing full update.
+    for progress in (9000, 4400):
+        assert model.apply_event(streams, {
+            "type": "stream.progress", "data": {"id": sid, "progress_ms": progress},
+        })
+    assert model.apply_event(streams, {
+        "type": "stream.updated",
+        "data": {**old, "media_id": None, "genres": None, "library_id": None, "progress_ms": 3800},
+    })
+    assert streams[sid] == {**old, "media_id": None, "progress_ms": 4400}

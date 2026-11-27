@@ -2,6 +2,8 @@
 import asyncio
 from contextlib import asynccontextmanager
 from copy import deepcopy
+import json
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -489,6 +491,101 @@ def test_stop_restart_same_id_never_inherits_inflight_old_row():
                 sim.streams["same"].update(library_id="new-library", genres=["New"], player="new player")
                 await coord.async_refresh()
                 await views(b, entry, sim, ws)
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("resource", ["streams", "servers"])
+@pytest.mark.parametrize("rest_has_next", [False, True])
+def test_music_same_id_transition_during_refresh(resource, rest_has_next):
+    async def run():
+        fixtures = json.loads((Path(__file__).parents[1] / "tests/fixtures/music_streams.json").read_text())
+        async with Tracearr().serve() as sim:
+            old = {**fixtures["plex"], "server_id": sim.servers[0]["server_id"]}
+            sid = old["id"]
+            sim.streams[sid] = old
+            next_event = {
+                "id": sid, "server_id": old["server_id"], "media_type": "track",
+                "rating_key": "102", "media_title": "Interlude II", "artist_name": "Artiste suivant",
+                "state": "playing", "progress_ms": 0, "genres": None, "library_id": None,
+            }
+            new_rest = {
+                **next_event, "duration_ms": 15000, "genres": ["Nouveau"],
+                "library_id": "7", "progress_ms": 200,
+            }
+            async with core() as b, b.connect() as ws:
+                entry = await b.add(sim)
+                coord = b.coord(entry)
+                if rest_has_next:
+                    sim.streams[sid] = new_rest
+                async with held(sim, coord, resource):
+                    # Progress of the first track is coalesced in this very same refresh.
+                    sim.event("stream.progress", {"id": sid, "progress_ms": 7000, "bitrate": 999})
+                    await observed(coord, lambda: coord.streams[sid]["progress_ms"] == 7000)
+                    sim.event("stream.updated", next_event)
+                    await observed(coord, lambda: coord.streams[sid]["rating_key"] == "102")
+                    assert coord.streams[sid] == next_event
+                    sim.event("stream.progress", {"id": sid, "progress_ms": 800, "state": "paused"})
+                    await observed(coord, lambda: coord.streams[sid]["state"] == "paused")
+                expected = {**(new_rest if rest_has_next else next_event), "state": "paused", "progress_ms": 800}
+                assert coord.last_update_success
+                assert coord.streams[sid] == expected
+                sim.streams[sid] = expected
+                await views(b, entry, sim, ws)
+                clean(coord)
+                # A subsequent REST can again enrich the current track.
+                sim.streams[sid] = new_rest
+                await coord.async_refresh()
+                await views(b, entry, sim, ws)
+    asyncio.run(run())
+
+
+def test_music_progress_for_live_old_track_does_not_overwrite_rest_next_track():
+    async def run():
+        async with Tracearr().serve() as sim:
+            old = sim.session("same", media_type="track", rating_key="a", album_name="Album A")
+            new = {**old, "rating_key": "b", "album_name": "Album B", "progress_ms": 20}
+            sim.streams["same"] = old
+            async with core() as b, b.connect() as ws:
+                entry = await b.add(sim)
+                coord = b.coord(entry)
+                sim.streams["same"] = new
+                async with held(sim, coord):
+                    sim.event("stream.progress", {"id": "same", "progress_ms": 7000, "state": "paused"})
+                    await observed(coord, lambda: coord.streams["same"]["progress_ms"] == 7000)
+                await views(b, entry, sim, ws)
+                clean(coord)
+    asyncio.run(run())
+
+
+def test_music_short_sequence_and_rest_reappearance_after_sse_disconnect():
+    async def run():
+        async with Tracearr().serve() as sim, core() as b, b.connect() as ws:
+            entry = await b.add(sim)
+            coord = b.coord(entry)
+            sim.change("started", "a", media_type="track", rating_key="101", duration_ms=8000)
+            await observed(coord, lambda: "a" in coord.streams)
+            sim.change("progress", "a", progress_ms=7700, state="paused")
+            await observed(coord, lambda: coord.streams["a"]["state"] == "paused")
+            sim.change("progress", "a", progress_ms=2100, state="playing")
+            await observed(coord, lambda: coord.streams["a"]["progress_ms"] == 2100)
+            # Automatic next, manual next and previous are not distinct public events.
+            for old, new, rating in (("a", "b", "102"), ("b", "c", "103"), ("c", "a2", "101")):
+                sim.change("stopped", old)
+                sim.change("started", new, media_type="track", rating_key=rating, duration_ms=8000)
+                await observed(coord, lambda: set(coord.streams) == {new})
+                assert coord.streams[new]["progress_ms"] == 0
+            await views(b, entry, sim, ws)
+            sim.errors["events"] = (503, {})
+            sim.raw(None)
+            await observed(coord, lambda: not coord.sse_connected)
+            sim.streams.clear()
+            await coord.async_refresh()
+            await views(b, entry, sim, ws)
+            sim.streams["a2"] = sim.session("a2", media_type="track", rating_key="104", progress_ms=150)
+            await coord.async_refresh()
+            assert not coord.sse_connected and not coord.data["streams_stale"]
+            await views(b, entry, sim, ws)
+            clean(coord)
     asyncio.run(run())
 
 
