@@ -1,4 +1,6 @@
-# État de reprise — prépublication 6D.5
+# État de reprise — finition audio 6D.6
+
+**6D.6 livré localement** sur `fix/technical-badges-format-fallback` depuis la bêta 2 publiée `74742d4615019676515010a70f52196eb3de91f1`. Le mainteneur confirme le correctif de transcodage en conditions réelles et valide le repli Format audio → codec lorsque le format spécifique manque. Voir [recette et limites](RECETTE.md#6d6--complémentarité-des-badges-audio). Le futur lot 6E est inscrit sans audit ni implémentation ; 6C est inchangé.
 
 **Décision 6D.5.** Le mainteneur valide le [correctif 6D.4 des badges de transcodage](RECETTE.md#6d4--badges-de-transcodage) sur `f41b6744381acd8fd1bafdc5bd8381e50ac525bb`. Ce commit a été intégré par avance rapide à `release/v0.1.18`. Le mainteneur autorise la [préversion `v0.1.18-beta.2`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.18-beta.2) pour ses essais via HACS. Après le correctif validé, seuls les références de version, leurs tests et la documentation changent. Le [contrôle GitHub du tag](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml?query=branch%3Av0.1.18-beta.2) doit porter sur le commit effectivement publié. La stable `v0.1.17` et la bêta 1 restent en place.
 
@@ -79,6 +81,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** après la prépublication 6D.5, attendre les essais personnels du mainteneur et son autorisation explicite avant toute publication stable. Le lot 6C reste dans la [feuille de route](ROADMAP.md) et nécessite une autorisation distincte.
+**Suite :** attendre la validation du mainteneur avant toute préparation de `v0.1.18-beta.3`. Aucune publication sans autorisation. Les lots 6C et 6E restent dans la [feuille de route](ROADMAP.md) et nécessitent des autorisations distinctes.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.

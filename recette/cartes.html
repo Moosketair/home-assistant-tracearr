@@ -646,7 +646,9 @@
         const title=section.appendChild(document.createElement("h3"));
         title.textContent=mode==="destination" ? "Destination uniquement" : "Source → destination";
         const {card:node}=mountTechnical(section,{technical_badge_style:"technical",show_poster:false,
-          technical_badge_layout:"separate",technical_transcode_mode:mode},stream,kind==="audio" ? "streams" : "stream");
+          technical_badge_layout:"separate",technical_transcode_mode:mode,
+          ...(params.has("format-only") && {technical_badge_visibility:{audio_codec:false}})},
+          stream,kind==="audio" ? "streams" : "stream");
         await frame();
         const block=node.shadowRoot.querySelector(".technical");
         const labels=[...block.querySelectorAll(".tech-badge")].map(b=>[b.dataset.tech,
@@ -654,8 +656,7 @@
         const values=Object.fromEntries(labels);
         const compare=mode!=="destination";
         const ok=kind==="audio" ? values.hdr==="DV" && values.channels==="2.0" &&
-          (compare ? values.audio_format==="ATMOS → AAC" && !values.audio_codec :
-            values.audio_codec==="AAC" && !values.audio_format) :
+          values.audio_format===(compare ? "ATMOS → AAC" : "AAC") && !values.audio_codec :
           values.resolution===(compare ? "4K → 1080p" : "1080p") &&
           values.video_codec===(compare ? "HEVC → H.264" : "H.264") &&
           values.hdr===(compare ? "DV" : undefined) && values.audio_format==="ATMOS";
@@ -738,7 +739,7 @@
           const ok = classic ? !section && container?.textContent === "4K·4.2 Mb/s·H.264 / TrueHD" && data.overflow<=1 &&
             !data.overlap && !data.clipping && data.contrast>=4.5 :
             section?.classList.contains(`tech-${style}`) && groups === (layout==="separate" ? 3 : 0) &&
-            data.count===(style==="classic" ? 4 : 8) && data.overflow<=1 && !data.overlap && !data.clipping && data.contrast>=4.5 &&
+            data.count===(style==="classic" ? 4 : 7) && data.overflow<=1 && !data.overlap && !data.clipping && data.contrast>=4.5 &&
             (width>320 || data.rows>1);
           rows.push({name:`${type}-${mode}-${style}-${layout}`,width,ok:!!ok,...data,groups});
         }
@@ -771,7 +772,7 @@
       find('[data-subdetail="technical-colors"]').open=true;
       find('[data-subdetail="technical-colors-resolution"]').open=true;
       selectFieldColor("1080p","#fedcba");
-      selectFieldColor("truehd","#123456");
+      selectFieldColor("atmos","#123456");
       function selectFieldColor(id,value) {
         const input=find(`[data-tech-color="${id}"]`); input.value=value;
         input.dispatchEvent(new Event("input",{bubbles:true}));
@@ -792,7 +793,7 @@
       const match = preview.innerHTML === panel.innerHTML;
       node.remove();
       find('[data-tech-reset="1080p"]').click();
-      const resetOne = !saved.technical_badge_custom_colors["1080p"] && saved.technical_badge_custom_colors.truehd==="#123456";
+      const resetOne = !saved.technical_badge_custom_colors["1080p"] && saved.technical_badge_custom_colors.atmos==="#123456";
       find('[data-tech-reset="all"]').click();
       const resetAll = !saved.technical_badge_custom_colors;
       const order = saved.technical_badge_order.startsWith("hdr,resolution,") && saved.technical_badge_visibility.hdr===false;

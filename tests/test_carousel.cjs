@@ -100,8 +100,8 @@ for (const style of ['classic','premium','cinema','minimal','technical']) {
           assert.deepEqual(result.video_codec,['HEVC']);
           assert.deepEqual(result.channels,['2.0']);
           assert.deepEqual(result.bitrate,['8.0 Mb/s']);
-          assert.deepEqual(result.audio_format,compare && format ? (codec ? ['ATMOS','AAC'] : ['ATMOS']) : undefined);
-          assert.deepEqual(result.audio_codec,codec && !(compare && format) ?
+          assert.deepEqual(result.audio_format,format ? (compare ? ['ATMOS','AAC'] : ['AAC']) : undefined);
+          assert.deepEqual(result.audio_codec,codec && !format ?
             (compare ? ['E-AC-3','AAC'] : ['AAC']) : undefined);
           assert.doesNotMatch(html,/>[^<]*(?:source|src\.|dolby digital plus \+ dolby atmos)[^<]*</i);
           if (compare && format && codec && style === 'technical') {
@@ -133,20 +133,20 @@ test('6D.4: video, audio and container trust are independent', () => {
       const after = badges(technicalPanel(config,both));
       assert.equal(after.video_codec,undefined); // Equal raw codec is an adapter fallback as well as a possible true result.
       assert.deepEqual(after.resolution,['1080p']);
-      assert.deepEqual(after.audio_codec,[audio_decision === 'copy' ? 'TRUEHD' : 'AC-3']);
+      assert.deepEqual(after.audio_format,[audio_decision === 'copy' ? 'TRUEHD' : 'AC-3']);
       if (audio_decision === 'transcode') {
         assert.deepEqual(badges(technicalPanel(comparison,both)).channels,['7.1','2.0']);
-        assert.deepEqual(badges(technicalPanel(comparison,both)).audio_codec,['TRUEHD','AC-3']);
+        assert.deepEqual(badges(technicalPanel(comparison,both)).audio_format,['TRUEHD','AC-3']);
       }
     }
   }
   const remux = {...atmosphere,is_transcode:false,video_decision:'copy',audio_decision:'copy'};
   assert.deepEqual(badges(technicalPanel(comparison,remux)).container,['MKV','MP4']);
-  assert.deepEqual(badges(technicalPanel(comparison,remux)).audio_codec,['E-AC-3']);
+  assert.deepEqual(badges(technicalPanel(comparison,remux)).audio_format,['ATMOS']);
   const direct = {...remux,video_decision:'directplay',audio_decision:'directplay',transcode_info:{sourceContainer:'MKV'}};
   assert.deepEqual(badges(technicalPanel(config,direct)).container,['MKV']);
   const dts = {...atmosphere,source_audio_codec:'DTS-HD MA',source_audio_details:{}};
-  assert.deepEqual(badges(technicalPanel(comparison,dts)).audio_codec,['DTS-HD MA','AAC']);
+  assert.deepEqual(badges(technicalPanel(comparison,dts)).audio_format,['DTS-HD MA','AAC']);
   const unknown = {...atmosphere,stream_audio_codec:'EAC3',stream_audio_codec_display:'EAC3',
     stream_audio_details:null,transcode_info:{sourceContainer:'MKV'}};
   assert.equal(badges(technicalPanel(config,unknown)).channels,undefined);
@@ -155,8 +155,44 @@ test('6D.4: video, audio and container trust are independent', () => {
   assert.equal(badges(technicalPanel(config,unknown)).audio_codec,undefined);
   const fallback = technicalPanel(comparison,unknown);
   assert.deepEqual(badges(fallback).audio_format,['ATMOS']);
-  assert.match(fallback,/Dolby Atmos \(source ; destination inconnue\)/);
+  assert.match(fallback,/Dolby Atmos \(E-AC-3[^)]*\) \(source ; destination inconnue\)/);
   assert.doesNotMatch(fallback,/→/);
+});
+
+test('6D.6: format falls back to the codec, without inventing a destination', () => {
+  for (const mode of ['destination','source_to_destination']) for (const format of [true,false]) for (const codec of [true,false]) {
+    const config = {technical_badge_style:'premium',technical_transcode_mode:mode,
+      technical_badge_visibility:{audio_format:format,audio_codec:codec}};
+    const compare = mode === 'source_to_destination';
+    const samples = [
+      [{...atmosphere,source_audio_codec:'TRUEHD',stream_audio_codec:'AC3'}, ['ATMOS','AC-3'], ['TRUEHD','AC-3']],
+      [{...atmosphere,source_audio_codec:'DTS-HD MA',source_audio_details:{},stream_audio_codec:'AAC'},
+        ['DTS-HD MA','AAC'], ['DTS-HD MA','AAC']],
+      [{...atmosphere,audio_decision:'copy',video_decision:'transcode',
+        source_audio_codec:'AAC',source_audio_details:{},stream_audio_codec:'AAC'}, ['AAC'], ['AAC']],
+      [{...atmosphere,is_transcode:false,audio_decision:'directplay',video_decision:'directplay',
+        source_audio_codec:'AAC',source_audio_details:{},stream_audio_codec:'AAC'}, ['AAC'], ['AAC']],
+      [{...atmosphere,is_transcode:false,audio_decision:'directplay',video_decision:'directplay',
+        stream_audio_codec:'EAC3'}, ['ATMOS'], ['E-AC-3']],
+      [{...atmosphere,source_audio_codec:'AAC',source_audio_details:{},stream_audio_codec:'AAC'},
+        compare ? ['AAC'] : [], compare ? ['AAC'] : []],
+    ];
+    for (const [stream, rich, precise] of samples) {
+      const result = badges(technicalPanel(config,stream));
+      const visible = list => list.length ? compare ? list : list.slice(-1) : undefined;
+      assert.deepEqual(result.audio_format,format ? visible(rich) : undefined);
+      assert.deepEqual(result.audio_codec,codec && !format ? visible(precise) : undefined);
+      assert.deepEqual(result.channels,['2.0']);
+    }
+    const premium = {...atmosphere,stream_audio_codec:'DTS:X'};
+    assert.deepEqual(badges(technicalPanel(config,premium)).audio_format,
+      format ? (compare ? ['ATMOS','DTS:X'] : ['DTS:X']) : undefined);
+  }
+  const styled = technicalPanel({technical_badge_style:'premium',technical_badge_layout:'separate',
+    technical_transcode_mode:'source_to_destination', technical_badge_order:'audio_codec,channels,audio_format',
+    technical_badge_custom_colors:{atmos:'#283849',aac:'#5599cc'}},atmosphere);
+  assert.match(styled,/data-tech="channels".*data-tech="audio_format".*--tech-color:#283849.*--tech-color:#5599cc/);
+  assert.doesNotMatch(styled,/data-tech="audio_codec"/);
 });
 
 test('6B classic preserves the exact footer markup and historical ordering', () => {
@@ -216,7 +252,8 @@ test('6B matches explicit premium formats only; unknown text is neutral and esca
     const html = technicalPanel(config,{resolution:'4K',source_video_codec:'HEVC',
       source_video_details:{dynamicRange:'HDR'},source_audio_codec:codec});
     assert.match(html,/>HDR<\/strong>/);
-    assert.doesNotMatch(html,/ATMOS|DTS:X|Dolby Vision|HDR10|data-tech="audio_format"/);
+    assert.doesNotMatch(html,/ATMOS|DTS:X|Dolby Vision|HDR10/);
+    assert.ok(badges(html).audio_format);
   }
   const html = technicalPanel(config,{source_audio_codec:'DTS',source_audio_details:{profile:'DTS:X'},
     source_video_details:{dynamicRange:'Dolby Vision'},source_video_codec:'<img onerror="x">'});
@@ -274,12 +311,12 @@ test('6B transcodes compare confirmed output and distinguish unknown destination
       stream_audio_codec:'truehd',stream_video_details:null,stream_audio_details:{channels:8},transcode_info:null});
     assert.doesNotMatch(equal,/→/);
     assert.match(equal,/H\.265 \/ HEVC \(source ; destination inconnue\)/);
-    assert.match(equal,/Dolby TrueHD \(source ; destination inconnue\)/);
+    assert.match(equal,/Dolby Atmos \(TRUEHD\) \(source ; destination inconnue\)/);
     assert.match(equal,/Surround 7\.1" title="Canaux audio : Surround 7\.1"/);
   }
   const direct = technicalPanel(config,{...stream,is_transcode:false,video_decision:'directplay',audio_decision:'directplay',
     transcode_info:{sourceContainer:'mkv'}});
-  assert.match(direct,/<strong>4K<.*<strong>HEVC<.*<strong>TRUEHD</);
+  assert.match(direct,/<strong>4K<.*<strong>HEVC<.*<strong>ATMOS<\/strong><span class="tech-detail">TRUEHD</);
   assert.doesNotMatch(direct,/→|tech-source|<strong>1080p/);
 });
 
@@ -305,8 +342,9 @@ test('6B preview and both cards use identical badge markup from the saved config
   assert.match(editor._technicalPreview(),/Dolby Atmos \(E-AC-3\) → Advanced Audio Coding/);
   assert.doesNotMatch(editor._technicalPreview(),/>[^<]*source[^<]*</i);
   editor.setConfig({...config,technical_transcode_mode:'destination'});
-  assert.doesNotMatch(editor._technicalPreview(),/data-tech="(?:hdr|audio_format)"/);
-  assert.match(editor._technicalPreview(),/>AAC<\/strong>/);
+  assert.doesNotMatch(editor._technicalPreview(),/data-tech="(?:hdr|audio_codec)"|>ATMOS<\/strong>/);
+  assert.deepEqual(badges(editor._technicalPreview()).audio_format,['AAC']);
+  assert.match(editor.shadowRoot.innerHTML,/Audio format shows the specific format/);
   editor.setConfig({...config,technical_badge_style:'classic'});
   assert.doesNotMatch(editor.shadowRoot.innerHTML,/data-field="technical_badge_colors"/);
   assert.equal(editor._config.technical_badge_custom_colors['1080p'],'#aabbcc');

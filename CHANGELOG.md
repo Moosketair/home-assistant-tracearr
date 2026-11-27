@@ -2,6 +2,10 @@
 
 Les changements sont classés par version publique. Les préversions et les anciennes notes restent consultables ci-dessous. Les [GitHub Releases](https://github.com/Moosketair/home-assistant-tracearr/releases) permettent de télécharger une version précise.
 
+## Non publié
+
+- **Format audio** affiche le codec lorsqu’aucun format spécifique n’est connu. Un transcodage Atmos → AAC reste donc lisible lorsque Format audio est seul activé, sans doubler l’affichage lorsque Codec audio est aussi activé.
+
 ## 0.1.18-beta.2 — Préversion de test
 
 Cette bêta corrige les badges techniques de `v0.1.18-beta.1`. **La version stable recommandée reste `v0.1.17`.**

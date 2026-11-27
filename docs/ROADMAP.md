@@ -23,8 +23,21 @@ Les phases 0 et 1.1 sont validées. **2A** est définitivement validée sur `942
 | 6A | [**Affichage en pause et couleurs des badges du bandeau**](#lot-6a--affichage-en-pause-et-couleurs-des-badges) | Conserver les options de masquage et l’apparence des anciennes configurations par défaut. |
 | 6B | [**Badges techniques personnalisables**](#lot-6b--badges-techniques-personnalisables) : identité visuelle propre à Tracearr HA pour les panneaux de lecture. | Cinq styles avec aperçu dans l’éditeur ; rendu compact, lisible en thèmes clair et sombre ; style classique conservé par défaut. |
 | 6C | [**Lectures musicales**](#lot-6c--lectures-musicales), [demande #2](https://github.com/Moosketair/home-assistant-tracearr/issues/2). | Définir le repli si les métadonnées manquent et préserver la compatibilité des cartes et des lectures vidéo. Confirmation du périmètre avant développement. |
+| 6E | [**Ergonomie de l’éditeur graphique des cartes**](#lot-6e--ergonomie-de-léditeur-graphique-des-cartes). | Audit en lecture seule, discussion, maquettes validées avant développement, puis recette de compatibilité. |
 
 La priorité d’un lot n’est pas une promesse de publication. Garder les issues comme suivi opérationnel et le changelog pour ce qui a effectivement été livré.
+
+### Lot 6E — Ergonomie de l’éditeur graphique des cartes
+
+Lot futur, ni audité ni commencé en 6D.6 :
+
+1. Auditer en lecture seule la pertinence des réglages, les doublons et l’organisation actuelle des menus et sous-menus.
+2. Discuter des constats et des organisations possibles avec le mainteneur.
+3. Préparer des maquettes et obtenir une validation explicite de la nouvelle ergonomie.
+4. Développer uniquement après cette validation.
+5. Effectuer la recette et vérifier la compatibilité des configurations existantes.
+
+Pistes à discuter, non retenues à ce stade : catégories, onglets, sous-pages, affichage conditionnel, recherche, réglages avancés et composants natifs Home Assistant. Le lot musical 6C reste distinct.
 
 ### Lot 6A — Affichage en pause et couleurs des badges
 

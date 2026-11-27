@@ -314,11 +314,21 @@
       return group === "general" ? anyTranscode || info?.containerDecision === "transcode" || !!output.container :
         codecState(s[`${group}_decision`]) !== "direct" && anyTranscode;
     };
-    // A premium source profile and its base codec describe the same track.
-    // Fold a known transition to a standard codec into the format slot only
-    // when both categories are visible. Neither switch reveals the other.
-    const groupedAudio = compare && changed("audio_format") && source.audio_format && !output.audio_format &&
-      output.audio_codec && techVisible(c,"audio_format") && techVisible(c,"audio_codec");
+    const showAudioFormat = techVisible(c,"audio_format");
+    const showAudioCodec = techVisible(c,"audio_codec");
+    const audioChanged = changed("audio_format");
+    const preferredAudio = (format,codec) => {
+      if (!format || !codec || !showAudioCodec || sameTech(format,codec)) return format || codec;
+      return {...format,secondary:codec.short,extra:[codec.short,codec.extra].filter(Boolean).join(" · ")};
+    };
+    const sourceFormat = source.audio_format || (!audioChanged ? streamAudioFormat : null);
+    const sourceCodec = source.audio_codec || (!audioChanged ? audioCodec : null);
+    // Select independently on each side, after applying the same confidence
+    // rules as the other categories. The format slot owns the combined badge.
+    const audioBefore = preferredAudio(sourceFormat,sourceCodec);
+    const audioAfter = preferredAudio(output.audio_format,output.audio_codec);
+    const legacyFormat = source.audio_format || (!anyTranscode ? streamAudioFormat : null);
+    const legacyCodec = audioCodec || source.audio_codec;
     const order = c.technical_badge_order ? c.technical_badge_order.split(",") : TECH_FIELDS;
     return order.flatMap(key => {
       if (!techVisible(c,key)) return [];
@@ -327,24 +337,20 @@
       const before = source[key];
       if (!c.technical_transcode_mode) {
         // Preserve source resolution and the old stream codec preference.
-        const value = (key === "video_codec" ? videoCodec : key === "audio_codec" ? audioCodec : null) ||
-          before || (key === "audio_format" && !anyTranscode ? streamAudioFormat : null);
+        if (key === "audio_codec" && showAudioFormat && !legacyFormat) return [];
+        const value = key === "audio_format" ? legacyFormat || legacyCodec :
+          key === "audio_codec" ? legacyCodec : (key === "video_codec" ? videoCodec : null) || before;
         return value ? [{key,value}] : [];
       }
-      if (groupedAudio && key === "audio_codec") return [];
-      if (groupedAudio && key === "audio_format") {
-        const codec = source.audio_codec;
-        return [{key,value:output.audio_codec,before:{...before,
-          secondary:codec?.short,
-          extra:[codec?.short,profile].filter(Boolean).join(" · ")}}];
-      }
+      if (key === "audio_codec" && showAudioFormat) return [];
+      const from = key === "audio_format" ? audioBefore : before;
       if (!changed(key)) {
-        const value = before || (key === "video_codec" ? videoCodec : key === "audio_codec" ? audioCodec : output[key]);
+        const value = from || (key === "video_codec" ? videoCodec : key === "audio_codec" ? audioCodec : output[key]);
         return value ? [{key,value}] : [];
       }
-      const after = output[key];
-      if (!after) return compare && before ? [{key,value:before,sourceOnly:true}] : [];
-      return [{key,value:after,before:compare && before && !sameTech(before,after) ? before : null}];
+      const after = key === "audio_format" ? audioAfter : output[key];
+      if (!after) return compare && from ? [{key,value:from,sourceOnly:true}] : [];
+      return [{key,value:after,before:compare && from && !sameTech(from,after) ? from : null}];
     });
   }
   const technicalStyle = `
@@ -1987,7 +1993,9 @@
         ]) +
         (legacyTechnical(c) ? `<small>${t("Le rendu historique suit l’ordre du bandeau jusqu’à la première personnalisation des catégories.",
           "The legacy display follows the footer order until you customize the categories.")}</small>` : "") +
-        this._subgroup("technical-order",t("Informations affichées et ordre","Visible information and order"),order) + colorEditor +
+        this._subgroup("technical-order",t("Informations affichées et ordre","Visible information and order"),
+          `<small>${t("Format audio privilégie le format spécifique, sinon le codec. Activez uniquement Codec audio pour voir les codecs sans le format spécifique.",
+            "Audio format shows the specific format when known, otherwise the codec. Enable only Audio codec to show codecs without the specific format.")}</small>` + order) + colorEditor +
         `<div class="group-label">${t("Aperçu — exemple transcodé","Preview — transcoding example")}</div>${this._technicalPreview()}`;
     }
     _footerOrderFields() {
