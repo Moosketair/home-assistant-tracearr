@@ -2,6 +2,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 from copy import deepcopy
+from hashlib import sha256
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -47,7 +48,12 @@ async def views(b, entry, sim, ws):
     assert coord.data["streams"] == coord.snapshot()["streams"]
     rows = (await ws.call("tracearr_ha/get"))["entries"]
     row, = [r for r in rows if r["id"] == entry.entry_id]
-    assert {s["id"]: s for s in row["streams"]} == sim.streams
+    expected = {}
+    for sid, stream in sim.streams.items():
+        uri = stream.get("poster_url")
+        expected[sid] = ({**stream, "poster_revision": sha256(uri.encode()).hexdigest()}
+                         if stream.get("media_type") == "track" and uri else stream)
+    assert {s["id"]: s for s in row["streams"]} == expected
     assert row["stats"] == coord.snapshot()["stats"]
     registry = er.async_get(b.hass)
     for key in ("total", "playing", "paused", "bandwidth_mbps"):

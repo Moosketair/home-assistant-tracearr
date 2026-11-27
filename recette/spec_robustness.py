@@ -3,6 +3,7 @@ import asyncio
 from contextlib import aclosing
 from datetime import timedelta
 import gzip
+from hashlib import sha256
 
 from aiohttp import ClientSession, ClientTimeout, web
 from homeassistant.components.http.auth import async_sign_path
@@ -302,16 +303,87 @@ def test_music_poster_revision_is_signed_and_does_not_change_proxy_target():
             return await super().handle(request)
 
     async def run():
-        async with MusicArtwork().serve() as sim, core() as bench, ClientSession() as client:
+        async with MusicArtwork().serve() as sim, core() as bench, bench.connect() as ws, ClientSession() as client:
             sim.change("started", "s", media_type="track", rating_key="101")
             entry = await bench.add(sim)
-            path = f"/api/tracearr_ha/image/{entry.entry_id}/s/poster?rev=abc"
-            signed = await sign(bench, path)
+            rev = sha256(sim.streams["s"]["poster_url"].encode()).hexdigest()
+            (data,) = (await ws.call("tracearr_ha/get"))["entries"]
+            assert data["streams"][0]["poster_revision"] == rev
+            path = f"/api/tracearr_ha/image/{entry.entry_id}/s/poster"
+            signed = await sign(bench, f"{path}?rev={rev}")
             async with client.get(bench.server.make_url(signed)) as response:
                 assert response.status == 200
                 assert await response.read() == PNG
                 assert response.headers["Cache-Control"] == "private, max-age=60"
-            async with client.get(bench.server.make_url(signed.replace("rev=abc", "rev=def"))) as response:
+            async with client.get(bench.server.make_url(signed.replace(f"rev={rev}", "rev=def"))) as response:
                 assert response.status == 401
+            async with client.get(bench.server.make_url(await sign(bench, path))) as response:
+                assert response.status == 200
+                assert response.headers["Cache-Control"] == "no-store"
+            sim.change("updated", "s", media_type="movie")
+            coord = bench.coord(entry)
+            await observed(coord, lambda: coord.streams["s"]["media_type"] == "movie")
+            async with client.get(bench.server.make_url(signed)) as response:
+                assert response.status == 404
+                assert response.headers["Cache-Control"] == "no-store"
+
+    asyncio.run(asyncio.wait_for(run(), 12))
+
+
+def test_audit_p24_old_signed_revision_cannot_fetch_new_poster():
+    class Posters(Tracearr):
+        async def handle(self, request):
+            if request.match_info.get("resource"):
+                return await super().handle(request)
+            return web.Response(body=PNG + request.query["fixture"].encode(), content_type="image/png")
+
+    async def run():
+        async with Posters().serve() as sim, core() as bench, ClientSession() as client:
+            sim.change("started", "s", media_type="track", rating_key="a", poster_url="/api/v1/images/proxy?fixture=a")
+            entry = await bench.add(sim)
+            coord = bench.coord(entry)
+            path = f"/api/tracearr_ha/image/{entry.entry_id}/s/poster"
+            signatures = {}
+            for name in ("a", "b", "c", "a"):
+                uri = f"/api/v1/images/proxy?fixture={name}"
+                sim.change("updated", "s", rating_key=name, poster_url=uri)
+                await observed(coord, lambda: coord.streams["s"]["poster_url"] == uri)
+                for key, old in signatures.items():
+                    async with client.get(bench.server.make_url(old)) as response:
+                        if key != name:
+                            assert response.status == 404
+                            assert response.headers["Cache-Control"] == "no-store"
+                        else:
+                            assert await response.read() == PNG + name.encode()
+                revision = sha256(uri.encode()).hexdigest()
+                signatures[name] = await sign(bench, f"{path}?rev={revision}")
+                async with client.get(bench.server.make_url(signatures[name])) as response:
+                    assert response.status == 200
+                    assert await response.read() == PNG + name.encode()
+
+    asyncio.run(asyncio.wait_for(run(), 12))
+
+
+def test_audit_p24_revision_is_rechecked_after_inflight_image_read():
+    async def run():
+        async with Tracearr().serve() as sim, core() as bench, ClientSession() as client:
+            sim.change("started", "s", media_type="track", rating_key="a")
+            entry = await bench.add(sim)
+            coord = bench.coord(entry)
+            rev = sha256(sim.streams["s"]["poster_url"].encode()).hexdigest()
+            signed = await sign(bench, f"/api/tracearr_ha/image/{entry.entry_id}/s/poster?rev={rev}")
+            gate = sim.gates["image"] = Gate()
+            async with asyncio.TaskGroup() as group:
+                async def fetch():
+                    async with client.get(bench.server.make_url(signed)) as response:
+                        return response.status, response.headers.get("Cache-Control")
+                request = group.create_task(fetch())
+                try:
+                    await asyncio.wait_for(gate.entered.wait(), 5)
+                    sim.change("updated", "s", rating_key="b", poster_url="/api/v1/images/proxy?fixture=b")
+                    await observed(coord, lambda: coord.streams["s"]["rating_key"] == "b")
+                finally:
+                    gate.release.set()
+            assert request.result() == (404, "no-store")
 
     asyncio.run(asyncio.wait_for(run(), 12))

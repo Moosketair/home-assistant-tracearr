@@ -94,13 +94,6 @@
     return sameMusicMedia(old,next) === false ||
       !!(old.started && next.started && old.started !== next.started);
   }
-  // Opaque cache key for the existing signed HA path, never an upstream URL
-  // or a security check. Distinct artwork must not share a browser cache key.
-  function posterRevision(raw) {
-    let hash = 2166136261;
-    for (let i=0; i<raw.length; i++) hash = Math.imul(hash ^ raw.charCodeAt(i),16777619);
-    return (hash >>> 0).toString(36);
-  }
   const MOVIE_FIELDS = Object.freeze(["title", "year"]);
   const SERIES_FIELDS = Object.freeze(["series", "season", "episode_number", "episode", "year"]);
   const MEDIA_LABELS = Object.freeze({
@@ -956,8 +949,9 @@
     }
     _artworkPath(entry, stream, kind) {
       const path = `/api/tracearr_ha/image/${encodeURIComponent(entry.id)}/${encodeURIComponent(stream.id)}/${kind}`;
-      return kind === "poster" && isMusicTrack(stream) && typeof stream.poster_url === "string" && stream.poster_url ?
-        `${path}?rev=${posterRevision(stream.poster_url)}` : path;
+      const revision = stream.poster_revision;
+      return kind === "poster" && isMusicTrack(stream) && typeof revision === "string" && /^[a-f0-9]{64}$/.test(revision) ?
+        `${path}?rev=${revision}` : path;
     }
     _pruneArtwork(entry, streams) {
       const sources = new Map();

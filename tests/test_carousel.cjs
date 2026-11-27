@@ -3,6 +3,7 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {readFileSync} = require('node:fs');
+const {createHash} = require('node:crypto');
 const {join} = require('node:path');
 const vm = require('node:vm');
 
@@ -115,8 +116,10 @@ test('6C.3.B P3 duration: a same-track correction preserves the known clock', ()
 test('6C.3: a reused music session signs a distinct poster URL and ignores the old signature', async () => {
   const card = new Card();
   card.setConfig({show_poster:true,show_avatar:false});
-  const first = music.plex;
-  const second = {...first,rating_key:'102',poster_url:first.poster_url.replace('101','102')};
+  const signedProjection = stream => ({...stream,
+    poster_revision:createHash('sha256').update(stream.poster_url).digest('hex')});
+  const first = signedProjection(music.plex);
+  const second = signedProjection({...first,rating_key:'102',poster_url:first.poster_url.replace('101','102')});
   const entry = {id:'fictional-entry'};
   const pending = [], painted = [];
   card.isConnected = true;
@@ -127,6 +130,8 @@ test('6C.3: a reused music session signs a distinct poster URL and ignores the o
   card._pruneArtwork(entry,[second]);
   card._image(entry,second,'poster');
   assert.notEqual(pending[0].path,pending[1].path); // HA signer/browser cache must distinguish the sources.
+  assert.ok(pending[0].path.endsWith(`?rev=${first.poster_revision}`));
+  assert.ok(pending[1].path.endsWith(`?rev=${second.poster_revision}`));
   assert.ok(pending.every(({path}) => !path.includes('images/proxy')));
   pending[0].resolve({path:`${pending[0].path}&authSig=old-fixture`});
   pending[1].resolve({path:`${pending[1].path}&authSig=new-fixture`});

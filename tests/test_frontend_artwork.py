@@ -1,6 +1,7 @@
 """Artwork proxy regression tests without importing Home Assistant."""
 import ast
 import asyncio
+from hashlib import sha256
 import logging
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,19 +15,20 @@ SOURCE = Path(__file__).resolve().parents[1] / "custom_components/tracearr_ha/fr
 
 def load_artwork_view():
     module = ast.parse(SOURCE.read_text())
-    node = next(n for n in module.body if isinstance(n, ast.ClassDef) and n.name == "TracearrArtworkView")
+    nodes = [n for n in module.body if getattr(n, "name", None) in ("poster_revision", "TracearrArtworkView")]
     namespace = {
         "HomeAssistantView": object,
         "KEY_HASS": "hass",
         "DOMAIN": "tracearr_ha",
         "urlsplit": urlsplit,
+        "sha256": sha256,
         "web": web,
         "ClientError": ClientError,
         "ClientTimeout": ClientTimeout,
         "_LOGGER": logging.getLogger(__name__),
         "MAX_ARTWORK_BYTES": 8_000_000,
     }
-    exec(compile(ast.fix_missing_locations(ast.Module(body=[node], type_ignores=[])), str(SOURCE), "exec"), namespace)
+    exec(compile(ast.fix_missing_locations(ast.Module(body=nodes, type_ignores=[])), str(SOURCE), "exec"), namespace)
     return namespace["TracearrArtworkView"]
 
 
@@ -54,7 +56,7 @@ def test_artwork_proxy_uses_image_accept_and_accepts_octet_stream():
                 coord = SimpleNamespace(client=client,
                     streams={"s": {"poster_url": f"{base}/api/v1/images/proxy?key=abc"}})
                 hass = SimpleNamespace(data={"tracearr_ha": {"e": coord}})
-                req = SimpleNamespace(app={"hass": hass})
+                req = SimpleNamespace(app={"hass": hass}, query={})
                 view = load_artwork_view()()
                 response = await view.get(req, "e", "s", "poster")
                 assert response.status == 200
@@ -88,7 +90,7 @@ def test_artwork_proxy_rejects_non_images():
                 base = f"http://127.0.0.1:{port}"
                 client = SimpleNamespace(base_url=base, session=session, headers={})
                 coord = SimpleNamespace(client=client, streams={"s":{"poster_url":"/api/v1/images/proxy"}})
-                req = SimpleNamespace(app={"hass": SimpleNamespace(data={"tracearr_ha":{"e":coord}})})
+                req = SimpleNamespace(app={"hass": SimpleNamespace(data={"tracearr_ha":{"e":coord}})}, query={})
                 assert (await load_artwork_view()().get(req,"e","s","poster")).status == 415
         finally:
             await runner.cleanup()

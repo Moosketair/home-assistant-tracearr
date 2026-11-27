@@ -9,6 +9,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import CONF_ALIASES, CONF_AVATARS, CONF_NETWORK_LOCATIONS, DOMAIN, EVENT_SIGNAL
+from .frontend import poster_revision
 
 
 def _payload(hass) -> dict[str, Any]:
@@ -18,6 +19,10 @@ def _payload(hass) -> dict[str, Any]:
         if not coordinator:
             continue
         data = coordinator.snapshot()
+        data["streams"] = [
+            {**stream, "poster_revision": revision} if (revision := poster_revision(stream)) else stream
+            for stream in data["streams"]
+        ]
         entries.append({
             "id": entry.entry_id,
             "name": entry.title,

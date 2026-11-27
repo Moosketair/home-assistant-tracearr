@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from hashlib import sha256
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -13,6 +14,14 @@ from .const import DOMAIN, FRONTEND_URL
 
 _LOGGER = logging.getLogger(__name__)
 MAX_ARTWORK_BYTES = 8_000_000
+
+
+def poster_revision(stream: dict) -> str | None:
+    """Bind a musical poster to the exact upstream reference, not its session ID."""
+    uri = stream.get("poster_url")
+    if stream.get("media_type") == "track" and isinstance(uri, str) and uri:
+        return sha256(uri.encode()).hexdigest()
+    return None
 
 
 async def async_register_frontend(hass):
@@ -53,12 +62,14 @@ class TracearrArtworkView(HomeAssistantView):
         if kind not in ("poster", "avatar"):
             return web.Response(status=404)
         hass = request.app[KEY_HASS]
+        rev = request.query.get("rev")
         coord = hass.data.get(DOMAIN, {}).get(entry_id)
-        if not coord:
-            return web.Response(status=404)
-        item = coord.streams.get(session_id)
+        item = coord.streams.get(session_id) if coord else None
         if not item:
-            return web.Response(status=404)
+            return web.Response(status=404, headers={"Cache-Control": "no-store"} if rev is not None else None)
+        track_poster = kind == "poster" and item.get("media_type") == "track"
+        if rev is not None and (not track_poster or rev != poster_revision(item)):
+            return web.Response(status=404, headers={"Cache-Control": "no-store"})
         uri = item.get("poster_url" if kind == "poster" else "user_avatar_url")
         if not isinstance(uri, str) or not uri:
             return web.Response(status=404)
@@ -120,8 +131,16 @@ class TracearrArtworkView(HomeAssistantView):
                         safe_type = "image/avif"
                 if safe_type not in ("image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"):
                     return web.Response(status=415)
+                if track_poster:
+                    # The body was read from the captured URI. If that reference
+                    # ceased to be current while awaiting I/O, fail closed.
+                    active = hass.data.get(DOMAIN, {}).get(entry_id)
+                    current = coord.streams.get(session_id, {})
+                    if active is not coord or current.get("media_type") != "track" or current.get("poster_url") != uri:
+                        return web.Response(status=404, headers={"Cache-Control": "no-store"})
+                cache = "no-store" if track_poster and rev is None else "private, max-age=60"
                 return web.Response(body=body, content_type=safe_type,
-                                    headers={"Cache-Control": "private, max-age=60", "X-Content-Type-Options": "nosniff"})
+                                    headers={"Cache-Control": cache, "X-Content-Type-Options": "nosniff"})
         except (ClientError, TimeoutError) as exc:
             _LOGGER.debug("Tracearr artwork request failed: %s", type(exc).__name__)
             return web.Response(status=502)
