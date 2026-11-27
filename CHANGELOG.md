@@ -2,9 +2,20 @@
 
 Les changements sont classés par version publique. Les préversions et les anciennes notes restent consultables ci-dessous. Les [GitHub Releases](https://github.com/Moosketair/home-assistant-tracearr/releases) permettent de télécharger une version précise.
 
-## Non publié
+## 0.1.18-beta.2 — Préversion de test
 
-- Les badges des pistes transcodées n’affichent plus de caractéristiques source comme des destinations confirmées. La comparaison regroupe format et codec audio quand les deux sont visibles (par ex. ATMOS → AAC), et le style Technique utilise des libellés secondaires plus courts.
+Cette bêta corrige les badges techniques de `v0.1.18-beta.1`. **La version stable recommandée reste `v0.1.17`.**
+
+- **Destination uniquement** n’affiche plus les formats source comme des caractéristiques du flux transcodé. Les valeurs de destination inconnues ou ambiguës sont omises, pas inventées.
+- **Source → destination** affiche une transition seulement entre valeurs connues et différentes. Par exemple, **ATMOS → AAC** remplace les badges redondants si les deux catégories sont visibles ; masquer le codec ne fait pas réapparaître AAC ailleurs.
+- Le style **Technique** affiche des libellés secondaires plus courts, avec les détails complets dans les infobulles lorsque disponibles.
+- La règle est commune à la vidéo, à l’audio et au conteneur. Les caractéristiques des pistes lues directement ou copiées sont conservées ; les options de visibilité restent respectées.
+
+### Installer la bêta 2 ou revenir à la stable
+
+1. Après sauvegarde, ouvrez **HACS → Tracearr HA**. Actualisez les informations du dépôt et activez les préversions si nécessaire. Téléchargez ou retéléchargez exactement **`v0.1.18-beta.2`**.
+2. Redémarrez Home Assistant et actualisez le tableau de bord sans recréer l’entrée ni les cartes. En mode ressource YAML, remplacez la version dans l’URL par `/tracearr_ha/tracearr-card.js?v=0.1.18-beta.2`. En stockage, la ressource existante est actualisée automatiquement.
+3. Pour revenir à la stable, retéléchargez **`v0.1.17`** dans HACS, redémarrez et actualisez le tableau de bord. En YAML, restaurez `?v=0.1.17`.
 
 ## 0.1.18-beta.1 — Préversion de test
 

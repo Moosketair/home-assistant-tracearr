@@ -1,6 +1,6 @@
-# État de reprise — correctif local 6D.4
+# État de reprise — prépublication 6D.5
 
-**6D.4 livré localement** sur `fix/technical-badges-transcoding` depuis la bêta publiée `0552d6c4bed298b0955be73300edbae21bf19425`. Le [correctif des badges de transcodage](RECETTE.md#6d4--badges-de-transcodage) est limité au frontend. Attendre la validation du mainteneur avant de préparer une deuxième bêta ; aucun changement de version, de publication ni de périmètre 6C.
+**Décision 6D.5.** Le mainteneur valide le [correctif 6D.4 des badges de transcodage](RECETTE.md#6d4--badges-de-transcodage) sur `f41b6744381acd8fd1bafdc5bd8381e50ac525bb`. Ce commit a été intégré par avance rapide à `release/v0.1.18`. Le mainteneur autorise la [préversion `v0.1.18-beta.2`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.18-beta.2) pour ses essais via HACS. Après le correctif validé, seuls les références de version, leurs tests et la documentation changent. Le [contrôle GitHub du tag](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml?query=branch%3Av0.1.18-beta.2) doit porter sur le commit effectivement publié. La stable `v0.1.17` et la bêta 1 restent en place.
 
 **Décision 6D.3.** Le mainteneur valide 6A, 6B, 6D.1 et 6D.2 et autorise la [préversion `v0.1.18-beta.1`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.18-beta.1) pour ses essais via HACS. Candidat de départ : `f42edbbc39a371646f98cde955de9b5d24f8403e` ; seules les mentions de publication et les notes changent après ce SHA. Le [contrôle GitHub du tag](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml?query=branch%3Av0.1.18-beta.1) doit porter sur le commit effectivement tagué. `v0.1.17` reste la stable recommandée ; aucune fusion dans `main` ni promotion de `v0.1.18` n’est autorisée.
 
@@ -79,6 +79,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** attendre la validation du correctif 6D.4 par le mainteneur avant toute préparation de `v0.1.18-beta.2`. Toute publication demande une autorisation explicite. Le lot 6C reste dans la [feuille de route](ROADMAP.md) et nécessite une autorisation distincte.
+**Suite :** après la prépublication 6D.5, attendre les essais personnels du mainteneur et son autorisation explicite avant toute publication stable. Le lot 6C reste dans la [feuille de route](ROADMAP.md) et nécessite une autorisation distincte.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.
