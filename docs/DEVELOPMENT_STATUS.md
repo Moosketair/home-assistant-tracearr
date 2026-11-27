@@ -1,4 +1,6 @@
-# État de reprise — promotion stable 6D.8
+# État de reprise — visuels README 6D.10
+
+**Décision 6D.10.** Le mainteneur valide les [visuels de démonstration 6D.9](images/showcase/README.md) obtenus avec le module stable `v0.1.18` et autorise leur publication dans la documentation. La capture de l’éditeur reste hors du dépôt public. Aucun changement de version, de distribution ou de tag ; les lots 6C et 6E restent à part.
 
 **Décision 6D.8.** Le mainteneur confirme des essais satisfaisants de `v0.1.18-beta.3` (`180a13752de94fafad529940325befff3af0ef0e`) sur son Home Assistant via HACS et autorise la [stable `v0.1.18`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.18). Seules les références de version, leurs tests et la documentation changent depuis la bêta 3. Le tag publié et les contrôles GitHub font foi. Les releases et tags précédents sont conservés. Le mainteneur effectue lui-même la mise à jour de son installation.
 

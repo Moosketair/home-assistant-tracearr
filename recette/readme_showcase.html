@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tracearr HA · Showcase</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --primary-text-color: #f2f5fb;
+    --secondary-text-color: #afbdd1;
+    --accent-color: #83ded6;
+    --divider-color: #ffffff26;
+    --card-background-color: #182233;
+    --secondary-background-color: #202d41;
+    --ha-card-border-radius: 18px;
+    font: 15px system-ui, sans-serif;
+    color: var(--primary-text-color);
+    background: #0d1421;
+  }
+  :root.cinema {
+    background: #070911;
+    --card-background-color: #10121e;
+    --secondary-background-color: #171b29;
+    --accent-color: #aea6fa;
+  }
+  body { margin: 0; }
+  main { display: flow-root; box-sizing: border-box; width: min(100%, 1000px); padding: 26px 32px 30px; margin: auto; }
+  main.narrow { max-width: 740px; }
+  header { margin: 0 0 16px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  h1 { font-size: 24px; letter-spacing: -.035em; margin: 0; }
+  header span { color: var(--secondary-text-color); font-size: 11px; font-weight: 650; letter-spacing: .16em; text-transform: uppercase; }
+  section + section { margin-top: 9px; }
+  h2 { color: var(--secondary-text-color); font-size: 12px; margin: 0 0 5px 2px; }
+</style>
+<main id="capture"><header><h1>Tracearr HA</h1><span id="caption"></span></header><div id="mount"></div></main>
+<script src="../custom_components/tracearr_ha/frontend/tracearr-card.js"></script>
+<script>
+  // Same synthetic subscription pattern as cartes.html. Only the outer theme
+  // surface is mocked; no card markup, labels or styles are injected.
+  customElements.define("ha-card", class extends HTMLElement {
+    constructor() {
+      super();
+      this.attachShadow({mode:"open"}).innerHTML = `<style>:host{display:block;
+        background:var(--card-background-color);border:1px solid var(--divider-color)}</style><slot></slot>`;
+    }
+  });
+  const params = new URLSearchParams(location.search);
+  const view = params.get("view") || "overview";
+  const cinema = params.has("cinema");
+  document.documentElement.classList.toggle("cinema",cinema);
+  document.querySelector("main").classList.toggle("narrow",["individual","styles"].includes(view));
+  document.getElementById("caption").textContent = {
+    overview:"Live playback", individual:"Single stream", carousel:"Playback carousel",
+    styles:"Technical badge styles",
+  }[view];
+  const artwork = name => `${location.origin}/showcase-art/${name}.svg`;
+  const makeStream = (id, server_type, username, media_title, year, extra) => ({
+    id, server_id:server_type, server_type, username, media_title, year, media_type:"movie",
+    state:"playing", duration_ms:6840000, progress_ms:2432000,
+    poster_url:artwork(id), user_avatar_url:artwork(`${id}-avatar`),
+    video_decision:"directplay", audio_decision:"directplay", is_transcode:false,
+    source_audio_channels:6, source_video_width:3840, source_video_height:2160, resolution:"4K",
+    source_video_codec:"HEVC", stream_video_codec_display:"HEVC",
+    source_audio_codec:"EAC3", stream_audio_codec_display:"E-AC-3",
+    transcode_info:{sourceContainer:"MKV"}, bitrate:18400, ...extra,
+  });
+  const streams = [
+    makeStream("orbit","plex","Nova","The Quiet Orbit",2025,{
+      source_video_details:{dynamicRange:"Dolby Vision"}, source_audio_details:{atmos:true},
+      device:"Living room",
+    }),
+    makeStream("glass","jellyfin","Quinn","Cities of Glass",2024,{
+      is_transcode:true, video_decision:"transcode",audio_decision:"transcode",bitrate:6200,
+      stream_video_codec:"H264",stream_video_codec_display:"H.264",
+      stream_video_details:{width:1920,height:1080},source_audio_details:{atmos:true},
+      stream_audio_details:{channels:2},stream_audio_codec:"AAC",stream_audio_codec_display:"AAC",
+      transcode_info:{sourceContainer:"MKV",streamContainer:"MP4"},progress_ms:1043000,device:"Tablet",
+    }),
+    makeStream("tide","emby","Rowan","Where the Tide Sleeps",2026,{
+      state:"paused", source_video_width:1920,source_video_height:1080,resolution:"1080p",
+      source_video_codec:"AV1",stream_video_codec_display:"AV1",source_video_details:{dynamicRange:"SDR"},
+      source_audio_channels:2,source_audio_codec:"OPUS",stream_audio_codec_display:"Opus",
+      transcode_info:{sourceContainer:"WEBM"},bitrate:3900,progress_ms:3896000,device:"Bedroom TV",
+    }),
+  ];
+  const payload = {entries:[{id:"showcase",name:"Media library",connected:true,sse_connected:true,servers:[],streams}]};
+  const hass = {language:"en", themes:{darkMode:true},states:{},connection:{
+    subscribeMessage:async callback => { callback(payload); return () => {}; },
+  }};
+  const config = {
+    title:"Now playing", sort:"user", show_bitrate:true,show_codecs:true,show_health:false,show_server:false,
+    font_size:16,poster_size:118, accent_color_mode:"server",header_show_bandwidth:true,
+    header_show_paused:true,header_show_transcodes_total:true, technical_badge_style:"premium",
+    technical_transcode_mode:"source_to_destination",
+    technical_badge_visibility:{container:false},
+    header_metric_settings:{
+      streams:{label:"Streams",normal_custom_color:"#96e2d1"},
+      bandwidth:{label:"Bandwidth",normal_custom_color:"#c3ccff"},
+      paused:{label:"Paused",normal_custom_color:"#ffce9d"},
+      transcodes_total:{label:"Transcodes",normal_custom_color:"#efbbce"},
+    },
+    ...(cinema ? {stream_surface:"blur",stream_overlay:56,stream_blur:21} : {}),
+  };
+  const host = document.getElementById("mount");
+  function mount(parent, type, options, sessions=streams) {
+    const card = parent.appendChild(document.createElement(`tracearr-${type}-card`));
+    card.setConfig({...config,...options});
+    card.hass = {...hass,connection:{...hass.connection,subscribeMessage:async callback => {
+      callback({entries:[{...payload.entries[0],streams:sessions}]});
+      return () => {};
+    }}};
+  }
+  if (view === "styles") {
+    for (const [style,label] of [["classic","Classic"],["premium","Premium"],["cinema","Cinema"],
+      ["minimal","Minimal"],["technical","Technical"]]) {
+      const group = host.appendChild(document.createElement("section"));
+      group.appendChild(document.createElement("h2")).textContent = label;
+      const options = {show_header:false,compact:true,show_poster:false,show_avatar:false,show_progress:false,
+        show_device:false,font_size:14,technical_badge_style:style};
+      if (style === "classic") {
+        options.technical_badge_visibility = undefined;
+        options.technical_transcode_mode = undefined;
+      }
+      mount(group,"stream",options,[streams[0]]);
+    }
+  } else if (view === "individual") {
+    mount(host,"stream",{title:"Stream details",header_show_paused:false,header_show_transcodes_total:false,
+      technical_badge_style:"technical",technical_badge_layout:"separate",
+      technical_badge_visibility:{container:true},poster_size:162},[streams[1]]);
+  } else if (view === "carousel") {
+    mount(host,"streams",{title:"Now playing",mode:"carousel",carousel_visible:2,carousel_transition:"none",
+      show_device:false,font_size:15,poster_size:105});
+  } else {
+    mount(host,"streams",{});
+  }
+</script>
+</html>

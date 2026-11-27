@@ -12,14 +12,30 @@
 
 ## Aperçu des cartes
 
-![Tableau de bord Home Assistant : liste de deux lectures, carrousel et carte individuelle](recette/preuves/4.2/sections.png)
+![Trois lectures Tracearr HA avec affiches et badges : lecture directe, transcodage et pause](docs/images/showcase/overview-cinema.webp)
 
-*Aperçu du rendu classique dans Home Assistant, avec des données fictives.*
+*Rendu de Tracearr HA v0.1.18, avec données fictives et le fond cinéma de la carte.*
+
+<details>
+<summary>Voir l’aperçu sombre standard</summary>
+
+![Les mêmes trois lectures Tracearr HA, sur un fond sombre uni](docs/images/showcase/overview-dark.webp)
+
+</details>
 
 | Carte | Usage |
 | --- | --- |
 | **Lectures groupées** — `custom:tracearr-streams-card` | Les lectures en cours dans une liste ou un carrousel, avec filtres. Navigation tactile, au clavier et à la souris ; flèches, transitions et défilement automatique facultatifs. |
 | **Lecture individuelle** — `custom:tracearr-stream-card` | Une seule lecture : la plus récente, ou une lecture ciblée par compte, serveur ou session. |
+
+<details>
+<summary>Voir la carte individuelle et le carrousel</summary>
+
+![Carte individuelle en style Technique : résolution, codecs, canaux et conteneur avant et après transcodage](docs/images/showcase/individual-dark.webp)
+
+![Carrousel Tracearr HA : deux des trois lectures et flèches de navigation](docs/images/showcase/carousel.webp)
+
+</details>
 
 ## Fonctionnalités et personnalisation
 
@@ -35,9 +51,7 @@ Les panneaux de lecture proposent cinq styles de badges techniques : **Classique
 <details>
 <summary>Comparer les cinq styles (thème sombre)</summary>
 
-![Les cinq styles de badges techniques sur le même film de démonstration](recette/preuves/6b.1/styles-firefox-sombre.png)
-
-*Comparaison issue du banc de recette, avec un compte et un film fictifs.*
+![Styles Classique, Premium, Cinéma, Minimaliste et Technique sur la même lecture fictive](docs/images/showcase/badge-styles.webp)
 
 </details>
 
