@@ -96,6 +96,11 @@
   }
   const MOVIE_FIELDS = Object.freeze(["title", "year"]);
   const SERIES_FIELDS = Object.freeze(["series", "season", "episode_number", "episode", "year"]);
+  const MUSIC_FIELDS = Object.freeze(["title","artist","album","year","track_number","disc_number"]);
+  const MUSIC_BADGES = Object.freeze(["audio_format","audio_codec","sample_rate","channels","audio_bitrate","container"]);
+  const usablePosition = value => Number.isFinite(value) && value >= 0;
+  const musicTimeShape = stream => !isMusicTrack(stream) ? undefined : !usablePosition(stream.progress_ms) ? false :
+    stream.duration_ms > 0 ? true : stream.progress_ms;
   const MEDIA_LABELS = Object.freeze({
     title: "Titre du film", series: "Titre de la série", season: "Saison",
     episode_number: "Numéro d’épisode", episode: "Nom de l’épisode", year: "Année",
@@ -170,6 +175,11 @@
     audio_codec:["Codec audio","Audio codec"], channels:["Canaux audio","Audio channels"],
     container:["Conteneur","Container"], bitrate:["Débit du flux","Stream bitrate"],
   };
+  const MUSIC_TECH_LABELS = {
+    sample_rate:["Fréquence d’échantillonnage","Sample rate"],
+    audio_bitrate:["Débit audio","Audio bitrate"],
+  };
+  const techGroup = key => TECH_GROUPS[key] || "audio";
   const TECH_STYLE_LABELS = [
     ["Classique","Classic"],["Premium","Premium"],["Cinéma","Cinema"],
     ["Minimaliste","Minimalist"],["Technique","Technical"],
@@ -295,6 +305,67 @@
       key === "bitrate" ? c.show_bitrate : c.technical_badge_style !== "classic");
   }
   const sameTech = (a,b) => (a.id || a.short.toLowerCase()) === (b.id || b.short.toLowerCase());
+  function audioMeasurement(value, unit, en) {
+    if (!Number.isFinite(value) || value <= 0 || value > Number.MAX_SAFE_INTEGER) return null;
+    const label = new Intl.NumberFormat(en ? "en" : "fr",{maximumFractionDigits:3,useGrouping:false})
+      .format(unit === "Hz" && value >= 1000 ? value / 1000 : value);
+    const text = `${label} ${unit === "Hz" && value >= 1000 ? "kHz" : unit}`;
+    return {short:text,name:text};
+  }
+  function musicTechnicalValues(s,c,bitrate,en) {
+    const visible = key => c.music_badge_visibility?.[key] ?? !["audio_bitrate","container"].includes(key);
+    const compare = c.technical_transcode_mode !== "destination";
+    const confirmed = s.audio_decision === "transcode";
+    const converting = confirmed || (!!s.is_transcode && codecState(s.audio_decision) !== "direct");
+    // Plex's audio-only sessions can put output measurements in source_*.
+    // No public output sample rate or dedicated output bitrate is reliable here.
+    const uncertainSource = converting && s.server_type === "plex";
+    const details = uncertainSource ? null : s.source_audio_details;
+    const info = s.transcode_info;
+    const rawSource = techText(s.source_audio_codec) || s.source_audio_codec_display;
+    const rawOutput = techText(s.stream_audio_codec) || s.stream_audio_codec_display;
+    const audio = (raw, format) => ({
+      format:format || techLookup("audio_format",raw),
+      codec:techLookup("audio_format",raw) ? null : techValue("audio_codec",raw),
+    });
+    const profile = techLookup("audio_format",details?.profile);
+    const source = audio(rawSource,details?.atmos === true ? techLookup("audio_format","Atmos") : profile);
+    const output = audio(rawOutput);
+    // Adapters can repeat the source codec/format when no output was reported.
+    if (output.codec && source.codec && sameTech(output.codec,source.codec)) output.codec = null;
+    if (output.format && source.format && sameTech(output.format,source.format)) output.format = null;
+    const pickAudio = ({format,codec}, key) => {
+      if (key === "audio_codec") return codec;
+      if (!format || !codec || !visible("audio_codec") || sameTech(format,codec)) return format || codec;
+      return {...format,secondary:codec.short,extra:codec.short};
+    };
+    const sourceValues = {
+      sample_rate:audioMeasurement(details?.sampleRate,"Hz",en),
+      channels:uncertainSource ? null : techChannels(s.audio_channels_display,s.source_audio_channels,details?.channelLayout),
+      audio_bitrate:audioMeasurement(details?.bitrate,"kb/s",en),
+      container:uncertainSource ? null : techValue("container",info?.sourceContainer),
+    };
+    const outputValues = {
+      channels:confirmed ? techChannels(null,s.stream_audio_details?.channels) : null,
+      container:techValue("container",info?.streamContainer),
+    };
+    const order = normalizedOrder(c.music_badge_order,MUSIC_BADGES);
+    if (bitrate !== null) order.push("bitrate");
+    return order.flatMap(key => {
+      if (key === "bitrate") return [{key,value:{short:`${(bitrate/1000).toFixed(1)} Mb/s`,name:TECH_LABELS.bitrate}}];
+      if (!visible(key) || (key === "audio_codec" && visible("audio_format"))) return [];
+      const codec = key === "audio_format" || key === "audio_codec";
+      const before = codec ? pickAudio(source,key) : sourceValues[key];
+      const after = codec ? (confirmed ? pickAudio(output,key) : null) : outputValues[key];
+      const changed = converting || (key === "container" && !!after);
+      if (!changed) {
+        const value = before || (codec ? pickAudio(audio(rawOutput),key) : after);
+        return value ? [{key,value}] : [];
+      }
+      if (!after) return compare && before ? [{key,value:before,sourceOnly:true}] : [];
+      return [{key,value:after,before:compare && before && !sameTech(before,after) ? before : null}];
+    });
+  }
   function technicalValues(s,c,bitrate) {
     const sourceAudio = s.source_audio_details;
     const streamAudio = s.stream_audio_details;
@@ -330,14 +401,12 @@
       // Output HDR is copied or assumed by the supported adapters; there is
       // no independent output HDR or Atmos/DTS:X flag in this contract.
     };
-    const music = isMusicTrack(s);
     const anyTranscode = isTranscoding(s);
     const compare = c.technical_transcode_mode === "source_to_destination";
     const changed = key => {
       const group = TECH_GROUPS[key];
       return group === "general" ? anyTranscode || info?.containerDecision === "transcode" || !!output.container :
-        music ? s.audio_decision === "transcode" :
-          codecState(s[`${group}_decision`]) !== "direct" && anyTranscode;
+        codecState(s[`${group}_decision`]) !== "direct" && anyTranscode;
     };
     const showAudioFormat = techVisible(c,"audio_format");
     const showAudioCodec = techVisible(c,"audio_codec");
@@ -356,7 +425,6 @@
     const legacyCodec = audioCodec || source.audio_codec;
     const order = c.technical_badge_order ? c.technical_badge_order.split(",") : TECH_FIELDS;
     return order.flatMap(key => {
-      if (music && TECH_GROUPS[key] === "video") return [];
       if (!techVisible(c,key)) return [];
       if (key === "bitrate") return bitrate === null ? [] :
         [{key, value:{short:`${(bitrate/1000).toFixed(1)} Mb/s`,name:["Débit du flux","Stream bitrate"]}}];
@@ -408,16 +476,17 @@
     .tech-classic :is(.tech-badge,.tech-swatch) { border-radius:7px; font-weight:600; }
   `;
   function renderTechnical(s,c,bitrate,en=false) {
-    if (legacyTechnical(c)) {
-      const video = isMusicTrack(s) ? "" : s.stream_video_codec_display;
+    const music = isMusicTrack(s);
+    if (!music && legacyTechnical(c)) {
+      const video = s.stream_video_codec_display;
       return {
-        quality:!isMusicTrack(s) && c.show_quality && s.resolution ? `<span class="chip">${E(s.resolution)}</span>` : "",
+        quality:c.show_quality && s.resolution ? `<span class="chip">${E(s.resolution)}</span>` : "",
         bitrate:bitrate !== null ? `<span class="chip">${E((bitrate/1000).toFixed(1))} Mb/s</span>` : "",
         codecs:c.show_codecs && (video || s.stream_audio_codec_display) ?
           `<span>${E([video,s.stream_audio_codec_display].filter(Boolean).join(" / "))}</span>` : "",
       };
     }
-    const values = technicalValues(s,c,bitrate);
+    const values = music ? musicTechnicalValues(s,c,bitrate,en) : technicalValues(s,c,bitrate);
     if (!values.length) return {};
     const pick = text => Array.isArray(text) ? text[Number(en)] : text;
     const mode = c.technical_badge_style;
@@ -430,7 +499,7 @@
       };
       const detail = format => techText(format.extra);
       const full = format => `${pick(format.name)}${detail(format) ? ` (${detail(format)})` : ""}`;
-      const label = `${pick(TECH_LABELS[key])} : ${before ? `${full(before)} → ` : ""}${full(value)}${sourceOnly ?
+      const label = `${pick(TECH_LABELS[key] || MUSIC_TECH_LABELS[key])} : ${before ? `${full(before)} → ` : ""}${full(value)}${sourceOnly ?
         (en ? " (source; output unknown)" : " (source ; destination inconnue)") : ""}`;
       const part = format => {
         // Prefer a short, known codec label over long adapter profile text.
@@ -438,7 +507,7 @@
         const codec = format.category === "audio_codec" || format.category === "video_codec";
         const measured = !codec || !c.technical_transcode_mode;
         const subtitle = mode === "technical" && (format.secondary || (measured && detail(format)) ||
-          pick(format.description));
+          (music && format.description === lossless ? "" : pick(format.description)));
         return `<span class="tech-part"><strong>${E(format.short)}</strong>${
           subtitle ? `<span class="tech-detail">${E(subtitle)}</span>` : ""}</span>`;
       };
@@ -447,8 +516,8 @@
         before ? "" : ` ${paintColor(value)}`}>` +
         `${before ? `${swatch(before)}<span aria-hidden="true">→</span>${swatch(value)}` : part(value)}</span>`;
     };
-    const rows = c.technical_badge_layout === "separate" ? [...new Set(values.map(item => TECH_GROUPS[item.key]))].map(group =>
-      `<div class="tech-row" data-tech-group="${group}">${values.filter(item => TECH_GROUPS[item.key] === group).map(paint).join("")}</div>`).join("") :
+    const rows = c.technical_badge_layout === "separate" ? [...new Set(values.map(item => techGroup(item.key)))].map(group =>
+      `<div class="tech-row" data-tech-group="${group}">${values.filter(item => techGroup(item.key) === group).map(paint).join("")}</div>`).join("") :
       values.map(paint).join("");
     return {technical:`<div class="technical tech-${mode}" data-layout="${c.technical_badge_layout}">${rows}</div>`};
   }
@@ -466,6 +535,10 @@
     return parts.length ? `<div class="meta">${parts.map(({key,html},i) =>
       (i && key !== "technical" && parts[i-1].key !== "technical" ? '<span aria-hidden="true">·</span>' : "") + html).join("")}</div>` : "";
   }
+  const posterFallback = music => music ?
+    `<div class="poster empty music-placeholder" role="img" aria-label="Pochette indisponible">${badgeIcon("audio")}</div>` :
+    '<div class="poster empty">▣</div>';
+  const posterImage = (url, music) => `<img class="poster" data-kind="poster" src="${E(url)}" alt="${music ? "Pochette" : "Affiche"}" loading="eager" decoding="async">`;
   function syncTechTheme(el, hass) {
     el.toggleAttribute?.("data-tech-dark",hass?.themes?.darkMode === true);
     el.toggleAttribute?.("data-tech-light",hass?.themes?.darkMode === false);
@@ -605,6 +678,11 @@
     .title { font-weight:700; font-size:calc(var(--tr-font-size)*1.12);
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .subtitle { font-size:calc(var(--tr-font-size)*.9); white-space:normal; overflow-wrap:anywhere; }
+    .music-artist { font-weight:600; }
+    .music-album { opacity:.85; }
+    .poster.music-placeholder { color:var(--stream-accent); background:rgba(100,100,100,.14); }
+    .music-placeholder svg { width:44%; height:44%; fill:none; stroke:currentColor; stroke-width:1.4;
+      stroke-linecap:round; stroke-linejoin:round; }
     .media-flags { display:flex; position:absolute; right:12px; top:12px; align-items:center; gap:8px; z-index:1; }
     .stream-indicator { width:19px; height:19px; display:inline-flex; align-items:center;
       justify-content:center; color:#a3a3a3; }
@@ -646,6 +724,8 @@
     button.nav:focus-visible,.streams.carousel:focus-visible { outline:2px solid var(--focus-color,#00bcd4); outline-offset:2px; }
     .compact .stream { min-height:78px; padding:8px; gap:8px; }
     .compact .poster-wrap { width:var(--tr-compact-poster-width,48px); flex-basis:var(--tr-compact-poster-width,48px); height:var(--tr-compact-poster-height,72px); }
+    .poster-wrap.music-cover,.compact .poster-wrap.music-cover { height:auto; aspect-ratio:1 / 1; }
+    .music-cover > .poster { position:absolute; inset:0; object-position:center; }
     .compact .user { font-size:calc(var(--tr-font-size)*.83); }
     .compact .info { gap:3px; }
     .compact .media-flags { top:8px; right:8px; }
@@ -781,7 +861,8 @@
       const en = techEnglish(hass);
       if (en !== this._techEnglish) {
         this._techEnglish = en;
-        if (this.isConnected && !legacyTechnical(this._config)) this.render();
+        if (this.isConnected && (!legacyTechnical(this._config) ||
+            this._entryData()?.streams?.some(isMusicTrack))) this.render();
       }
       if (!this.isConnected) return;
       if (this._subscription?.connection !== (hass?.connection || undefined)) this._subscribe(hass?.connection);
@@ -864,8 +945,9 @@
         rows:"auto", min_rows:1, max_rows:30};
     }
     _setTimers(streams, stale=false) {
-      const running = !stale && this.isConnected && (this._config.show_progress || this._config.show_end_time) &&
-        streams.some(s => s.state === "playing" && Number(s.duration_ms) > 0);
+      const running = !stale && this.isConnected && streams.some(s => s.state === "playing" &&
+        Number(s.duration_ms) > 0 && (isMusicTrack(s) ? this._config.show_progress && usablePosition(s.progress_ms) :
+          this._config.show_progress || this._config.show_end_time));
       if (running && this._tick === null) this._tick = setInterval(() => this._updateProgress(), 250);
       else if (!running && this._tick !== null) {
         clearInterval(this._tick);
@@ -1010,9 +1092,8 @@
         const target = kind === "poster" ? card.querySelector(".poster-wrap .poster") :
           card.querySelector(".user .avatar");
         if (target && !(target.tagName === "IMG" && target.getAttribute("src") === url)) {
-          const css = kind === "poster" ? "poster" : "avatar";
-          const alt = kind === "poster" ? "Affiche" : "";
-          target.outerHTML = `<img class="${css}" data-kind="${kind}" src="${E(url)}" alt="${alt}" loading="eager" decoding="async">`;
+          target.outerHTML = kind === "poster" ? posterImage(url,!!target.closest?.(".music-cover")) :
+            `<img class="avatar" data-kind="avatar" src="${E(url)}" alt="" loading="eager" decoding="async">`;
         }
         // Signed artwork may arrive after the backdrop was initially rendered.
         // Update its image in place, preserving the live carousel DOM and index.
@@ -1062,7 +1143,7 @@
       if (kind === "poster" && isMusicTrack(stream) && img.getAttribute("src") !== (cached?.url || stream.poster_url)) return;
       const isBackdrop = !!img.classList?.contains?.("backdrop-image");
       const fallback = kind === "poster" ?
-        (isBackdrop ? '<div class="backdrop-empty"></div>' : '<div class="poster empty">▣</div>') :
+        (isBackdrop ? '<div class="backdrop-empty"></div>' : posterFallback(isMusicTrack(stream))) :
         `<span class="avatar fallback-avatar">${E(this._name(entry,stream).slice(0,1).toUpperCase())}</span>`;
       // A failed foreground image must not leave a broken blurred image behind.
       const background = !isBackdrop && kind === "poster" ?
@@ -1104,6 +1185,18 @@
     }
     _mediaFields(stream) {
       const c = this._config;
+      if (isMusicTrack(stream)) {
+        const en = this._techEnglish;
+        const fields = {
+          title:techText(stream.media_title), artist:techText(stream.artist_name),
+          album:techText(stream.album_name), year:techCount(stream.year) && stream.year <= 9999 ? String(stream.year) : "",
+          track_number:techCount(stream.track_number) ? `${en ? "Track" : "Piste"} ${stream.track_number}` : "",
+          disc_number:techCount(stream.disc_number) ? `${en ? "Disc" : "Disque"} ${stream.disc_number}` : "",
+        };
+        return normalizedOrder(c.music_field_order,MUSIC_FIELDS)
+          .filter(key => fields[key] && (c.music_field_visibility?.[key] ?? !key.endsWith("_number")))
+          .map(key => ({key,text:fields[key]}));
+      }
       const episode = stream.media_type === "episode";
       if (!episode) {
         const fields = {
@@ -1131,6 +1224,23 @@
     _mediaMarkup(stream) {
       const fields = this._mediaFields(stream);
       if (!fields.length) return "";
+      if (isMusicTrack(stream)) {
+        // Keep the usual primary type, while allowing the ordered music
+        // fields to fill only the lines that actually have content.
+        const [primary,...rest] = fields;
+        const lines = [];
+        const standalone = ({key}) => key === "title" || key === "artist";
+        for (const field of rest) {
+          const line = lines.at(-1);
+          if (line && !standalone(line[0]) && !standalone(field)) line.push(field);
+          else lines.push([field]);
+        }
+        const title = `<div class="title" title="${E(primary.text)}">${E(primary.text)}</div>`;
+        return title + lines.map(line => {
+          const style = line[0].key === "artist" ? "music-artist" : "music-album";
+          return `<div class="subtitle ${style}">${line.map(({text})=>E(text)).join(" · ")}</div>`;
+        }).join("");
+      }
       const parts = [];
       for (const field of fields) {
         // Join S01 + E02 only when adjacent, preserving the user's field order.
@@ -1353,6 +1463,7 @@
     }
     _streamCard(entry,s) {
       const c = this._config;
+      const music = isMusicTrack(s);
       const blurred = c.stream_surface === "blur";
       const poster = c.show_poster || blurred ? this._image(entry,s,"poster") : "";
       const avatar = c.show_avatar ? this._image(entry,s,"avatar") : "";
@@ -1364,9 +1475,11 @@
       const ratio = clock.duration > 0 ? 100 * Math.min(1, displayPosition / clock.duration) : 0;
       const timePair = playbackSeconds(displayPosition, clock.duration);
       const paused = s.state === "paused";
-      const showTimes = c.show_progress || c.show_end_time;
+      const showTimes = music ? c.show_progress && usablePosition(s.progress_ms) : c.show_progress || c.show_end_time;
+      const showBar = c.show_progress && (!music || (showTimes && clock.duration > 0));
+      const elapsed = music && !clock.duration ? fmtTime(s.progress_ms) : formattedSeconds(timePair.elapsed);
       const pauseLabel = paused ? `<span class="time-paused">En pause</span>` : "";
-      const endLabel = c.show_end_time && clock.duration > 0 ?
+      const endLabel = !music && c.show_end_time && clock.duration > 0 ?
         (stale ? `<span class="time-end">Non actualisé</span>` : clock.state === "playing" ?
           `<span class="time-end" data-id="${E(s.id)}">Fin à ${E(estimatedEnd(clock,displayPosition,Date.now()))}</span>` : "") : "";
       const rightTime = pauseLabel && endLabel ? `<span class="time-status">${pauseLabel}${endLabel}</span>` : pauseLabel || endLabel;
@@ -1385,14 +1498,13 @@
       const backdropMarkup = blurred ? `<div class="stream-backdrop" aria-hidden="true">${poster ?
         `<img class="backdrop-image"${c.show_poster ? "" : ' data-kind="poster"'} src="${E(poster)}" alt="" decoding="async">` :
         '<div class="backdrop-empty"></div>'}</div>` : "";
-      const music = isMusicTrack(s);
       const indicators = c.show_transcode_icons ? `<div class="media-flags" aria-label="${music ? "État du flux audio" : "État du flux audio et vidéo"}">${(music ? ["audio"] : ["video","audio"]).map(kind => {
         const decision = kind === "video" ? s.video_decision : s.audio_decision;
         const state = codecState(decision);
         const tip = `${kind === "video" ? "Vidéo" : "Audio"} : ${state === "transcode" ? "Transcodage" : state === "direct" ? "Lecture directe" : "Inconnu"}`;
         return `<span class="stream-indicator ${state}" role="img" aria-label="${E(tip)}" title="${E(tip)}">${badgeIcon(kind)}</span>`;
       }).join("")}</div>` : "";
-      const posterMarkup = c.show_poster ? `<div class="poster-wrap">${poster ? `<img class="poster" data-kind="poster" src="${E(poster)}" alt="Affiche" loading="eager" decoding="async">` : `<div class="poster empty">▣</div>`}${paused ? `<span class="poster-paused" aria-label="Lecture en pause"><span class="pause-symbol" aria-hidden="true"></span></span>` : ""}</div>` : "";
+      const posterMarkup = c.show_poster ? `<div class="poster-wrap${music ? " music-cover" : ""}">${poster ? posterImage(poster,music) : posterFallback(music)}${paused ? `<span class="poster-paused" aria-label="Lecture en pause"><span class="pause-symbol" aria-hidden="true"></span></span>` : ""}</div>` : "";
       return `<article class="stream accent-${edgeMode}${blurred ? " surface-blur" : ""}" data-session="${E(s.id)}" style="--stream-accent:${accent};${sharedStyle}">
         ${backdropMarkup}
         ${posterMarkup}
@@ -1400,8 +1512,8 @@
         <div class="info">
           ${c.show_avatar ? `<div class="user">${avatar ? `<img class="avatar" data-kind="avatar" src="${E(avatar)}" alt="" loading="eager" decoding="async">` : `<span class="avatar fallback-avatar">${E(name.slice(0,1).toUpperCase())}</span>`}<span>${E(name)}</span></div>` : `<div class="user">${E(name)}</div>`}
           ${mediaMarkup}
-          ${c.show_progress ? `<div class="progress"><span class="fill" data-id="${E(s.id)}" style="width:${ratio.toFixed(2)}%"></span></div>` : ""}
-          ${showTimes || paused ? `<div class="times">${showTimes ? `<span class="time-left"><span class="time-current" data-id="${E(s.id)}">${formattedSeconds(timePair.elapsed)}</span>${c.show_remaining && c.show_progress ? `<span class="time-separator">/</span><span class="time-remaining" data-id="${E(s.id)}">-${formattedSeconds(timePair.remaining)}</span>` : ""}</span>` : ""}${rightTime}</div>` : ""}
+          ${showBar ? `<div class="progress"><span class="fill" data-id="${E(s.id)}" style="width:${ratio.toFixed(2)}%"></span></div>` : ""}
+          ${showTimes || paused ? `<div class="times">${showTimes ? `<span class="time-left"><span class="time-current" data-id="${E(s.id)}">${elapsed}</span>${c.show_remaining && showBar ? `<span class="time-separator">/</span><span class="time-remaining" data-id="${E(s.id)}">-${formattedSeconds(timePair.remaining)}</span>` : ""}</span>` : ""}${rightTime}</div>` : ""}
           ${metaMarkup(metaByKey,c.footer_field_order)}
         </div>
       </article>`;
@@ -1568,9 +1680,10 @@
 
     _liveSnapshot(stream, entry) {
       const {progress_ms, ...rest} = stream;
-      return JSON.stringify({rest,health:entry?.servers?.find(x => x.server_id === stream.server_id)?.status,
+      return JSON.stringify({rest,musicTime:musicTimeShape(stream),
+          health:entry?.servers?.find(x => x.server_id === stream.server_id)?.status,
          showBitrate:this._config.show_bitrate && this._scopedBitrate(stream) !== null,
-         stale:this._streamsStale(entry), technicalEnglish:!legacyTechnical(this._config) && this._techEnglish});
+         stale:this._streamsStale(entry), technicalEnglish:(isMusicTrack(stream) || !legacyTechnical(this._config)) && this._techEnglish});
     }
     _refreshHeader(streams) {
       const header = this._header(streams);
@@ -1753,7 +1866,10 @@
       // transition whenever pause/bitrate/health/codec updates arrived.
       const fingerprint = JSON.stringify({
         config: c,
-        streams: c.mode === "carousel" ? streams.map(s => s.id) : streams.map(({progress_ms, ...rest}) => rest),
+        streams: c.mode === "carousel" ? streams.map(s => s.id) : streams.map(stream => {
+          const {progress_ms, ...rest} = stream;
+          return isMusicTrack(stream) ? [rest,musicTimeShape(stream)] : rest;
+        }),
         stats: c.mode === "carousel" ? undefined : entry?.stats,
         servers: c.mode === "carousel" ? undefined : entry?.servers,
         // Option-only WS snapshots can change the scoped bitrate without changing
@@ -1763,7 +1879,7 @@
         aliases: entry?.aliases,
         avatars: entry?.avatars,
         stale: c.mode === "carousel" && streams.length ? undefined : stale,
-        technicalEnglish:c.mode !== "carousel" && !legacyTechnical(c) && this._techEnglish,
+        technicalEnglish:c.mode !== "carousel" && (!legacyTechnical(c) || streams.some(isMusicTrack)) && this._techEnglish,
       });
       // Refresh each stream's clock even if the rest of the card is unchanged.
       // Crucially, do NOT reset its anchor on every incoming SSE progress event.

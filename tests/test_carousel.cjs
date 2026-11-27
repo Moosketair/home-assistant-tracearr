@@ -53,6 +53,72 @@ const Card = classes.get('tracearr-streams-card');
 assert.ok(Card, 'Lovelace custom element registered');
 const music = require('./fixtures/music_streams.json');
 
+for (const type of ['tracearr-streams-card','tracearr-stream-card']) {
+  const panel = (row, config={}) => {
+    const card = new (classes.get(type))();
+    card.setConfig({show_end_time:true, ...config});
+    return card._streamCard({},row);
+  };
+  test(`6C.4 ${type}: musical metadata, timing and square fallback`, () => {
+    const row = {...music.plex,year:2024,poster_url:null};
+    const html = panel(row,{movie_show_title:false,series_show_year:false});
+    assert.match(html,/class="title"[^>]*>Interlude<\/div>/);
+    assert.match(html,/class="subtitle music-artist"[^>]*>Artiste A<\/div>/);
+    assert.match(html,/class="subtitle music-album"[^>]*>Album A · 2024<\/div>/);
+    assert.match(html,/poster-wrap music-cover/);
+    assert.match(html,/class="poster empty music-placeholder"/);
+    assert.match(html,/class="time-remaining"/);
+    assert.doesNotMatch(html,/time-end|Piste 3|Disque 1|Vidéo :/);
+    const invalid = panel({...row,media_title:' <A> ',artist_name:{},album_name:' ',year:0,
+      track_number:-1,disc_number:'2',duration_ms:null,progress_ms:3000,state:'paused'},
+      {music_field_visibility:{track_number:true,disc_number:true}});
+    assert.match(invalid,/&lt;A&gt;<\/div>/);
+    assert.match(invalid,/time-current[^>]*>0:03/);
+    assert.match(invalid,/class="time-paused">En pause/);
+    assert.doesNotMatch(invalid,/music-artist|music-album|time-end|time-remaining|Piste|Disque|class="progress"/);
+    const absentPosition = panel({...row,progress_ms:null});
+    assert.doesNotMatch(absentPosition,/time-current|time-remaining|class="progress"/);
+    const ordered = panel(row,{music_field_order:'artist,title,album,year,track_number,disc_number',
+      music_field_visibility:{artist:false,album:false,track_number:true,disc_number:true}});
+    assert.match(ordered,/>2024 · Piste 3 · Disque 1</);
+    assert.doesNotMatch(ordered,/Artiste A|Album A/);
+    const movie = panel({...row,media_type:'movie'},{show_year:false});
+    assert.match(movie,/class="poster-wrap"/);
+    assert.match(movie,/Fin à/);
+    assert.doesNotMatch(movie,/music-cover|music-placeholder|2024/);
+  });
+  test(`6C.4 ${type}: five styles, localized sampling and confirmed audio transitions`, () => {
+    for (const style of ['classic','premium','cinema','minimal','technical']) {
+      const row = {...music.plex,source_audio_details:{sampleRate:44100,bitrate:813}};
+      const direct = panel(row,{technical_badge_style:style,show_bitrate:true});
+      assert.match(direct,new RegExp(`technical tech-${style}`));
+      assert.deepEqual(badges(direct).audio_format,['FLAC']);
+      assert.deepEqual(badges(direct).sample_rate,['44,1 kHz']);
+      assert.deepEqual(badges(direct).channels,['2.0']);
+      assert.ok(badges(direct).bitrate);
+      assert.doesNotMatch(direct,/data-tech="(?:audio_bitrate|container|audio_codec)"|Vidéo :/);
+      const jf = {...music.jellyfin,source_audio_details:{sampleRate:96000,bitrate:902},
+        source_audio_channels:2,transcode_info:{sourceContainer:'FLAC',streamContainer:'MPEGTS'},
+        stream_audio_details:{...music.jellyfin.stream_audio_details,sampleRate:32000,bitrate:191}};
+      const opts = {technical_badge_style:style,technical_badge_layout:'separate',
+        music_badge_visibility:{audio_bitrate:true,container:true}};
+      const compare = panel(jf,{...opts,technical_transcode_mode:'source_to_destination'});
+      assert.deepEqual(badges(compare).audio_format,['FLAC','AAC']);
+      assert.deepEqual(badges(compare).sample_rate,['96 kHz']);
+      assert.deepEqual(badges(compare).audio_bitrate,['902 kb/s']);
+      assert.match(compare,/source ; destination inconnue/);
+      assert.doesNotMatch(compare,/32 kHz|191 kb\/s|Hi.Res/);
+      const destination = panel(jf,{...opts,technical_transcode_mode:'destination'});
+      assert.deepEqual(badges(destination).audio_format,['AAC']);
+      assert.doesNotMatch(destination,/data-tech="(?:sample_rate|audio_bitrate|audio_codec)"/);
+      const unknown = panel({...jf,stream_audio_codec:'FLAC',stream_audio_details:{}},opts);
+      assert.deepEqual(badges(unknown).audio_format,['FLAC']);
+      assert.doesNotMatch(panel({...jf,server_type:'plex'},opts),/96 kHz|902 kb\/s/);
+      assert.doesNotMatch(panel({...row,source_audio_details:{sampleRate:'44100'}},opts),/data-tech="sample_rate"/);
+    }
+  });
+}
+
 test('6C.3: music never counts as video in either card or in existing transcode filters', () => {
   const {plex,jellyfin,emby} = music;
   const movie = {...plex,id:'movie',media_type:'movie',video_decision:'transcode',bitrate:2000};
