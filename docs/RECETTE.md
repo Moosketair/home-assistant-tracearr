@@ -489,3 +489,9 @@ La matrice REST compare GET(A), GET(B), GET(C) et GET vide ; A et B réutilisent
 **Chromium 152.0.7977.82 :** [six captures](../recette/preuves/6c.5/README.md) du module réel. Les deux éditeurs sont manipulés en français, puis recréés en anglais à partir de la configuration effectivement émise par `config-changed` et passée dans un sérialiseur/parseur YAML. Les cases, les ordres, le filtre et la liste explicitement vide sont vérifiés ; une ancienne configuration YAML sans les nouvelles clés garde toutes ses lectures et ses réglages vidéo. Le carrousel garde le panneau encore visible malgré son changement d’index, puis se recale lorsque le panneau actif est exclu.
 
 La persistance est testée au niveau de la configuration émise et du retour YAML, pas de l’interface Home Assistant ni d’un dashboard Sections réel (6C.6). Pas de campagne backend, SSE, proxy, lecteur réel ou HACS. Présentation 6C.4, garanties et trois réserves P3 6C.3 réutilisées. Aucun nouveau capteur, aucune publication.
+
+**Validation mainteneur :** les six captures 6C.5 sont validées, y compris la personnalisation et les aperçus. Deux badges FLAC sont acceptés s’ils désignent le codec et le conteneur explicitement activé. Le conteneur reste masqué par défaut ; une distinction plus visible relève éventuellement de 6E.
+
+## 6C.6.A — Recette intégrée avant prépublication
+
+Voir le [rapport 6C.6.A](RECETTE_6C6A.md) : mise à niveau depuis `v0.1.18`, Sections, persistance Lovelace et YAML, contrôles musicaux et distinction entre résultats nouveaux et preuves antérieures.

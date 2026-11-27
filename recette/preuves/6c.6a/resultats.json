@@ -1,0 +1,323 @@
+{
+  "core": "2026.11.3",
+  "stable_module": {
+    "status": 200,
+    "sha256": "9bab8494d31abe66af59c7c4d1264129e4892c23a6eb7343f9fd92eff74b58d5"
+  },
+  "candidate_module": {
+    "status": 200,
+    "sha256": "c22cefadaa20c94806deabd63c2f41103fd2417b037486b70e9a9b7b2d2e8685"
+  },
+  "entities": 17,
+  "devices": 4,
+  "storage_byte_identical": true,
+  "historical_video_equal": true,
+  "playback": {
+    "empty": {
+      "native": 56,
+      "group": {
+        "height": 56,
+        "width": 246,
+        "cellHeight": 56,
+        "overlap": false,
+        "rows": "auto",
+        "scroll": 0
+      },
+      "single": {
+        "height": 56,
+        "width": 246,
+        "cellHeight": 56,
+        "overlap": false,
+        "rows": "auto",
+        "scroll": 0
+      },
+      "fixed_group": {
+        "height": 120,
+        "width": 246,
+        "cellHeight": 120,
+        "overlap": false,
+        "rows": "2",
+        "scroll": 0
+      },
+      "fixed_single": {
+        "height": 56,
+        "width": 246,
+        "cellHeight": 56,
+        "overlap": false,
+        "rows": "1",
+        "scroll": 20
+      },
+      "carousel": {
+        "height": 56,
+        "width": 246,
+        "cellHeight": 56,
+        "overlap": false,
+        "rows": "auto",
+        "scroll": 0
+      }
+    },
+    "track": {
+      "native": 56,
+      "group": {
+        "height": 382.90625,
+        "width": 246,
+        "cellHeight": 382.90625,
+        "overlap": false,
+        "rows": "auto",
+        "scroll": 0
+      },
+      "single": {
+        "height": 382.90625,
+        "width": 246,
+        "cellHeight": 382.90625,
+        "overlap": false,
+        "rows": "auto",
+        "scroll": 0
+      },
+      "fixed_group": {
+        "height": 120,
+        "width": 246,
+        "cellHeight": 120,
+        "overlap": false,
+        "rows": "2",
+        "scroll": 263
+      },
+      "fixed_single": {
+        "height": 56,
+        "width": 246,
+        "cellHeight": 56,
+        "overlap": false,
+        "rows": "1",
+        "scroll": 327
+      },
+      "carousel": {
+        "height": 382.90625,
+        "width": 246,
+        "cellHeight": 382.90625,
+        "overlap": false,
+        "rows": "auto",
+        "scroll": 0
+      }
+    },
+    "mixed": {
+      "native": 56,
+      "group": {
+        "height": 1556.109375,
+        "width": 246,
+        "cellHeight": 1556.109375,
+        "overlap": false,
+        "rows": "auto",
+        "scroll": 0
+      },
+      "single": {
+        "height": 382.90625,
+        "width": 246,
+        "cellHeight": 382.90625,
+        "overlap": false,
+        "rows": "auto",
+        "scroll": 0
+      },
+      "fixed_group": {
+        "height": 120,
+        "width": 246,
+        "cellHeight": 120,
+        "overlap": false,
+        "rows": "2",
+        "scroll": 1436
+      },
+      "fixed_single": {
+        "height": 56,
+        "width": 246,
+        "cellHeight": 56,
+        "overlap": false,
+        "rows": "1",
+        "scroll": 327
+      },
+      "carousel": {
+        "height": 432.578125,
+        "width": 246,
+        "cellHeight": 432.578125,
+        "overlap": false,
+        "rows": "auto",
+        "scroll": 0
+      }
+    },
+    "artwork": {
+      "direct": {
+        "width": 73,
+        "height": 73,
+        "natural": [
+          600,
+          600
+        ],
+        "fit": "cover",
+        "position": "50% 50%"
+      },
+      "convert": {
+        "width": 73,
+        "height": 73,
+        "natural": [
+          400,
+          600
+        ],
+        "fit": "cover",
+        "position": "50% 50%"
+      },
+      "film": {
+        "width": 73,
+        "height": 109,
+        "natural": [
+          400,
+          600
+        ],
+        "fit": "cover",
+        "position": "50% 50%"
+      },
+      "episode": {
+        "width": 73,
+        "height": 109,
+        "natural": [
+          400,
+          600
+        ],
+        "fit": "cover",
+        "position": "50% 50%"
+      }
+    },
+    "paused_remaining": "-2:47"
+  },
+  "editors": {
+    "persisted": {
+      "group": {
+        "music_field_visibility": {
+          "year": false,
+          "track_number": true
+        },
+        "music_field_order": "artist,title,album,year,track_number,disc_number",
+        "music_badge_visibility": {
+          "audio_bitrate": true,
+          "container": true
+        },
+        "filter_media_types": [
+          "track"
+        ],
+        "music_badge_order": "audio_format,audio_codec,sample_rate,channels,container,audio_bitrate"
+      },
+      "single": {
+        "music_field_visibility": {
+          "year": false,
+          "track_number": true
+        },
+        "music_field_order": "artist,title,album,year,track_number,disc_number",
+        "music_badge_visibility": {
+          "audio_bitrate": true,
+          "container": true
+        },
+        "filter_media_types": [
+          "track"
+        ],
+        "music_badge_order": "audio_format,audio_codec,sample_rate,channels,container,audio_bitrate"
+      }
+    },
+    "global_stats": {
+      "tracearr_active_streams": "6",
+      "tracearr_playing_streams": "6",
+      "tracearr_paused_streams": "0",
+      "tracearr_direct_streams": "4",
+      "tracearr_video_only_transcodes": "0",
+      "tracearr_audio_only_transcodes": "2",
+      "tracearr_video_and_audio_transcodes": "0",
+      "tracearr_total_transcodes": "2",
+      "tracearr_unknown_playback_decision": "0",
+      "tracearr_stream_bandwidth": "9.61",
+      "fixture_plex_active_streams": "2",
+      "fixture_jellyfin_active_streams": "2",
+      "fixture_emby_active_streams": "2",
+      "tracearr_connected": "on",
+      "fixture_plex_online": "on",
+      "fixture_jellyfin_online": "on",
+      "fixture_emby_online": "on"
+    }
+  },
+  "sizing_end": {
+    "stopped": {
+      "native": 56,
+      "group": {
+        "height": 56,
+        "width": 246,
+        "cellHeight": 56,
+        "overlap": false,
+        "rows": "auto",
+        "scroll": 0
+      },
+      "single": {
+        "height": 56,
+        "width": 246,
+        "cellHeight": 56,
+        "overlap": false,
+        "rows": "auto",
+        "scroll": 0
+      },
+      "fixed_group": {
+        "height": 120,
+        "width": 246,
+        "cellHeight": 120,
+        "overlap": false,
+        "rows": "2",
+        "scroll": 0
+      },
+      "fixed_single": {
+        "height": 56,
+        "width": 246,
+        "cellHeight": 56,
+        "overlap": false,
+        "rows": "1",
+        "scroll": 20
+      },
+      "carousel": {
+        "height": 56,
+        "width": 246,
+        "cellHeight": 56,
+        "overlap": false,
+        "rows": "auto",
+        "scroll": 0
+      }
+    },
+    "masonry": [
+      [
+        69.765625,
+        103.6875
+      ],
+      [
+        304.125,
+        338.046875
+      ]
+    ]
+  },
+  "manual_yaml": {
+    "status": 200,
+    "sha256": "c22cefadaa20c94806deabd63c2f41103fd2417b037486b70e9a9b7b2d2e8685"
+  },
+  "browser_errors": [
+    "Object",
+    "Object",
+    "Object",
+    "Object",
+    "Object",
+    "Object",
+    "Object"
+  ],
+  "unknown_commands": [
+    "recorder/info",
+    "recorder/info",
+    "brands/access_token",
+    "brands/access_token",
+    "recorder/info",
+    "recorder/info",
+    "recorder/info",
+    "recorder/info",
+    "recorder/info",
+    "brands/access_token",
+    "brands/access_token"
+  ]
+}

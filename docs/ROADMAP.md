@@ -37,7 +37,7 @@ Lot futur, ni audité ni commencé en 6D.6 :
 4. Développer uniquement après cette validation.
 5. Effectuer la recette et vérifier la compatibilité des configurations existantes.
 
-Pistes à discuter, non retenues à ce stade : catégories, onglets, sous-pages, affichage conditionnel, recherche, réglages avancés et composants natifs Home Assistant. Le lot musical 6C reste distinct.
+Pistes à discuter, non retenues à ce stade : catégories, onglets, sous-pages, affichage conditionnel, recherche, réglages avancés, composants natifs Home Assistant et distinction visuelle entre codec et conteneur FLAC lorsqu’ils sont tous deux affichés. Le lot musical 6C reste distinct.
 
 ### Lot 6A — Affichage en pause et couleurs des badges
 
@@ -96,7 +96,7 @@ Réponse à la [demande #2](https://github.com/Moosketair/home-assistant-tracear
 - **Pochettes :** emplacement carré, largeur commune aux affiches via le réglage de taille existant, fond Cinéma réutilisé. Montrer intégralement une source carrée ; recadrer les autres ratios au centre pour remplir le carré, sans déformation. Illustration de remplacement carrée adaptée à la musique si l’image manque. Ne pas modifier les affiches vidéo ; accepter automatiquement une future image carrée publique. Ne pas reconstruire d’URL privée ni élargir le proxy.
 - **Badges :** cinq styles réutilisés. Format/codec, fréquence d’échantillonnage et canaux activés par défaut pour la musique ; débit audio et conteneur facultatifs. Même confiance source/destination et déduplication qu’en `v0.1.18`, aucune information vidéo pour les pistes. Le débit audio dédié n’est pas le débit global du flux. Ne pas déduire profondeur de bits, Hi‑Res, fréquence de sortie ou garantie lossless.
 
-**Découpage :** les [fondations 6C.3](RECETTE.md#6c3--fondations-techniques-musicales) et la [présentation 6C.4](RECETTE.md#6c4--présentation-musicale) sont validées. Les [filtres et réglages 6C.5](RECETTE.md#6c5--filtres-et-personnalisation-musicale) sont livrés localement, en attente de validation. 6C.6 reste réservé à la recette de publication et 6E à la refonte générale.
+**Découpage :** les [fondations 6C.3](RECETTE.md#6c3--fondations-techniques-musicales), la [présentation 6C.4](RECETTE.md#6c4--présentation-musicale) et les [filtres et réglages 6C.5](RECETTE.md#6c5--filtres-et-personnalisation-musicale) sont validés par le mainteneur. [6C.6.A](RECETTE_6C6A.md) est la recette intégrée avant toute décision de prépublication. 6E reste un lot distinct.
 
 #### Évolutions amont envisagées — non soumises
 

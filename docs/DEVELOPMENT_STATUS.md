@@ -1,6 +1,8 @@
-# État de reprise — filtres et réglages musicaux 6C.5
+# État de reprise — recette intégrée 6C.6.A
 
-**6C.5 livré localement pour validation du mainteneur.** Branche `feature/6c-music-support` depuis `31c5f541d57fa512c2f3dbae03c5f89bd4bdab67`. Types de médias, visibilité et ordre des champs et badges dans les deux cartes. Voir [contrat YAML](CONFIGURATION.md#types-de-médias-et-réglages-musicaux), [recette 6C.5](RECETTE.md#6c5--filtres-et-personnalisation-musicale) et [captures de l’éditeur et du rendu](../recette/preuves/6c.5/README.md). Aucun backend, changement de version, publication ou 6C.6.
+**6C.6.A livrée localement : PASS AVEC RÉSERVES** sur le candidat `e730b6339f738b6573de2c358a6de4d81103246e`. [Rapport](RECETTE_6C6A.md) : mise à niveau simulée depuis `v0.1.18`, vrai Sections et Masonry, persistance dans les deux éditeurs et en YAML, packaging. Aucun nouveau défaut significatif reproduit. La préparation de `v0.1.19-beta.1` est recommandée après accord, sans ouvrir 6E.
+
+**6C.5 validé visuellement par le mainteneur** sur `e730b6339f738b6573de2c358a6de4d81103246e`. Filtres, organisation des métadonnées, ordre et visibilité des badges, aperçus et rendus personnalisés sont acceptés. Le codec et le conteneur FLAC peuvent apparaître séparément quand le conteneur est explicitement activé ; il reste masqué par défaut. Une distinction visuelle différente pourra être examinée en 6E. Voir le [contrat YAML](CONFIGURATION.md#types-de-médias-et-réglages-musicaux), la [recette 6C.5](RECETTE.md#6c5--filtres-et-personnalisation-musicale) et ses [captures](../recette/preuves/6c.5/README.md).
 
 **6C.4 validé visuellement par le mainteneur** sur `31c5f541d57fa512c2f3dbae03c5f89bd4bdab67`, après examen des [neuf captures Chromium](../recette/preuves/6c.4/README.md). Conserver le design, les pochettes carrées, la cohabitation des médias, les cinq styles et la présentation de la pause. Le conteneur musical reste masqué par défaut. L’amélioration esthétique du remplacement sans pochette est reportée. Voir [recette 6C.4](RECETTE.md#6c4--présentation-musicale).
 
@@ -99,6 +101,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** arrêt à la livraison locale de 6C.5. Attendre le mainteneur ; 6C.6 et 6E nécessitent des autorisations distinctes.
+**Suite :** arrêt après le rapport local 6C.6.A. Attendre le mainteneur ; une prépublication et le lot 6E nécessitent des autorisations distinctes.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.
