@@ -33,8 +33,14 @@ def _valid_server_fields(fields: dict) -> bool:
     ))
 
 
+def _normalize_bitrate(fields: dict) -> dict:
+    """An out-of-range negative sample means no measurement, not no session."""
+    bitrate = fields.get("bitrate")
+    return {**fields, "bitrate": None} if bitrate is not None and bitrate < 0 else fields
+
+
 def snapshot_rows(response: dict, *, servers: bool = False) -> dict[str, dict]:
-    """Validate and index one REST collection without altering its rows."""
+    """Validate and index one REST collection without mutating its rows."""
     resource, key, valid = ("servers", "server_id", _valid_server_fields) if servers else (
         "streams", "id", _valid_stream_fields,
     )
@@ -46,7 +52,7 @@ def snapshot_rows(response: dict, *, servers: bool = False) -> dict[str, dict]:
         if (not isinstance(row, dict) or not isinstance(identity := row.get(key), str)
                 or not identity or identity in rows or not valid(row)):
             raise ValueError(f"Invalid Tracearr {resource} row")
-        rows[identity] = row
+        rows[identity] = row if servers else _normalize_bitrate(row)
     return rows
 
 
@@ -80,7 +86,7 @@ def stats(streams: dict[str, dict]) -> dict[str, Any]:
     """Compute frontend and HA entity stats from all active sessions."""
     values = list(streams.values())
     modes = [transcode_kind(s) for s in values]
-    total_bitrate = sum(s.get("bitrate") or 0 for s in values)
+    total_bitrate = sum(max(0, s.get("bitrate") or 0) for s in values)
     return {
         "total": len(values),
         "playing": sum(s.get("state") == "playing" for s in values),
@@ -208,7 +214,7 @@ def stream_mutation(streams: dict[str, dict], event: dict,
         fields = {k: payload[k] for k in _PROGRESS_FIELDS if k in payload}
         if not fields or not _valid_stream_fields(fields):
             return None
-        return StreamMutation(session_id, kind, fields, identity=identity)
+        return StreamMutation(session_id, kind, _normalize_bitrate(fields), identity=identity)
     # formatActiveStream without the REST join always supplies these nulls.
     # Other nullable fields, e.g. bitrate, are actual event data.
     join_nulls = tuple(k for k in _REST_JOIN_FIELDS if k in payload and payload[k] is None)
@@ -235,7 +241,7 @@ def stream_mutation(streams: dict[str, dict], event: dict,
         if (same_play and current.get("state") == new.get("state") == "playing"
                 and _valid_measurement(position) and position > fields["progress_ms"]):
             del fields["progress_ms"]
-    return StreamMutation(session_id, kind, fields, join_nulls, new_play, identity)
+    return StreamMutation(session_id, kind, _normalize_bitrate(fields), join_nulls, new_play, identity)
 
 
 def apply_event(streams: dict[str, dict], event: dict) -> bool:

@@ -150,3 +150,18 @@ def test_music_same_track_late_full_update_cannot_undo_seek_progress():
         "data": {**old, "media_id": None, "genres": None, "library_id": None, "progress_ms": 3800},
     })
     assert streams[sid] == {**old, "progress_ms": 4400}
+
+
+@pytest.mark.parametrize("event", ["stream.progress", "stream.updated"])
+def test_audit_p3_negative_bitrate_is_missing_without_dropping_play(event):
+    row = {**MUSIC["plex"], "bitrate": -350}
+    sid = row["id"]
+    streams = model.snapshot_rows({"data": [row]})
+    assert streams[sid]["bitrate"] is None
+    assert row["bitrate"] == -350
+    assert model.apply_event(streams, {"type": "stream.progress", "data": {"id": sid, "bitrate": 250}})
+    assert model.stats(streams)["bandwidth_mbps"] == .25
+    assert model.apply_event(streams, {"type": event, "data": {"id": sid, "bitrate": -300}})
+    assert streams[sid]["bitrate"] is None
+    assert model.stats(streams)["bandwidth_mbps"] == 0
+    assert model.stats(streams)["total"] == 1

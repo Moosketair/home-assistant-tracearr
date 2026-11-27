@@ -1177,7 +1177,8 @@
       return scope === "both" || this._networkScope(stream) === scope;
     }
     _scopedBitrate(stream) {
-      return this._includeBitrate(stream) ? stream.bitrate ?? null : null;
+      const bitrate = stream.bitrate;
+      return this._includeBitrate(stream) && Number.isFinite(bitrate) && bitrate >= 0 ? bitrate : null;
     }
     _streamSummary(streams) {
       const sums = {total:streams.length, direct:0, video:0, audio:0, both:0,

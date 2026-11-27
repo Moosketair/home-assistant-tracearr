@@ -113,6 +113,16 @@ test('6C.3.B P3 duration: a same-track correction preserves the known clock', ()
   assert.notEqual(card._syncPosition({...movie,duration_ms:35000},200),historical);
 });
 
+test('6C.3.B P3 bitrate: a negative sample is absent, not an audio badge', () => {
+  const card = new Card();
+  card.setConfig({show_bitrate:true});
+  const row = {...music.plex,bitrate:-350};
+  assert.equal(card._scopedBitrate(row),null);
+  assert.equal(card._streamSummary([row]).bandwidth,0);
+  assert.equal(card._scopedBitrate({...row,bitrate:0}),0);
+  assert.equal(card._scopedBitrate({...row,bitrate:250}),250);
+});
+
 test('6C.3: a reused music session signs a distinct poster URL and ignores the old signature', async () => {
   const card = new Card();
   card.setConfig({show_poster:true,show_avatar:false});
