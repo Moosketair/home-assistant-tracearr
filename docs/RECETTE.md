@@ -452,3 +452,18 @@ Réutilisées sans campagne exhaustive : validations de cycle de vie 2A/3.2, dis
 | `recette/spec_{music_audit,race,robustness,snapshot_validation,websocket,generation,transport}.py` (Core 2025.6.0 / Python 3.13.18 et Core 2026.11.3 / Python 3.14.10, loopback isolé) | 118 réussis par Core |
 
 Aucun skip, xfail ni échec dans ces suites ; avertissements des dépendances du banc HA. `git diff --check` propre. La classification validée, le contrat Tracearr de 6C.1 et les validations visuelles antérieures sont réutilisés. Pas de lecteur réel, navigateur, Sections, HACS, hassfest ou production. Voir [ARCHITECTURE](ARCHITECTURE.md#réconciliation-restsse--2b1-et-2b3) pour les bornes et ambiguïtés restantes. Arrêt pour un contre-audit ciblé avant 6C.4.
+
+## 6C.3.D — Arrêts successifs et horloge musicale
+
+**Base :** `dad7b83f46b65576b1a1a706a7c6b8dcc33756ef`, refusée en 6C.3.C. Le commit REST ne comparait plus que le dernier arrêt, et un arrêt tardif distinct de la lecture vivante quittait le traitement sans protéger le GET. Côté cartes, une clé manquante empêchait la reconnaissance positive du média : une correction de durée de plus de 10 s recréait alors l’ancre avant la conservation des preuves.
+
+| Contrôle discriminant | Base auditée | Correctif local |
+|---|---:|---:|
+| `spec_music_audit.py -k 6c3d` : 16 séquences × piste, film, épisode. GET suspendu, cache vivant vérifié après chaque événement, état coordonné/WS et capteurs après libération, puis second GET autorisé à rétablir C | 21 échecs, 27 témoins réussis (Core 2026.11.3) | 48 réussis sur chacun des deux Core |
+| `tests/test_carousel.cjs`, sélection `6C.3.D` : deux cartes, clé absente au changement de durée ou au réancrage après péremption, diminution, pause, seek, reprise, répétition et contrôles vidéo | 6 échecs, 2 témoins réussis | 8 réussis |
+
+La matrice REST compare GET(A), GET(B), GET(C) et GET vide ; A et B réutilisent **le même média et le même ID**, avec deux démarrages distincts. Elle inclut `stop(A)/start(B)/stop(B)`, des arrêts tardifs seuls et suivis de `updated`, un arrêt sans identité, ainsi qu’une séquence où la preuve de E ne tient plus ni dans les quatre preuves antérieures de la fenêtre ni dans les quatre arrêts récents. Le repli protège le GET suspendu sans interdire le suivant. La matrice d’horloge vérifie 3 600 → **4 600 ms** après 1 s malgré la correction 12 → 35 s ; à 1,1 s, le retour de A donne 4 700 ms et une autre clé donne **100 ms**. Le réancrage après péremption garde, lui aussi, la dernière clé comparable.
+
+**Suites exécutées sur le candidat :** `spec_music_audit.py`, `spec_race.py`, `spec_generation.py` et `spec_websocket.py` ensemble : **128 réussis par Core** (2025.6.0 et 2026.11.3), dont reload, reconnexion, péremption, bornage et récupération REST. `node --check` puis `node --test tests/test_carousel.cjs` : **114 réussis**. Aucun échec ni saut sur ces sélections. Les contrôles SHA‑256/proxy, la classification et le contrat amont sont réutilisés, pas réaudités. Pas de campagne navigateur, Sections ou HACS.
+
+**Réserves P3 explicitement conservées :** si l’amont renvoie 404 pendant que la révision devient périmée, la réponse d’erreur peut ne pas inclure `Cache-Control: no-store`. Une requête sans révision commencée sur une vidéo peut finir avec une réponse cacheable après passage à une piste. Aucun changement d’image dans ce lot.

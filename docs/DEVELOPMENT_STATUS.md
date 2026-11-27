@@ -1,4 +1,6 @@
-# État de reprise — correctifs du contre-audit 6C.3.B
+# État de reprise — corrections résiduelles 6C.3.D
+
+**6C.3.D livré localement, dernier contrôle indépendant attendu.** 6C.3.C a rendu **FAIL** sur `dad7b83f46b65576b1a1a706a7c6b8dcc33756ef` : cinq anomalies closes, trois partiellement corrigées relevant de deux mécanismes. Branche `feature/6c-music-support` : `2122837515c7ea4364c57c4d3e18737b30a72412` pour les arrêts pendant un GET, `e03238569b799fe248c1ce37565b07587f6cb254` pour l’ancre de progression et les preuves d’identité. Voir [matrice avant/après et réserves P3](RECETTE.md#6c3d--arrêts-successifs-et-horloge-musicale). Aucun changement de version ni publication.
 
 **6C.3.B livré localement, en attente de contre-audit de confirmation.** Le contre-audit 6C.3.A a refusé `e9992f689e13b698c90c615c1f8a227e6b24f57b` (aucun P0 ; deux P1, quatre P2 et deux P3 historiques). La classification musicale est restée validée. Correctifs séparés : `228a1274e2cce0e81181dfdd97d2c3a87b268bd8` (identité REST/SSE et arrêts), `8b6b713491baebc4317ec154cf13170cacff7ed0` (horloge), `9059c656498712f80f8f1deb5835f15f6032b735` (révisions d'image), `f6097e18e589264e29a876e6c8135bb01fd66b5e` (débit). Voir [recette 6C.3.B](RECETTE.md#6c3b--corrections-du-contre-audit). Aucune publication ni ouverture des lots suivants.
 
@@ -91,6 +93,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** arrêt à la livraison locale de 6C.3.B. Attendre le contre-audit de confirmation et la validation du mainteneur ; 6C.4, 6C.5 et 6E restent dans la [feuille de route](ROADMAP.md) et nécessitent des autorisations distinctes.
+**Suite :** arrêt à la livraison locale de 6C.3.D. Attendre la confirmation indépendante ciblée sur ces deux mécanismes et la validation du mainteneur ; 6C.4, 6C.5 et 6E restent dans la [feuille de route](ROADMAP.md) et nécessitent des autorisations distinctes.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.
