@@ -53,6 +53,106 @@ const Card = classes.get('tracearr-streams-card');
 assert.ok(Card, 'Lovelace custom element registered');
 const music = require('./fixtures/music_streams.json');
 
+const mixedFilters = [
+  {...music.plex,id:'song',server_id:'p',username:'Alice',started_at:'2026-01-01T12:00:01Z'},
+  {id:'film',media_type:'movie',server_id:'p',username:'Alice',state:'playing',started_at:'2026-01-01T12:00:08Z',
+    video_decision:'transcode'},
+  {id:'episode',media_type:'episode',server_id:'j',username:'Bob',state:'paused',started_at:'2026-01-01T12:00:04Z'},
+  ...['live','photo','trailer','unknown','show',null].map((media_type,i)=>({id:`other-${i}`,media_type,
+    server_id:'j',username:'Bob',state:'playing',started_at:`2026-01-01T12:00:0${i+1}Z`})),
+];
+const filterIds = (card,config) => {
+  card.setConfig(config);
+  return Array.from(card._streams({streams:mixedFilters}),s=>s.id);
+};
+test('6C.5 media filters distinguish all, empty, invalid and every public category', () => {
+  const card = new Card();
+  assert.equal(filterIds(card,{}).length,mixedFilters.length);
+  assert.deepEqual(filterIds(card,{filter_media_types:['movie']}),['film']);
+  assert.deepEqual(filterIds(card,{filter_media_types:['episode']}),['episode']);
+  assert.deepEqual(filterIds(card,{filter_media_types:['track']}),['song']);
+  assert.deepEqual(filterIds(card,{filter_media_types:['episode','nope','movie','movie']}),['film','episode']);
+  assert.equal(filterIds(card,{filter_media_types:['other']}).filter(id=>id.startsWith('other-')).length,6);
+  assert.deepEqual(filterIds(card,{filter_media_types:[]}),[]);
+  for (const invalid of [null,{},'track',['nope'],[null,{}]]) {
+    assert.equal(filterIds(card,{filter_media_types:invalid}).length,mixedFilters.length);
+  }
+  assert.deepEqual(filterIds(card,{filter_media_types:['episode','other'],filter_server:'j',filter_user:'Bob',
+    show_paused:false,filter_transcode:'unknown'}).sort(),['other-0','other-1','other-2','other-3','other-4','other-5']);
+  const visible = card._streams({streams:mixedFilters});
+  assert.equal(card._streamSummary(visible).total,6);
+  assert.match(card._header(visible),/6 flux/);
+});
+test('6C.5 individual automatic and explicit selection respect media filters without replacing a target', () => {
+  const card = new (classes.get('tracearr-stream-card'))();
+  const filter_media_types = ['track'];
+  assert.deepEqual(filterIds(card,{filter_media_types}),['song']);
+  assert.deepEqual(filterIds(card,{filter_media_types,selection:'stream',stream_id:'film'}),[]);
+  assert.deepEqual(filterIds(card,{filter_media_types,selection:'stream',stream_id:'song',filter_server:'wrong'}),['song']);
+  assert.deepEqual(filterIds(card,{filter_media_types,selection:'account',selected_account:'p:Alice'}),['song']);
+  assert.deepEqual(filterIds(card,{filter_media_types,selection:'server',selected_server:'j'}),[]);
+  assert.deepEqual(filterIds(card,{filter_media_types,filter_transcode:'video'}),[]);
+});
+test('6C.5 editor renders the five settings, safely normalizes and round-trips additive keys', () => {
+  for (const type of ['custom:tracearr-stream-card','custom:tracearr-streams-card']) {
+    const Editor = classes.get('tracearr-card-editor'), editor = new Editor();
+    editor.setConfig({type,show_year:false,filter_media_types:['track','bad','track'],
+      music_field_order:'year,nope,artist,year',music_field_visibility:{year:false,disc_number:true,album:'false'},
+      music_badge_order:'container,channels,container,unknown',music_badge_visibility:{container:true,channels:false,nope:true}});
+    const html = editor.shadowRoot.innerHTML;
+    assert.match(html,/data-media-type="track" checked/);
+    assert.doesNotMatch(html,/data-media-type="movie" checked/);
+    assert.match(html,/data-music-field="disc_number" checked/);
+    assert.match(html,/data-music-badge="container" checked/);
+    assert.match(html,/data-preview="music"/);
+    assert.ok(!editor._config.movie_show_year && !editor._config.series_show_year);
+    assert.equal(editor._config.music_field_order,'year,artist,title,album,track_number,disc_number');
+    assert.equal(editor._config.music_badge_order,'container,channels,audio_format,audio_codec,sample_rate,audio_bitrate');
+    assert.equal(JSON.stringify(editor._config.music_field_visibility),'{"year":false,"disc_number":true}');
+    assert.equal(JSON.stringify(editor._config.music_badge_visibility),'{"channels":false,"container":true}');
+    const restored = new Editor();
+    restored.setConfig(JSON.parse(JSON.stringify(editor._config)));
+    assert.equal(restored.shadowRoot.innerHTML,html);
+    restored.setConfig({type,filter_media_types:[]});
+    assert.equal((restored.shadowRoot.innerHTML.match(/data-media-type="[^"]+" checked/g)||[]).length,0);
+    restored.setConfig({type});
+    assert.equal((restored.shadowRoot.innerHTML.match(/data-media-type="[^"]+" checked/g)||[]).length,4);
+    assert.equal(restored._config.filter_media_types,undefined);
+  }
+});
+test('6C.5 filter reconfiguration keeps the carousel anchor available for the next render', () => {
+  const card = new Card();
+  card.setConfig({mode:'carousel',entry_id:'fixture'});
+  card._carouselIndex = 2;
+  card.setConfig({mode:'carousel',entry_id:'fixture',filter_media_types:['track']});
+  assert.equal(card._carouselIndex,2);
+  card.setConfig({mode:'carousel',entry_id:'different',filter_media_types:['movie']});
+  assert.equal(card._carouselIndex,0);
+});
+test('6C.5 music preview fields and badges have the same markup as the actual card', () => {
+  const example = {
+    media_type:'track',server_type:'jellyfin',media_title:'Signal de minuit',artist_name:'Studio Sillage',
+    album_name:'Atlas nocturne',year:2024,track_number:3,disc_number:1,
+    audio_decision:'transcode',is_transcode:true,source_audio_codec:'FLAC',stream_audio_codec:'AAC',
+    source_audio_channels:2,source_audio_details:{sampleRate:44100,bitrate:902},stream_audio_details:{channels:2},
+    transcode_info:{sourceContainer:'FLAC',streamContainer:'MPEGTS'},
+  };
+  for (const type of ['tracearr-streams-card','tracearr-stream-card']) {
+    const config = {type:`custom:${type}`,music_field_order:'artist,album,title',
+      music_field_visibility:{track_number:true,title:false},music_badge_order:'container,channels',
+      music_badge_visibility:{container:true,sample_rate:false},technical_badge_style:'technical',
+      show_poster:false,show_avatar:false,show_health:false,show_server:false,show_device:false};
+    const editor = new (classes.get('tracearr-card-editor'))(), card = new (classes.get(type))();
+    editor.setConfig(config);
+    card.setConfig(config);
+    const actual = card._streamCard({}, {...example,id:'preview',state:'playing'});
+    assert.ok(actual.includes(editor._musicPreview('fields').replace(/^<div[^>]*>|<\/div>$/g,'')));
+    const technical = editor._musicPreview('badges').replace(/^<div[^>]*>|<\/div>$/g,'');
+    assert.ok(actual.includes(technical));
+    assert.deepEqual(Object.keys(badges(technical)),['container','channels','audio_format']);
+  }
+});
+
 for (const type of ['tracearr-streams-card','tracearr-stream-card']) {
   const panel = (row, config={}) => {
     const card = new (classes.get(type))();

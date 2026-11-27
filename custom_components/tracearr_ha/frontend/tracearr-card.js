@@ -98,6 +98,18 @@
   const SERIES_FIELDS = Object.freeze(["series", "season", "episode_number", "episode", "year"]);
   const MUSIC_FIELDS = Object.freeze(["title","artist","album","year","track_number","disc_number"]);
   const MUSIC_BADGES = Object.freeze(["audio_format","audio_codec","sample_rate","channels","audio_bitrate","container"]);
+  const MEDIA_TYPES = Object.freeze(["movie","episode","track","other"]);
+  const MEDIA_TYPE_LABELS = {
+    movie:["Films","Movies"], episode:["Séries","TV shows"], track:["Musique","Music"], other:["Autres médias","Other media"],
+  };
+  const MUSIC_FIELD_LABELS = {
+    title:["Titre du morceau","Track title"], artist:["Artiste","Artist"], album:["Album","Album"],
+    year:["Année","Year"], track_number:["Numéro de piste","Track number"], disc_number:["Numéro de disque","Disc number"],
+  };
+  const mediaCategory = ({media_type}) => MEDIA_TYPES.includes(media_type) ? media_type : "other";
+  const selectedMediaTypes = c => c.filter_media_types ?? MEDIA_TYPES;
+  const musicFieldVisible = (c,key) => c.music_field_visibility?.[key] ?? !key.endsWith("_number");
+  const musicBadgeVisible = (c,key) => c.music_badge_visibility?.[key] ?? !["audio_bitrate","container"].includes(key);
   const usablePosition = value => Number.isFinite(value) && value >= 0;
   const musicTimeShape = stream => !isMusicTrack(stream) ? undefined : !usablePosition(stream.progress_ms) ? false :
     stream.duration_ms > 0 ? true : stream.progress_ms;
@@ -313,7 +325,7 @@
     return {short:text,name:text};
   }
   function musicTechnicalValues(s,c,bitrate,en) {
-    const visible = key => c.music_badge_visibility?.[key] ?? !["audio_bitrate","container"].includes(key);
+    const visible = key => musicBadgeVisible(c,key);
     const compare = c.technical_transcode_mode !== "destination";
     const confirmed = s.audio_decision === "transcode";
     const converting = confirmed || (!!s.is_transcode && codecState(s.audio_decision) !== "direct");
@@ -539,6 +551,32 @@
     `<div class="poster empty music-placeholder" role="img" aria-label="Pochette indisponible">${badgeIcon("audio")}</div>` :
     '<div class="poster empty">▣</div>';
   const posterImage = (url, music) => `<img class="poster" data-kind="poster" src="${E(url)}" alt="${music ? "Pochette" : "Affiche"}" loading="eager" decoding="async">`;
+  function musicFields(stream,c,en) {
+    const fields = {
+      title:techText(stream.media_title), artist:techText(stream.artist_name),
+      album:techText(stream.album_name), year:techCount(stream.year) && stream.year <= 9999 ? String(stream.year) : "",
+      track_number:techCount(stream.track_number) ? `${en ? "Track" : "Piste"} ${stream.track_number}` : "",
+      disc_number:techCount(stream.disc_number) ? `${en ? "Disc" : "Disque"} ${stream.disc_number}` : "",
+    };
+    return normalizedOrder(c.music_field_order,MUSIC_FIELDS)
+      .filter(key => fields[key] && musicFieldVisible(c,key))
+      .map(key => ({key,text:fields[key]}));
+  }
+  function musicMarkup(fields) {
+    if (!fields.length) return "";
+    // Preserve the usual hierarchy but fill only the lines that have content.
+    const [primary,...rest] = fields;
+    const lines = [];
+    const standalone = ({key}) => key === "title" || key === "artist";
+    for (const field of rest) {
+      const line = lines.at(-1);
+      if (line && !standalone(line[0]) && !standalone(field)) line.push(field);
+      else lines.push([field]);
+    }
+    return `<div class="title" title="${E(primary.text)}">${E(primary.text)}</div>` + lines.map(line =>
+      `<div class="subtitle ${line[0].key === "artist" ? "music-artist" : "music-album"}">${
+        line.map(({text})=>E(text)).join(" · ")}</div>`).join("");
+  }
   function syncTechTheme(el, hass) {
     el.toggleAttribute?.("data-tech-dark",hass?.themes?.darkMode === true);
     el.toggleAttribute?.("data-tech-light",hass?.themes?.darkMode === false);
@@ -735,6 +773,22 @@
 
   function normalizeConfig(config) {
     const result = {...DEFAULTS, ...config};
+    const selection = result.filter_media_types;
+    delete result.filter_media_types;
+    if (Array.isArray(selection)) {
+      const known = MEDIA_TYPES.filter(type => selection.includes(type));
+      if (!selection.length || known.length) result.filter_media_types = known;
+    }
+    for (const [kind,allowed] of [["field",MUSIC_FIELDS],["badge",MUSIC_BADGES]]) {
+      const order = `music_${kind}_order`, visibility = `music_${kind}_visibility`;
+      if (typeof result[order] === "string") result[order] = normalizedOrder(result[order],allowed).join(",");
+      else delete result[order];
+      const source = result[visibility];
+      const values = Object.fromEntries(allowed.filter(key => typeof source?.[key] === "boolean")
+        .map(key => [key,source[key]]));
+      if (Object.keys(values).length) result[visibility] = values;
+      else delete result[visibility];
+    }
     // The old grid layout is replaced by the full-width list. Native Sections
     // owns sizing; retired internal sizing controls are never persisted again.
     if (!['list', 'carousel'].includes(result.mode)) result.mode = 'list';
@@ -848,10 +902,13 @@
     static getConfigElement() { return document.createElement("tracearr-card-editor"); }
     setConfig(config) {
       if (!config || !["list", "grid", "carousel", undefined].includes(config.mode)) throw Error("Invalid Tracearr layout");
-      this._config = normalizeConfig(config);
+      const next = normalizeConfig(config), previous = this._config;
+      const filterChanged = previous.mode === "carousel" && next.mode === "carousel" && previous.entry_id === next.entry_id &&
+        selectedMediaTypes(previous).join(",") !== selectedMediaTypes(next).join(",");
+      this._config = next;
       this._renderFingerprint = null;
       this._liveFingerprints.clear();
-      this._carouselIndex = 0;
+      if (!filterChanged) this._carouselIndex = 0;
       this._stopCarouselAnimation();
       if (this.isConnected) this.render();
     }
@@ -1003,6 +1060,7 @@
     }
     _streams(entry) {
       let streams = [...(entry?.streams || [])];
+      if (this._config.filter_media_types) streams = streams.filter(s => this._config.filter_media_types.includes(mediaCategory(s)));
       if (!this._config.show_paused) streams = streams.filter(s => s.state === "playing");
       // An explicit individual-card target takes priority over stale generic
       // filters saved by an older dashboard configuration.
@@ -1185,18 +1243,7 @@
     }
     _mediaFields(stream) {
       const c = this._config;
-      if (isMusicTrack(stream)) {
-        const en = this._techEnglish;
-        const fields = {
-          title:techText(stream.media_title), artist:techText(stream.artist_name),
-          album:techText(stream.album_name), year:techCount(stream.year) && stream.year <= 9999 ? String(stream.year) : "",
-          track_number:techCount(stream.track_number) ? `${en ? "Track" : "Piste"} ${stream.track_number}` : "",
-          disc_number:techCount(stream.disc_number) ? `${en ? "Disc" : "Disque"} ${stream.disc_number}` : "",
-        };
-        return normalizedOrder(c.music_field_order,MUSIC_FIELDS)
-          .filter(key => fields[key] && (c.music_field_visibility?.[key] ?? !key.endsWith("_number")))
-          .map(key => ({key,text:fields[key]}));
-      }
+      if (isMusicTrack(stream)) return musicFields(stream,c,this._techEnglish);
       const episode = stream.media_type === "episode";
       if (!episode) {
         const fields = {
@@ -1224,23 +1271,7 @@
     _mediaMarkup(stream) {
       const fields = this._mediaFields(stream);
       if (!fields.length) return "";
-      if (isMusicTrack(stream)) {
-        // Keep the usual primary type, while allowing the ordered music
-        // fields to fill only the lines that actually have content.
-        const [primary,...rest] = fields;
-        const lines = [];
-        const standalone = ({key}) => key === "title" || key === "artist";
-        for (const field of rest) {
-          const line = lines.at(-1);
-          if (line && !standalone(line[0]) && !standalone(field)) line.push(field);
-          else lines.push([field]);
-        }
-        const title = `<div class="title" title="${E(primary.text)}">${E(primary.text)}</div>`;
-        return title + lines.map(line => {
-          const style = line[0].key === "artist" ? "music-artist" : "music-album";
-          return `<div class="subtitle ${style}">${line.map(({text})=>E(text)).join(" · ")}</div>`;
-        }).join("");
-      }
+      if (isMusicTrack(stream)) return musicMarkup(fields);
       const parts = [];
       for (const field of fields) {
         // Join S01 + E02 only when adjacent, preserving the user's field order.
@@ -2013,10 +2044,14 @@
       border-radius:7px; padding:8px; color:var(--primary-text-color);
       background:var(--secondary-background-color,transparent); cursor:pointer; text-align:left; }
     .badge-color { display:grid; gap:8px; }
-    .tech-preview { min-width:0; padding:10px; border-radius:7px;
+    .tech-preview,.music-field-preview { min-width:0; padding:10px; border-radius:7px;
       background:var(--secondary-background-color,transparent); font-size:.86em; }
     .tech-preview .meta { display:flex; flex-wrap:wrap; align-items:center; gap:5px; }
     .tech-preview .chip { padding:3px 7px; border-radius:7px; background:var(--pill-bg); color:var(--pill-text); font-weight:600; }
+    .music-field-preview .title { font-weight:700; }
+    .music-field-preview .subtitle { margin-top:4px; font-size:.9em; overflow-wrap:anywhere; }
+    .music-field-preview .music-artist { font-weight:600; }
+    .music-field-preview .music-album { opacity:.85; }
     .tech-reset { font:inherit; color:inherit; background:transparent; border:1px solid var(--divider-color,#888);
       border-radius:6px; padding:6px 8px; cursor:pointer; }
     .tech-reset:disabled { opacity:.5; cursor:default; }
@@ -2122,9 +2157,52 @@
         video_decision:"transcode", audio_decision:"transcode", stream_audio_details:{channels:2},
         stream_video_codec:"h264", stream_video_codec_display:"H.264", stream_audio_codec:"aac", stream_audio_codec_display:"AAC",
         stream_video_details:{width:1920,height:1080}};
-      return `<div class="tech-preview${c.stream_surface === "blur" ? " surface-blur" : ""}"${palette ? ` style="--pill-bg:${palette.bg};--pill-text:${palette.text}"` : ""}>${
+      return `<div class="tech-preview${c.stream_surface === "blur" ? " surface-blur" : ""}" data-preview="video"${palette ? ` style="--pill-bg:${palette.bg};--pill-text:${palette.text}"` : ""}>${
         metaMarkup(renderTechnical(example,c,c.show_bitrate ? 4200 : null,en),c.footer_field_order) ||
         `<small>${en ? "No visible technical information" : "Aucune information technique visible"}</small>`}</div>`;
+    }
+    _musicPreview(kind) {
+      const c = this._config, en = techEnglish(this._hass);
+      const example = {
+        media_type:"track",server_type:"jellyfin",media_title:"Signal de minuit",artist_name:"Studio Sillage",
+        album_name:"Atlas nocturne",year:2024,track_number:3,disc_number:1,is_transcode:true,
+        audio_decision:"transcode",source_audio_codec:"FLAC",stream_audio_codec:"AAC",source_audio_channels:2,
+        source_audio_details:{sampleRate:44100,bitrate:902},stream_audio_details:{channels:2},
+        transcode_info:{sourceContainer:"FLAC",streamContainer:"MPEGTS"},
+      };
+      const fields = kind === "fields";
+      const contents = fields ? musicMarkup(musicFields(example,c,en)) :
+        metaMarkup(renderTechnical(example,c,c.show_bitrate ? 196 : null,en),c.footer_field_order);
+      return `<div data-preview="${fields ? "music-fields" : "music"}" class="${
+        fields ? "music-field-preview" : `tech-preview${c.stream_surface === "blur" ? " surface-blur" : ""}`}">${
+        contents || `<small>${en ? "No visible information" : "Aucune information visible"}</small>`}</div>`;
+    }
+    _musicControls(kind) {
+      const fields = kind === "field", en = techEnglish(this._hass);
+      const list = fields ? MUSIC_FIELDS : MUSIC_BADGES;
+      const labels = fields ? MUSIC_FIELD_LABELS : {...TECH_LABELS,...MUSIC_TECH_LABELS};
+      const visibility = fields ? musicFieldVisible : musicBadgeVisible;
+      const order = this._orderEditor(`music_${kind}_order`,list,
+        Object.fromEntries(list.map(key => [key,labels[key][Number(en)]])),
+        (key,label) => `<label class="check"><input type="checkbox" data-music-${kind}="${key}" ${
+          visibility(this._config,key) ? "checked" : ""}>${E(label)}</label>`,en);
+      const help = fields ? (en ?
+        "The first visible value becomes the title line. Tracearr may report the album artist." :
+        "La première valeur visible devient la ligne principale. Tracearr peut fournir l’artiste de l’album.") : (en ?
+        "Audio format takes precedence and falls back to codec. The detailed audio bitrate is separate from the shared stream bitrate." :
+        "Le format audio est prioritaire et se replie sur le codec. Le débit audio détaillé est distinct du débit commun du flux.");
+      const caption = fields ? (en ? "Preview — example track" : "Aperçu — morceau fictif") :
+        (en ? "Preview — FLAC to AAC example" : "Aperçu — exemple FLAC → AAC");
+      return `<small>${help}</small>${order}<div class="group-label">${caption}</div>${
+        this._musicPreview(fields ? "fields" : "badges")}`;
+    }
+    _mediaFilterEditor() {
+      const en = techEnglish(this._hass), selected = selectedMediaTypes(this._config);
+      return this._subgroup("media-filter",en ? "Media types" : "Types de médias",
+        `<div class="columns">${MEDIA_TYPES.map(type => `<label class="check"><input type="checkbox" data-media-type="${type}" ${
+          selected.includes(type) ? "checked" : ""}>${MEDIA_TYPE_LABELS[type][Number(en)]}</label>`).join("")}</div>
+        <small>${en ? "All types are shown by default. Uncheck all to show no sessions." :
+          "Tous les types sont affichés par défaut. Décochez tout pour n’afficher aucune lecture."}</small>`);
     }
     _technicalEditor() {
       const c = this._config, en = techEnglish(this._hass);
@@ -2159,7 +2237,8 @@
         this._subgroup("technical-order",t("Informations affichées et ordre","Visible information and order"),
           `<small>${t("Format audio privilégie le format spécifique, sinon le codec. Activez uniquement Codec audio pour voir les codecs sans le format spécifique.",
             "Audio format shows the specific format when known, otherwise the codec. Enable only Audio codec to show codecs without the specific format.")}</small>` + order) + colorEditor +
-        `<div class="group-label">${t("Aperçu — exemple transcodé","Preview — transcoding example")}</div>${this._technicalPreview()}`;
+        `<div class="group-label">${t("Aperçu — exemple transcodé","Preview — transcoding example")}</div>${this._technicalPreview()}` +
+        this._subgroup("music-badges",t("Badges musicaux","Music badges"),this._musicControls("badge"));
     }
     _footerOrderFields() {
       if (legacyTechnical(this._config)) return FOOTER_FIELDS;
@@ -2241,7 +2320,8 @@
         this._select("filter_server","Filtrer par serveur",[["","Tous les serveurs"],...servers])+
         this._select("filter_user","Filtrer par utilisateur",[["","Tous les utilisateurs"],...users.map(u=>[u,u])])+
         this._select("filter_transcode","Mode de lecture",[["all","Tous"],["direct","Direct"],["video","Vidéo seule"],["audio","Audio seul"],["both","Vidéo et audio"],["unknown","Inconnu"]])+
-        this._select("sort","Ordre des flux",[["recent","Plus récent d'abord"],["user","Utilisateur"],["server","Serveur"]]);
+        this._select("sort","Ordre des flux",[["recent","Plus récent d'abord"],["user","Utilisateur"],["server","Serveur"]])+
+        this._mediaFilterEditor();
       // Keep the visibility switches, and expose optional per-metric settings below.
       const headerMetrics=this._metricBadgeEditor();
       const headerCommon=this._checks([
@@ -2281,7 +2361,8 @@
         this._select("series_episode_style","Format de saison et épisode",[["short","S01E02"],["long","Saison 1 · Épisode 2"]])+
         `<small>Ordre d'affichage de toutes les informations :</small>`+
         this._orderEditor("series_field_order",SERIES_FIELDS)+
-        `<small>Les réglages d'année sont indépendants entre films et séries.</small>`;
+        `<small>Les réglages d'année sont indépendants entre films et séries.</small>`+
+        this._subgroup("music-fields",techEnglish(this._hass) ? "Music information" : "Informations musicales",this._musicControls("field"));
       const footerFields = this._footerOrderFields();
       const footerLabels = legacyTechnical(c) ? FOOTER_LABELS :
         {...FOOTER_LABELS,[footerFields.find(key => TECH_FOOTER_FIELDS.includes(key))]:techEnglish(this._hass) ? "Technical badges" : "Badges techniques"};
@@ -2355,6 +2436,23 @@
         this._config = {...this._config,technical_badge_visibility:{...this._config.technical_badge_visibility,[key]:input.checked}};
         this._updateTechnicalEditor(`[data-tech-visible="${key}"]`);
       }));
+      this.shadowRoot.querySelectorAll("[data-media-type]").forEach(input => input.addEventListener("change",() => {
+        const selected = new Set(selectedMediaTypes(this._config));
+        const type = input.dataset.mediaType;
+        if (input.checked) selected.add(type);
+        else selected.delete(type);
+        this._config = {...this._config,filter_media_types:MEDIA_TYPES.filter(value => selected.has(value))};
+        this._emit();
+      }));
+      for (const kind of ["field","badge"]) {
+        const attr = `data-music-${kind}`, setting = `music_${kind}_visibility`;
+        this.shadowRoot.querySelectorAll(`[${attr}]`).forEach(input => input.addEventListener("change",() => {
+          const key = input.getAttribute(attr);
+          this._config = {...this._config,[setting]:{...this._config[setting],[key]:input.checked}};
+          this._refreshMusicPreview(kind === "field" ? "fields" : "badges");
+          this._emit();
+        }));
+      }
       this.shadowRoot.querySelectorAll("[data-tech-color]").forEach(input => {
         const key = input.dataset.techColor;
         input.addEventListener("input",() => {
@@ -2464,6 +2562,8 @@
         const key=btn.dataset.order;
         const allowed= key==="movie_field_order" ? MOVIE_FIELDS :
           key==="series_field_order" ? SERIES_FIELDS :
+          key==="music_field_order" ? MUSIC_FIELDS :
+          key==="music_badge_order" ? MUSIC_BADGES :
           key==="footer_field_order" ? footerFields :
           key==="technical_badge_order" ? TECH_FIELDS :
           [...HEADER_FIELDS, ...(this._config.header_entity_badges || []).map(row => `entity:${row.id}`)];
@@ -2490,12 +2590,22 @@
         }
         this._captureOpenSections();
         this.render();
+        if (key.startsWith("music_")) {
+          const row = `[data-order="${key}"][data-index="${next}"]`;
+          (this.shadowRoot.querySelector(`${row}[data-direction="${btn.dataset.direction}"]:not(:disabled)`) ||
+            this.shadowRoot.querySelector(`${row}:not(:disabled)`))?.focus();
+        }
         this._emit();
       }));
     }
     _refreshTechnicalPreview() {
-      const preview = this.shadowRoot.querySelector(".tech-preview");
+      const preview = this.shadowRoot.querySelector('[data-preview="video"]');
       if (preview) preview.outerHTML = this._technicalPreview();
+      this._refreshMusicPreview("badges");
+    }
+    _refreshMusicPreview(kind) {
+      const preview = this.shadowRoot.querySelector(`[data-preview="${kind === "fields" ? "music-fields" : "music"}"]`);
+      if (preview) preview.outerHTML = this._musicPreview(kind);
     }
     _updateTechnicalEditor(focus) {
       this._captureOpenSections();
