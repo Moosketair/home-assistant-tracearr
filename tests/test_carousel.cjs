@@ -113,6 +113,56 @@ test('6C.3.B P3 duration: a same-track correction preserves the known clock', ()
   assert.notEqual(card._syncPosition({...movie,duration_ms:35000},200),historical);
 });
 
+for (const type of ['tracearr-streams-card','tracearr-stream-card']) {
+  for (const returningKey of ['101','102']) {
+    test(`6C.3.D ${type}: duration and missing key, then ${returningKey}`, () => {
+      const card = new (classes.get(type))();
+      const a = {...music.plex,media_id:null,progress_ms:3600};
+      card._syncPosition(a,0);
+      const partial = {...a,duration_ms:35000,rating_key:null};
+      const clock = card._syncPosition(partial,1000);
+      assert.equal(card._positionAt(clock,1000),4600);
+      assert.equal(clock.identity.key,'101');
+      const next = {...partial,rating_key:returningKey,progress_ms:returningKey === '101' ? 3600 : 100};
+      assert.equal(card._positionAt(card._syncPosition(next,1100),1100),returningKey === '101' ? 4700 : 100);
+    });
+  }
+  test(`6C.3.D ${type}: reanchor after stale without discarding evidence`, () => {
+    const card = new (classes.get(type))();
+    const a = {...music.plex,media_id:null,progress_ms:3600};
+    card._syncPosition(a,0);
+    card._syncPosition(a,500,true);
+    const partial = {...a,duration_ms:35000,rating_key:null};
+    const restored = card._syncPosition(partial,1000);
+    assert.equal(card._positionAt(restored,1000),3600); // deliberate REST catch-up
+    assert.equal(restored.identity.key,'101');
+    const next = {...partial,rating_key:'102',progress_ms:100};
+    assert.equal(card._positionAt(card._syncPosition(next,1100),1100),100);
+  });
+  test(`6C.3.D ${type}: shortened duration, pause, seek and repeat`, () => {
+    const card = new (classes.get(type))();
+    const a = {...music.plex,media_id:null,progress_ms:18000,duration_ms:35000};
+    const clock = card._syncPosition(a,0);
+    clock.lastRendered = card._positionAt(clock,1000);
+    const partial = {...a,state:'paused',duration_ms:12000,rating_key:null};
+    const paused = card._syncPosition(partial,1100);
+    assert.equal(paused.lastRendered,12000);
+    assert.equal(card._positionAt(paused,2200),12000);
+    const seek = {...partial,progress_ms:200,duration_ms:36000};
+    assert.equal(card._positionAt(card._syncPosition(seek,2500),3000),200);
+    const resumed = card._syncPosition({...seek,state:'playing'},3100);
+    assert.equal(card._positionAt(resumed,3500),600);
+    const repeat = {...a,started_at:'2026-01-01T12:05:00Z',progress_ms:50};
+    assert.equal(card._positionAt(card._syncPosition(repeat,3600),3600),50);
+    for (const media_type of ['movie','episode']) {
+      const video = {...a,media_type,id:'video'};
+      card._syncPosition(video,0);
+      const corrected = card._syncPosition({...video,duration_ms:55000},1000);
+      assert.equal(card._positionAt(corrected,1000),18000);
+    }
+  });
+}
+
 test('6C.3.B P3 bitrate: a negative sample is absent, not an audio badge', () => {
   const card = new Card();
   card.setConfig({show_bitrate:true});

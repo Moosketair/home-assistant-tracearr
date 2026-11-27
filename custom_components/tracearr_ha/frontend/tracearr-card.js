@@ -1298,9 +1298,13 @@
       const music = isMusicTrack(stream) || old?.identity?.type === "track";
       const previous = old?.identity || {};
       const changed = old && (music ? musicPlaybackChanged(previous,identity) : old.media !== media);
-      const sameTrack = music && sameMusicMedia(previous,identity) === true;
+      // Compare only the evidence in this sample. Then retain compatible
+      // evidence independently of whether the time anchor must be replaced.
+      if (old && music && !changed) {
+        for (const key of Object.keys(identity)) identity[key] ||= previous[key];
+      }
       if (!old || changed || (!stale && (old.stale ||
-          (!sameTrack && old.duration && duration && Math.abs(old.duration-duration) > 10000)))) {
+          (!music && old.duration && duration && Math.abs(old.duration-duration) > 10000)))) {
         const fresh = {progress:source, at:now, duration, state, media, identity, stale,
           lastRaw:source, lastRawAt:now, lastRendered:source};
         this._positions.set(id, fresh);
@@ -1338,12 +1342,9 @@
       old.at = now;
       old.duration = duration;
       old.state = state;
-      if (music) {
-        for (const key of Object.keys(identity)) identity[key] ||= previous[key];
-      }
       old.identity = identity;
       if (seek) old.lastRendered = old.progress;
-      else if (sameTrack && duration > 0) old.lastRendered = Math.min(old.lastRendered,duration);
+      else if (music && duration > 0) old.lastRendered = Math.min(old.lastRendered,duration);
       if (source !== old.lastRaw) {
         old.lastRaw = source;
         old.lastRawAt = now;
