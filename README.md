@@ -6,7 +6,7 @@
 
 **Voyez qui regarde quoi sur Plex, Jellyfin et Emby, directement dans Home Assistant.** Tracearr HA utilise les données de Tracearr pour alimenter des capteurs et deux cartes Lovelace personnalisables : une vue d’ensemble des lectures et une carte centrée sur une seule lecture.
 
-**Stable recommandée via HACS : [`v0.1.17`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.17).** La [préversion `v0.1.18-beta.3`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.18-beta.3) rend les transitions audio lisibles même lorsque seule la catégorie Format audio est activée. Voir [comment l’installer ou revenir à la stable](CHANGELOG.md#0118-beta3--préversion-de-test).
+**Stable recommandée via HACS : [`v0.1.18`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.18).** Voir [les nouveautés et les instructions de mise à jour](CHANGELOG.md#0118--2026-11-27).
 
 [Voir les cartes](#aperçu-des-cartes) · [Installer](#installation-via-hacs) · [Configurer les cartes](docs/CONFIGURATION.md) · [Historique](CHANGELOG.md)
 
@@ -28,7 +28,7 @@
 - **Mise en page et affichage.** Taille pilotée par les réglages natifs de *Sections*, mode compact, fond cinéma flouté, couleurs par type de serveur, affiches, avatars, titres et épisodes. Affichez la progression, le temps restant ou une estimation de fin.
 - **Bandeau au choix.** Combinez statistiques Tracearr et entités Home Assistant, avec ordre, alignement et couleurs configurables. Filtrez l’affichage des débits à partir de vos [règles LAN/WAN](docs/CONFIGURATION.md#débits-locaux-et-distants).
 
-### Nouveautés des préversions 0.1.18
+### Nouveautés de la version 0.1.18
 
 Les panneaux de lecture proposent cinq styles de badges techniques : **Classique** (rendu historique par défaut), **Premium** (fond teinté et bordure colorée), **Cinéma** (couleur pleine), **Minimaliste** (trait latéral) et **Technique** (précisions sur les formats). L’éditeur permet de prévisualiser le résultat, de choisir une disposition compacte ou séparée et de régler les couleurs, l’ordre et la visibilité des catégories. Selon les données disponibles, affichez la destination seule ou la comparaison source → destination.
 
@@ -41,9 +41,9 @@ Les panneaux de lecture proposent cinq styles de badges techniques : **Classique
 
 </details>
 
-La préversion garde aussi le temps restant visible à gauche pendant la pause et affiche **En pause** à droite. Les badges du bandeau peuvent avoir une couleur normale propre, distincte de leur couleur à zéro. Dans *Sections*, les cartes s’ajustent à leur contenu par défaut : un bandeau seul tient sur une ligne native si son contenu le permet. Les tailles explicitement enregistrées restent prioritaires.
+Le temps restant reste visible à gauche pendant la pause et **En pause** s’affiche à droite. Les badges du bandeau peuvent avoir une couleur normale propre, distincte de leur couleur à zéro. Dans *Sections*, les cartes s’ajustent à leur contenu par défaut : un bandeau seul tient sur une ligne native si son contenu le permet. Les tailles explicitement enregistrées restent prioritaires.
 
-[Réglages des badges techniques](docs/CONFIGURATION.md#badges-techniques-des-panneaux-de-lecture) · [Notes de la bêta 3 et retour à la stable](CHANGELOG.md#0118-beta3--préversion-de-test)
+[Réglages des badges techniques](docs/CONFIGURATION.md#badges-techniques-des-panneaux-de-lecture) · [Notes de la version 0.1.18](CHANGELOG.md#0118--2026-11-27)
 
 ## Installation via HACS
 
@@ -70,12 +70,12 @@ Pour une mise à jour normale, conservez l’entrée et les cartes existantes. A
 - **LAN/WAN :** la classification des lectures repose sur des règles manuelles par compte ou appareil. Tracearr HA ne déduit pas automatiquement la localisation d’un flux.
 - **Arrêt à distance :** l’intégration ne permet pas d’arrêter une lecture.
 - **Métadonnées :** la précision et la disponibilité des informations techniques dépendent des données que Tracearr transmet. Elles peuvent être incomplètes ou différées.
-- **Musique :** l’affichage dédié aux lectures musicales reste prévu dans le [lot 6C](docs/ROADMAP.md#lot-6c--lectures-musicales) ; il n’est pas inclus dans cette bêta.
+- **Musique :** l’affichage dédié aux lectures musicales n’est pas inclus ; il reste prévu dans le [lot 6C](docs/ROADMAP.md#lot-6c--lectures-musicales).
 
 ## Documentation et dépannage
 
 - [Guide de configuration](docs/CONFIGURATION.md) : éditeur visuel, [exemples YAML](docs/CONFIGURATION.md#exemples-de-cartes-lovelace), badges et filtres.
-- [Historique des versions](CHANGELOG.md) : [nouveautés de la stable `v0.1.17`](CHANGELOG.md#0117--2026-11-26), notes de la bêta et versions précédentes. [Versions publiées sur GitHub](https://github.com/Moosketair/home-assistant-tracearr/releases).
+- [Historique des versions](CHANGELOG.md) : nouveautés de la stable, notes des préversions et versions précédentes. [Versions publiées sur GitHub](https://github.com/Moosketair/home-assistant-tracearr/releases).
 - [Maintenance](docs/MAINTENANCE.md) : distribution HACS, icônes et marque.
 
 <details>
@@ -83,7 +83,7 @@ Pour une mise à jour normale, conservez l’entrée et les cartes existantes. A
 
 - **Aucun capteur :** vérifiez l’adresse Tracearr, la clé API et **Paramètres → Système → Journaux**.
 - **Clé refusée sur une intégration existante :** utilisez la demande de réauthentification de Home Assistant pour remplacer la clé sans recréer l’entrée ni perdre ses entités ou réglages.
-- **Carte absente ou ancienne interface :** dans **Paramètres → Tableaux de bord → Ressources**, vérifiez l’unique module `/tracearr_ha/tracearr-card.js` avec `?v=` suivi de la version installée (par exemple `?v=0.1.17`). Redémarrez Home Assistant et rechargez le tableau de bord. En [mode YAML](docs/CONFIGURATION.md#ressource-lovelace-en-mode-yaml), vérifiez la déclaration manuelle.
+- **Carte absente ou ancienne interface :** dans **Paramètres → Tableaux de bord → Ressources**, vérifiez l’unique module `/tracearr_ha/tracearr-card.js` avec `?v=` suivi de la version installée (par exemple `?v=0.1.18`). Redémarrez Home Assistant et rechargez le tableau de bord. En [mode YAML](docs/CONFIGURATION.md#ressource-lovelace-en-mode-yaml), vérifiez la déclaration manuelle.
 - **Affiche absente :** vérifiez que Tracearr transmet une URL d’affiche et consultez les erreurs réseau ou les journaux. Sans affiche, le fond cinéma reste uni et sombre.
 - **Carrousel immobile :** vérifiez le nombre de flux visibles, les réglages de défilement automatique, les préférences d’animation et la pause au survol.
 

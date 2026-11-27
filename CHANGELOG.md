@@ -2,6 +2,18 @@
 
 Les changements sont classés par version publique. Les préversions et les anciennes notes restent consultables ci-dessous. Les [GitHub Releases](https://github.com/Moosketair/home-assistant-tracearr/releases) permettent de télécharger une version précise.
 
+## 0.1.18 — 2026-11-27
+
+**Des cartes plus lisibles, qui s’adaptent au contenu et laissent choisir les détails à afficher.**
+
+- **Pause et bandeau :** le temps restant reste visible à gauche, « En pause » s’affiche à droite et l’estimation de fin est recalculée à la reprise. Chaque badge du bandeau peut avoir sa propre couleur normale, indépendamment de sa couleur à zéro.
+- **Badges techniques :** cinq styles — Classique, Premium, Cinéma, Minimaliste et Technique — avec aperçu, couleurs par format, visibilité et ordre configurables, et dispositions compacte ou séparée. **Classique reste le style par défaut** pour préserver le rendu des configurations existantes.
+- **Transcodage :** affichez la **Destination uniquement** ou comparez **Source → destination**. Les destinations inconnues ne sont pas inventées. Le format audio utilise le codec si nécessaire : **ATMOS → AAC** reste visible même sans le badge Codec audio. Les deux catégories ne répètent pas la même information ; les canaux restent indépendants.
+- **Lovelace Sections :** la hauteur s’ajuste au contenu, jusqu’à une seule ligne native pour le bandeau lorsqu’il tient. Les tailles explicitement enregistrées restent prioritaires.
+- **Documentation :** README réorganisé, aperçus des cartes et des styles, guide de configuration et prérequis plus faciles à retrouver.
+
+**Mise à jour :** installez `v0.1.18` via HACS, puis redémarrez Home Assistant et actualisez le tableau de bord. Ne recréez ni l’entrée ni les cartes. En stockage, la ressource Lovelace existante est actualisée automatiquement ; en YAML, utilisez `/tracearr_ha/tracearr-card.js?v=0.1.18`, y compris en venant d’une bêta.
+
 ## 0.1.18-beta.3 — Préversion de test
 
 Cette bêta complète les badges audio de `v0.1.18-beta.2`. **La version stable recommandée reste `v0.1.17`.**

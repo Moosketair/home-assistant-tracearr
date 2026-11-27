@@ -12,19 +12,19 @@ Tracearr `2.6.0` ne fournit pas `/servers` et n’est pas compatible, même sans
 
 ### Ressource Lovelace en mode YAML
 
-En mode stockage, redémarrez Home Assistant après le remplacement de l’intégration : la ressource existante est actualisée automatiquement. En mode YAML, conservez une seule déclaration et adaptez `?v=` à la version du manifeste installé. Pour `v0.1.17` :
+En mode stockage, redémarrez Home Assistant après le remplacement de l’intégration : la ressource existante est actualisée automatiquement. En mode YAML, conservez une seule déclaration et adaptez `?v=` à la version du manifeste installé. Pour `v0.1.18` :
 
 ```yaml
 lovelace:
   resource_mode: yaml
   resources:
-    - url: /tracearr_ha/tracearr-card.js?v=0.1.17
+    - url: /tracearr_ha/tracearr-card.js?v=0.1.18
       type: module
 ```
 
 Sur les anciens Core qui n’ont pas `resource_mode`, utilisez le `mode: yaml` déjà en place plutôt que d’ajouter cette clé. Rechargez le dashboard après la mise à jour de la ressource ; ne recréez ni l’entrée Tracearr ni les cartes.
 
-Si vous testez la préversion `v0.1.18-beta.3`, utilisez `?v=0.1.18-beta.3` dans cette même déclaration, sans ajouter de seconde ressource.
+Si vous venez d’une préversion, remplacez son `?v=` par `?v=0.1.18` dans cette même déclaration, sans ajouter de seconde ressource.
 
 ### Réglages du carrousel et de la présentation
 

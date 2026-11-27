@@ -1,4 +1,6 @@
-# État de reprise — prépublication 6D.7
+# État de reprise — promotion stable 6D.8
+
+**Décision 6D.8.** Le mainteneur confirme des essais satisfaisants de `v0.1.18-beta.3` (`180a13752de94fafad529940325befff3af0ef0e`) sur son Home Assistant via HACS et autorise la [stable `v0.1.18`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.18). Seules les références de version, leurs tests et la documentation changent depuis la bêta 3. Le tag publié et les contrôles GitHub font foi. Les releases et tags précédents sont conservés. Le mainteneur effectue lui-même la mise à jour de son installation.
 
 **Décision 6D.7.** Le mainteneur valide 6D.6 sur `563c4213ff7035f69c7b002a9af8be2ffccfbffd`, intégré par avance rapide à `release/v0.1.18`, et autorise la [préversion `v0.1.18-beta.3`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.18-beta.3) pour ses derniers essais HACS. Depuis le correctif validé, seuls les références de version, leurs tests et la documentation changent. La [validation GitHub du tag](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml?query=branch%3Av0.1.18-beta.3) doit porter sur le commit effectivement publié. Les deux premières bêtas et la stable `v0.1.17` restent en place.
 
@@ -83,6 +85,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** après la prépublication 6D.7, attendre les essais du mainteneur et son autorisation explicite avant toute publication stable. Les lots 6C et 6E restent dans la [feuille de route](ROADMAP.md) et nécessitent des autorisations distinctes.
+**Suite :** arrêt après vérification de la stable `v0.1.18`. Les lots 6C et 6E restent dans la [feuille de route](ROADMAP.md) et nécessitent des autorisations distinctes.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.

@@ -81,6 +81,14 @@ def test_legacy_mode_and_existing_resource_updated(previous_version):
     assert resources.updated == [('old', RESOURCE)]
 
 
+def test_storage_upgrade_from_beta_3_preserves_existing_resource():
+    resources = Resources([{'id': 'existing', 'res_type': 'module', 'url': f'{MODULE}?v=0.1.18-beta.3'}])
+    hass = SimpleNamespace(data={'lovelace': SimpleNamespace(resource_mode='storage', resources=resources)}, http=Http())
+    asyncio.run(load_register_function()(hass))
+    assert resources.created == []
+    assert resources.updated == [('existing', RESOURCE)]
+
+
 def test_current_resource_unchanged():
     resources = Resources([{'id': 'current', **RESOURCE}])
     hass = SimpleNamespace(data={'lovelace': SimpleNamespace(resource_mode='storage', resources=resources)}, http=Http())
