@@ -63,7 +63,12 @@
   }).format(new Date(epochMs));
   const estimatedEnd = (clock, now, wallNow) => clock && clock.state === "playing" && clock.duration > 0
     ? timeOfDay(wallNow + Math.max(0, clock.duration - Math.min(clock.duration, now))) : "";
+  const isMusicTrack = s => s.media_type === "track";
   const transcodeMode = (s) => {
+    if (isMusicTrack(s)) {
+      if (s.audio_decision === "transcode") return "audio";
+      return !s.is_transcode && ["copy", "directplay"].includes(s.audio_decision) ? "direct" : "unknown";
+    }
     if (s.video_decision === "transcode" && s.audio_decision === "transcode") return "both";
     if (s.video_decision === "transcode") return "video";
     if (s.audio_decision === "transcode") return "audio";
@@ -71,6 +76,27 @@
     if (["copy", "directplay"].includes(s.video_decision) || ["copy", "directplay"].includes(s.audio_decision)) return "direct";
     return "unknown";
   };
+  const isTranscoding = (s, mode=transcodeMode(s)) =>
+    s.is_transcode || mode === "video" || mode === "audio" || mode === "both";
+  const identityText = value => typeof value === "string" && value.trim() ? value : "";
+  const playbackIdentity = s => ({
+    type:identityText(s.media_type), server:identityText(s.server_id),
+    key:identityText(s.rating_key), canonical:identityText(s.media_id),
+    started:identityText(s.started_at),
+  });
+  function musicPlaybackChanged(old, next) {
+    const differs = key => old[key] && next[key] && old[key] !== next[key];
+    if (differs("type") || differs("server") || differs("started") || differs("key")) return true;
+    if (old.server && next.server && old.key && next.key) return false;
+    return !!differs("canonical");
+  }
+  // Opaque cache key for the existing signed HA path, never an upstream URL
+  // or a security check. Distinct artwork must not share a browser cache key.
+  function posterRevision(raw) {
+    let hash = 2166136261;
+    for (let i=0; i<raw.length; i++) hash = Math.imul(hash ^ raw.charCodeAt(i),16777619);
+    return (hash >>> 0).toString(36);
+  }
   const MOVIE_FIELDS = Object.freeze(["title", "year"]);
   const SERIES_FIELDS = Object.freeze(["series", "season", "episode_number", "episode", "year"]);
   const MEDIA_LABELS = Object.freeze({
@@ -307,12 +333,14 @@
       // Output HDR is copied or assumed by the supported adapters; there is
       // no independent output HDR or Atmos/DTS:X flag in this contract.
     };
-    const anyTranscode = s.is_transcode || s.video_decision === "transcode" || s.audio_decision === "transcode";
+    const music = isMusicTrack(s);
+    const anyTranscode = isTranscoding(s);
     const compare = c.technical_transcode_mode === "source_to_destination";
     const changed = key => {
       const group = TECH_GROUPS[key];
       return group === "general" ? anyTranscode || info?.containerDecision === "transcode" || !!output.container :
-        codecState(s[`${group}_decision`]) !== "direct" && anyTranscode;
+        music ? s.audio_decision === "transcode" :
+          codecState(s[`${group}_decision`]) !== "direct" && anyTranscode;
     };
     const showAudioFormat = techVisible(c,"audio_format");
     const showAudioCodec = techVisible(c,"audio_codec");
@@ -331,6 +359,7 @@
     const legacyCodec = audioCodec || source.audio_codec;
     const order = c.technical_badge_order ? c.technical_badge_order.split(",") : TECH_FIELDS;
     return order.flatMap(key => {
+      if (music && TECH_GROUPS[key] === "video") return [];
       if (!techVisible(c,key)) return [];
       if (key === "bitrate") return bitrate === null ? [] :
         [{key, value:{short:`${(bitrate/1000).toFixed(1)} Mb/s`,name:["Débit du flux","Stream bitrate"]}}];
@@ -383,11 +412,12 @@
   `;
   function renderTechnical(s,c,bitrate,en=false) {
     if (legacyTechnical(c)) {
+      const video = isMusicTrack(s) ? "" : s.stream_video_codec_display;
       return {
-        quality:c.show_quality && s.resolution ? `<span class="chip">${E(s.resolution)}</span>` : "",
+        quality:!isMusicTrack(s) && c.show_quality && s.resolution ? `<span class="chip">${E(s.resolution)}</span>` : "",
         bitrate:bitrate !== null ? `<span class="chip">${E((bitrate/1000).toFixed(1))} Mb/s</span>` : "",
-        codecs:c.show_codecs && (s.stream_video_codec_display || s.stream_audio_codec_display) ?
-          `<span>${E([s.stream_video_codec_display,s.stream_audio_codec_display].filter(Boolean).join(" / "))}</span>` : "",
+        codecs:c.show_codecs && (video || s.stream_audio_codec_display) ?
+          `<span>${E([video,s.stream_audio_codec_display].filter(Boolean).join(" / "))}</span>` : "",
       };
     }
     const values = technicalValues(s,c,bitrate);
@@ -921,7 +951,9 @@
       return streams;
     }
     _artworkPath(entry, stream, kind) {
-      return `/api/tracearr_ha/image/${encodeURIComponent(entry.id)}/${encodeURIComponent(stream.id)}/${kind}`;
+      const path = `/api/tracearr_ha/image/${encodeURIComponent(entry.id)}/${encodeURIComponent(stream.id)}/${kind}`;
+      return kind === "poster" && isMusicTrack(stream) && typeof stream.poster_url === "string" && stream.poster_url ?
+        `${path}?rev=${posterRevision(stream.poster_url)}` : path;
     }
     _pruneArtwork(entry, streams) {
       const sources = new Map();
@@ -1010,6 +1042,7 @@
         const current = currentEntry?.id === entry.id &&
           this._streams(currentEntry).find(item => String(item.id) === String(stream.id));
         if (!current || !(kind === "poster" ? (this._config.show_poster || this._config.stream_surface === "blur") : this._config.show_avatar)) return;
+        if (this._artworkPath(currentEntry,current,kind) !== path) return;
         this._images.delete(path);
         const url = this._image(currentEntry,current,kind);
         if (url) this._applyArtwork(stream.id,kind,url);
@@ -1028,6 +1061,7 @@
       const cached = this._images.get(path);
       // Ignore errors from an older URL if a newer signature already exists.
       if (cached?.url && cached.url !== img.getAttribute("src")) return;
+      if (kind === "poster" && isMusicTrack(stream) && img.getAttribute("src") !== (cached?.url || stream.poster_url)) return;
       const isBackdrop = !!img.classList?.contains?.("backdrop-image");
       const fallback = kind === "poster" ?
         (isBackdrop ? '<div class="backdrop-empty"></div>' : '<div class="poster empty">▣</div>') :
@@ -1049,6 +1083,8 @@
       const stream = entry?.streams?.find(s => String(s.id) === sessionId);
       if (!stream) return;
       const path = this._artworkPath(entry,stream,kind);
+      if (kind === "poster" && isMusicTrack(stream) &&
+          img.getAttribute("src") !== (this._images.get(path)?.url || stream.poster_url)) return;
       this._imageAttempts.delete(path);
       const timer = this._imageRetryTimers.get(path);
       if (timer !== undefined) clearTimeout(timer);
@@ -1151,7 +1187,7 @@
       for (const s of streams) {
         const kind = transcodeMode(s);
         sums[kind]++;
-        if (kind === "video" || kind === "audio" || kind === "both" || s.is_transcode) sums.transcodes++;
+        if (isTranscoding(s,kind)) sums.transcodes++;
         if (s.state === "paused") sums.paused++;
         sums.bandwidth += Math.max(0, Number(this._scopedBitrate(s)) || 0);
         const id = s.server_id || `${s.server_type}:${s.server_name}`;
@@ -1258,10 +1294,13 @@
       const state = stream.state === "playing" ? "playing" : "paused";
       // Session IDs can be reused; do not preserve an old film's clock.
       const media = [stream.started_at || "", stream.media_id || stream.rating_key || stream.media_title || ""].join("|");
+      const identity = playbackIdentity(stream);
       const old = this._positions.get(id);
-      if (!old || old.media !== media || (!stale && (old.stale ||
+      const changed = old && (isMusicTrack(stream) || old.identity?.type === "track" ?
+        musicPlaybackChanged(old.identity || {},identity) : old.media !== media);
+      if (!old || changed || (!stale && (old.stale ||
           (old.duration && duration && Math.abs(old.duration-duration) > 10000)))) {
-        const fresh = {progress:source, at:now, duration, state, media, stale,
+        const fresh = {progress:source, at:now, duration, state, media, identity, stale,
           lastRaw:source, lastRawAt:now, lastRendered:source};
         this._positions.set(id, fresh);
         return fresh;
@@ -1298,6 +1337,7 @@
       old.at = now;
       old.duration = duration;
       old.state = state;
+      old.identity = identity;
       if (seek) old.lastRendered = old.progress;
       if (source !== old.lastRaw) {
         old.lastRaw = source;
@@ -1339,7 +1379,8 @@
       const backdropMarkup = blurred ? `<div class="stream-backdrop" aria-hidden="true">${poster ?
         `<img class="backdrop-image"${c.show_poster ? "" : ' data-kind="poster"'} src="${E(poster)}" alt="" decoding="async">` :
         '<div class="backdrop-empty"></div>'}</div>` : "";
-      const indicators = c.show_transcode_icons ? `<div class="media-flags" aria-label="État du flux audio et vidéo">${["video","audio"].map(kind => {
+      const music = isMusicTrack(s);
+      const indicators = c.show_transcode_icons ? `<div class="media-flags" aria-label="${music ? "État du flux audio" : "État du flux audio et vidéo"}">${(music ? ["audio"] : ["video","audio"]).map(kind => {
         const decision = kind === "video" ? s.video_decision : s.audio_decision;
         const state = codecState(decision);
         const tip = `${kind === "video" ? "Vidéo" : "Audio"} : ${state === "transcode" ? "Transcodage" : state === "direct" ? "Lecture directe" : "Inconnu"}`;

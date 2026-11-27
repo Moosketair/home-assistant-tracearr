@@ -54,6 +54,13 @@ def transcode_kind(stream: dict) -> str:
     """Classify mutually exclusive A/V modes; distinguish unknown decisions."""
     video = stream.get("video_decision")
     audio = stream.get("audio_decision")
+    if stream.get("media_type") == "track":
+        # A track has no video stream, regardless of the adapter's decision.
+        if audio == "transcode":
+            return "audio"
+        if not stream.get("is_transcode") and audio in ("directplay", "copy"):
+            return "direct"
+        return "unknown"
     if video == "transcode" and audio == "transcode":
         return "both"
     if video == "transcode":
@@ -83,7 +90,8 @@ def stats(streams: dict[str, dict]) -> dict[str, Any]:
         "audio": modes.count("audio"),
         "both": modes.count("both"),
         "unknown": modes.count("unknown"),
-        "transcodes": sum(s.get("is_transcode") or transcode_kind(s) in ("audio", "video", "both") for s in values),
+        "transcodes": sum(bool(s.get("is_transcode")) or mode in ("audio", "video", "both")
+                          for s, mode in zip(values, modes)),
         "bandwidth_mbps": round(total_bitrate / 1000, 2),
     }
 

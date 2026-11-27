@@ -292,3 +292,26 @@ def test_artwork_access_boundaries():
             assert sim.calls == 0
 
     asyncio.run(asyncio.wait_for(run(), 12))
+
+
+def test_music_poster_revision_is_signed_and_does_not_change_proxy_target():
+    class MusicArtwork(Tracearr):
+        async def handle(self, request):
+            if not request.match_info.get("resource"):
+                assert set(request.query) == {"fixture"}
+            return await super().handle(request)
+
+    async def run():
+        async with MusicArtwork().serve() as sim, core() as bench, ClientSession() as client:
+            sim.change("started", "s", media_type="track", rating_key="101")
+            entry = await bench.add(sim)
+            path = f"/api/tracearr_ha/image/{entry.entry_id}/s/poster?rev=abc"
+            signed = await sign(bench, path)
+            async with client.get(bench.server.make_url(signed)) as response:
+                assert response.status == 200
+                assert await response.read() == PNG
+                assert response.headers["Cache-Control"] == "private, max-age=60"
+            async with client.get(bench.server.make_url(signed.replace("rev=abc", "rev=def"))) as response:
+                assert response.status == 401
+
+    asyncio.run(asyncio.wait_for(run(), 12))

@@ -69,6 +69,33 @@ def test_snapshot_rows_reject_invalid_essential_values(rows):
         model.snapshot_rows({"data": rows})
 
 
+def test_music_stats_and_non_track_stats():
+    plex, jf, emby = MUSIC.values()
+    movie = {
+        **plex, "id": "movie", "media_type": "movie", "bitrate": 2000,
+        "video_decision": "transcode",
+    }
+    episode = {
+        **movie, "id": "episode", "media_type": "episode", "audio_decision": "transcode",
+    }
+    cases = [
+        (plex, "direct"), (jf, "audio"), (emby, "unknown"),
+        ({**emby, "audio_decision": "transcode"}, "audio"),
+        ({**emby, "is_transcode": False, "audio_decision": "transcode"}, "audio"),
+        ({**emby, "is_transcode": False, "audio_decision": "copy"}, "direct"),
+        ({**emby, "is_transcode": False}, "unknown"),
+        ({**emby, "media_type": "unknown"}, "video"),
+    ]
+    assert [model.transcode_kind(row) for row, _ in cases] == [kind for _, kind in cases]
+    rows = model.snapshot_rows({"data": [plex, jf, emby, movie, episode]})
+    assert model.stats(rows) == {
+        "total": 5, "playing": 4, "paused": 1, "direct": 1,
+        "video": 1, "audio": 1, "both": 1, "unknown": 1,
+        "transcodes": 4, "bandwidth_mbps": 5.03,
+    }
+    assert model.stats({emby["id"]: {**emby, "is_transcode": False}})["transcodes"] == 0
+
+
 @pytest.mark.parametrize("server", MUSIC)
 def test_music_metadata_survives_snapshot_full_update_and_progress(server):
     row = {**MUSIC[server], "track_number": "atypique", "artist_name": None}

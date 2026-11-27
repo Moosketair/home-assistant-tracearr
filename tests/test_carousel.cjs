@@ -50,6 +50,89 @@ const source = readFileSync(join(__dirname, '..', 'custom_components', 'tracearr
 vm.runInNewContext(source, env);
 const Card = classes.get('tracearr-streams-card');
 assert.ok(Card, 'Lovelace custom element registered');
+const music = require('./fixtures/music_streams.json');
+
+test('6C.3: music never counts as video in either card or in existing transcode filters', () => {
+  const {plex,jellyfin,emby} = music;
+  const movie = {...plex,id:'movie',media_type:'movie',video_decision:'transcode',bitrate:2000};
+  const episode = {...movie,id:'episode',media_type:'episode',audio_decision:'transcode'};
+  const bothReported = {...jellyfin,id:'music-both-reported',video_decision:'transcode'};
+  const videoOnly = {...emby,id:'music-video-only',is_transcode:false};
+  const streams = [plex,jellyfin,emby,movie,episode,bothReported,videoOnly];
+  for (const type of ['tracearr-streams-card','tracearr-stream-card']) {
+    const card = new (classes.get(type))();
+    card.setConfig({show_paused:true});
+    const total = card._streamSummary(streams);
+    assert.deepEqual(
+      [total.total,total.direct,total.video,total.audio,total.both,total.unknown,total.transcodes,total.paused,total.bandwidth],
+      [7,1,1,2,1,2,5,2,5224]);
+    card.setConfig({show_paused:true,filter_transcode:'audio'});
+    const visible = card._streams({streams});
+    assert.equal(visible.length,type === 'tracearr-stream-card' ? 1 : 2);
+    assert.ok(visible.every(s => s.media_type === 'track' && s.audio_decision === 'transcode'));
+    card.setConfig({show_paused:true,filter_transcode:'both'});
+    assert.equal(card._streams({streams}).map(s=>s.id).join(','),'episode');
+  }
+});
+
+test('6C.3: same-track REST enrichment does not reset music clock; track switch and repeat do', () => {
+  for (const type of ['tracearr-streams-card','tracearr-stream-card']) {
+    const card = new (classes.get(type))();
+    const old = {...music.plex,progress_ms:3900};
+    const first = card._syncPosition(old,0);
+    assert.equal(card._syncPosition({...old,media_id:null},1000),first);
+    assert.equal(card._positionAt(first,1000),4900);
+    const next = {...old,rating_key:'102',progress_ms:100};
+    assert.equal(card._positionAt(card._syncPosition(next,1100),1100),100);
+    assert.equal(card._positionAt(card._syncPosition({...next,started_at:'2026-11-27T12:00:12.000Z',progress_ms:0},1200),1200),0);
+    assert.equal(card._positionAt(card._syncPosition({...old,id:'new-session',progress_ms:50},1300),1300),50);
+  }
+});
+
+test('6C.3: a reused music session signs a distinct poster URL and ignores the old signature', async () => {
+  const card = new Card();
+  card.setConfig({show_poster:true,show_avatar:false});
+  const first = music.plex;
+  const second = {...first,rating_key:'102',poster_url:first.poster_url.replace('101','102')};
+  const entry = {id:'fictional-entry'};
+  const pending = [], painted = [];
+  card.isConnected = true;
+  card._applyArtwork = (...args) => painted.push(args);
+  card._hass = {connection:{sendMessagePromise:({path})=>new Promise(resolve=>pending.push({path,resolve}))}};
+  card._pruneArtwork(entry,[first]);
+  card._image(entry,first,'poster');
+  card._pruneArtwork(entry,[second]);
+  card._image(entry,second,'poster');
+  assert.notEqual(pending[0].path,pending[1].path); // HA signer/browser cache must distinguish the sources.
+  assert.ok(pending.every(({path}) => !path.includes('images/proxy')));
+  pending[0].resolve({path:`${pending[0].path}&authSig=old-fixture`});
+  pending[1].resolve({path:`${pending[1].path}&authSig=new-fixture`});
+  await Promise.resolve();
+  assert.equal(painted.length,1);
+  assert.match(painted[0][2],/new-fixture$/);
+});
+
+test('6C.3: video is inapplicable to every existing badge style on tracks only', () => {
+  const atypical = {...music.emby,video_decision:'transcode',resolution:'4K',
+    source_video_width:3840,source_video_height:2160,source_video_details:{dynamicRange:'Dolby Vision'},
+    source_video_codec:'HEVC',stream_video_codec:'H264',stream_video_codec_display:'H.264',
+    source_audio_codec:'FLAC',stream_audio_codec:'AAC',stream_audio_codec_display:'AAC'};
+  for (const type of ['tracearr-streams-card','tracearr-stream-card']) {
+    for (const style of [undefined,'classic','premium','cinema','minimal','technical']) {
+      const card = new (classes.get(type))();
+      card.setConfig({show_quality:true,show_codecs:true,show_transcode_icons:true,
+        show_avatar:false,show_poster:false,
+        ...(style && {technical_badge_style:style,technical_transcode_mode:'source_to_destination',
+          technical_badge_visibility:{hdr:true}})});
+      const track = card._streamCard({},atypical);
+      assert.match(track,/Audio : Inconnu/);
+      assert.doesNotMatch(track,/Vidéo :|data-tech="(?:video_codec|hdr|resolution)"|4K|H\.264|→/);
+      const video = card._streamCard({}, {...atypical,media_type:'movie'});
+      assert.match(video,/Vidéo : Transcodage/);
+      assert.match(video,/4K|H\.264|data-tech="(?:video_codec|hdr|resolution)"/);
+    }
+  }
+});
 
 function technicalPanel(config, stream={}, type='tracearr-streams-card') {
   const card = new (classes.get(type))();
