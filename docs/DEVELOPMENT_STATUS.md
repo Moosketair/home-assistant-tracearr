@@ -1,4 +1,6 @@
-# État de reprise — visuels README 6D.10
+# État de reprise — fondations musicales 6C.3
+
+**6C.3 livré localement, en attente de validation.** Branche `feature/6c-music-support` depuis `main` (`e7241035a7e08b8889b7293772bb4a4cced502c2`). Réconciliation musicale isolée dans `830e70b8a811b0d280a0ba5da614332933ff4a8f` ; classification A/V et état frontend dans `c5ed5d382099f0c41866964a374c9d724e9c461d`. Voir le [cahier des charges 6C validé](ROADMAP.md#lot-6c--lectures-musicales), les [pistes amont](ROADMAP.md#évolutions-amont-envisagées--non-soumises) et la [recette ciblée](RECETTE.md#6c3--fondations-techniques-musicales). Stable `v0.1.18` inchangée (`c257ce666f9ca5dcd16b5984f994e5e959861e42`). Aucune publication. Arrêt avant 6C.4, 6C.5 et 6E.
 
 **Décision 6D.10.** Le mainteneur valide les [visuels de démonstration 6D.9](images/showcase/README.md) obtenus avec le module stable `v0.1.18` et autorise leur publication dans la documentation. La capture de l’éditeur reste hors du dépôt public. Aucun changement de version, de distribution ou de tag ; les lots 6C et 6E restent à part.
 
@@ -87,6 +89,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** arrêt après vérification de la stable `v0.1.18`. Les lots 6C et 6E restent dans la [feuille de route](ROADMAP.md) et nécessitent des autorisations distinctes.
+**Suite :** arrêt à la livraison locale de 6C.3. Attendre la validation du mainteneur ; 6C.4, 6C.5 et 6E restent dans la [feuille de route](ROADMAP.md) et nécessitent des autorisations distinctes.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.

@@ -88,4 +88,23 @@ Voir [les réglages et limites du contrat](CONFIGURATION.md#badges-techniques-de
 
 ### Lot 6C — Lectures musicales
 
-Préparation documentaire uniquement, en réponse à la [demande #2](https://github.com/Moosketair/home-assistant-tracearr/issues/2). Prévoir le titre du morceau, l’artiste, l’album, une pochette carrée, le codec et les informations audio, le débit et la progression, avec coexistence des lectures musicales et vidéo. Étudier les métadonnées réellement fournies par Tracearr pour Plex, Jellyfin et Emby et définir les replis si elles sont absentes. Réutiliser le moteur de rendu des badges techniques vidéo lorsque c’est pertinent.
+Réponse à la [demande #2](https://github.com/Moosketair/home-assistant-tracearr/issues/2). L’audit 6C.1 a établi que Plex, Jellyfin et Emby exposent les pistes via l’API publique v2 de Tracearr ; il n’a pas éprouvé des lecteurs réels. **Cahier des charges validé en 6C.2 :**
+
+- **Architecture :** adaptation automatique des deux cartes existantes, pas de troisième carte ni de dépendance obligatoire ; contrats publics Tracearr uniquement. Conserver le YAML existant, les dispositions, le carrousel et la hauteur automatique Sections.
+- **Filtres :** Films, Séries, Musique, Autres médias, tous sélectionnés par défaut. Aucun compteur spécifique par type ; les statistiques existantes restent utilisables.
+- **Présentation :** titre du morceau prioritaire, artiste en deuxième ligne, album et année en troisième, avec visibilité et ordre personnalisables. Numéros de piste et disque facultatifs, masqués par défaut. Conserver progression, temps restant et message orange « En pause » ; pas d’heure de fin pour la musique.
+- **Pochettes :** emplacement carré, largeur commune aux affiches via le réglage de taille existant, fond Cinéma réutilisé. Montrer intégralement une source carrée ; recadrer les autres ratios au centre pour remplir le carré, sans déformation. Illustration de remplacement carrée adaptée à la musique si l’image manque. Ne pas modifier les affiches vidéo ; accepter automatiquement une future image carrée publique. Ne pas reconstruire d’URL privée ni élargir le proxy.
+- **Badges :** cinq styles réutilisés. Format/codec, fréquence d’échantillonnage et canaux activés par défaut pour la musique ; débit audio et conteneur facultatifs. Même confiance source/destination et déduplication qu’en `v0.1.18`, aucune information vidéo pour les pistes. Le débit audio dédié n’est pas le débit global du flux. Ne pas déduire profondeur de bits, Hi‑Res, fréquence de sortie ou garantie lossless.
+
+**Découpage :** 6C.3 livre les fondations techniques et leur [recette](RECETTE.md#6c3--fondations-techniques-musicales), sans nouveau rendu musical, réglage ou filtre par type. 6C.4 traitera la présentation et les pochettes ; 6C.5 les filtres et réglages. 6E reste séparé.
+
+#### Évolutions amont envisagées — non soumises
+
+| Besoin | Limite constatée et priorité |
+|---|---|
+| Pochette musicale carrée exposée publiquement | Indispensable **pour garantir l’illustration entière** : `poster_url` actif utilise aujourd’hui le rendu vertical de Tracearr, recadré avant HA. Le panneau carré et le repli restent réalisables sans attendre. |
+| Profondeur de bits audio | Facultative ; champ audio non exposé dans le contrat étudié. Ne pas l’inférer. |
+| Caractéristiques audio source/destination mieux qualifiées | Facultatives pour le premier rendu ; indispensables pour présenter comme sûres des valeurs détaillées qui sont aujourd’hui absentes, reprises de la source ou ambiguës. Distinguer canaux, fréquence, débit et provenance des codecs. |
+| Artiste du morceau distinct de l’artiste de l’album | Amélioration facultative du premier rendu : `artist_name` ne distingue pas les deux et n’est pas une liste de crédits. |
+
+Aucune de ces évolutions ne bloque la première prise en charge. Aucun ticket amont ni publication sans accord du mainteneur.
