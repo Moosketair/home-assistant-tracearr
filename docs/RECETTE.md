@@ -438,3 +438,17 @@ Captures sur données fictives : [audio avant](../recette/preuves/6d.4/audio-ava
 La recette de concurrence vérifie la position avant et après libération du GET, l’absence d’héritage d’album, durée et image, la conservation des enrichissements valides, puis la convergence REST. Les transitions sous des ID nouveaux simulent le suivant automatique, le suivant manuel et le précédent avec leurs équivalents publics `stop/start` ; l’origine de la commande n’est pas exposée. Le banc couvre aussi pause/reprise, seek, répétition, succession courte et disparition/réapparition pendant la perte SSE. Il ne prouve pas la fréquence réelle des événements amont et ne rejoue pas une séquence non publiée par Tracearr.
 
 Réutilisées sans campagne exhaustive : validations de cycle de vie 2A/3.2, disponibilité 3B.2/4.1, hauteur et rendu Sections 6B.2, compatibilité 6D.1 et présentation 6D.6. Pas de test navigateur, HACS, hassfest ou serveur média personnel. Un contre-audit indépendant ciblé sur `_RefreshChanges.merge` et les changements rapides sous le même ID est recommandé ; pas de réouverture des lots précédents.
+
+## 6C.3.B — Corrections du contre-audit
+
+**Avant :** tests ajoutés contre `e9992f689e13b698c90c615c1f8a227e6b24f57b`. Sur Core 2026.11.3, 15 échecs et un témoin positif : P1.1 (perte des ID pendant GET et progress d'un autre serveur), P1.2 (huit variantes : hors GET et après `stop/start` en GET sur quatre types), P2.1 (retour à A ; `A → B → C` réussissait), P2.2 (canonique nul avec et sans `stop/start`), P2.4 (ancienne révision et requête en vol). Les deux sondes d'horloge et la sonde de débit JS échouaient ; le débit négatif n'était pas normalisé en Python. La base historique `e7241035a7e08b8889b7293772bb4a4cced502c2` reproduit les huit cas P1.2 ainsi que les écarts de durée et de débit.
+
+**Après :** les cas précédents passent, ainsi que les contrôles ajoutés de rétention bornée, récupération REST après coupure, séparation des serveurs pendant le regroupement, nettoyage au reload, référence annoncée par le WS et reprise sur une URL musicale signée. Les essais d'image vérifient le refus des anciennes signatures de A et B lorsqu'un autre morceau est actif, le retour vers A, la transition vers un film, la vérification après I/O, le rejet d'une modification de la requête signée et le maintien des restrictions HTTP. Le mode historique sans révision reste fonctionnel, sans cache pour la musique.
+
+| Suite sur le candidat | Résultat |
+|---|---:|
+| `python -B -m pytest -q -p no:cacheprovider tests` (Python 3.14.10) | 49 réussis |
+| `node --check` et `node --test tests/*.cjs` (Node 22.23.5) | 106 réussis |
+| `recette/spec_{music_audit,race,robustness,snapshot_validation,websocket,generation,transport}.py` (Core 2025.6.0 / Python 3.13.18 et Core 2026.11.3 / Python 3.14.10, loopback isolé) | 118 réussis par Core |
+
+Aucun skip, xfail ni échec dans ces suites ; avertissements des dépendances du banc HA. `git diff --check` propre. La classification validée, le contrat Tracearr de 6C.1 et les validations visuelles antérieures sont réutilisés. Pas de lecteur réel, navigateur, Sections, HACS, hassfest ou production. Voir [ARCHITECTURE](ARCHITECTURE.md#réconciliation-restsse--2b1-et-2b3) pour les bornes et ambiguïtés restantes. Arrêt pour un contre-audit ciblé avant 6C.4.
