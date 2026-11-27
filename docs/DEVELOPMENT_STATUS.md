@@ -1,4 +1,6 @@
-# État de reprise — finition audio 6D.6
+# État de reprise — prépublication 6D.7
+
+**Décision 6D.7.** Le mainteneur valide 6D.6 sur `563c4213ff7035f69c7b002a9af8be2ffccfbffd`, intégré par avance rapide à `release/v0.1.18`, et autorise la [préversion `v0.1.18-beta.3`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.18-beta.3) pour ses derniers essais HACS. Depuis le correctif validé, seuls les références de version, leurs tests et la documentation changent. La [validation GitHub du tag](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml?query=branch%3Av0.1.18-beta.3) doit porter sur le commit effectivement publié. Les deux premières bêtas et la stable `v0.1.17` restent en place.
 
 **6D.6 livré localement** sur `fix/technical-badges-format-fallback` depuis la bêta 2 publiée `74742d4615019676515010a70f52196eb3de91f1`. Le mainteneur confirme le correctif de transcodage en conditions réelles et valide le repli Format audio → codec lorsque le format spécifique manque. Voir [recette et limites](RECETTE.md#6d6--complémentarité-des-badges-audio). Le futur lot 6E est inscrit sans audit ni implémentation ; 6C est inchangé.
 
@@ -81,6 +83,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** attendre la validation du mainteneur avant toute préparation de `v0.1.18-beta.3`. Aucune publication sans autorisation. Les lots 6C et 6E restent dans la [feuille de route](ROADMAP.md) et nécessitent des autorisations distinctes.
+**Suite :** après la prépublication 6D.7, attendre les essais du mainteneur et son autorisation explicite avant toute publication stable. Les lots 6C et 6E restent dans la [feuille de route](ROADMAP.md) et nécessitent des autorisations distinctes.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.

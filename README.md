@@ -6,7 +6,7 @@
 
 **Voyez qui regarde quoi sur Plex, Jellyfin et Emby, directement dans Home Assistant.** Tracearr HA utilise les données de Tracearr pour alimenter des capteurs et deux cartes Lovelace personnalisables : une vue d’ensemble des lectures et une carte centrée sur une seule lecture.
 
-**Stable recommandée via HACS : [`v0.1.17`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.17).** La [préversion `v0.1.18-beta.2`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.18-beta.2) corrige les badges de transcodage de la première bêta. Voir [comment l’installer ou revenir à la stable](CHANGELOG.md#0118-beta2--préversion-de-test).
+**Stable recommandée via HACS : [`v0.1.17`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.17).** La [préversion `v0.1.18-beta.3`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.18-beta.3) rend les transitions audio lisibles même lorsque seule la catégorie Format audio est activée. Voir [comment l’installer ou revenir à la stable](CHANGELOG.md#0118-beta3--préversion-de-test).
 
 [Voir les cartes](#aperçu-des-cartes) · [Installer](#installation-via-hacs) · [Configurer les cartes](docs/CONFIGURATION.md) · [Historique](CHANGELOG.md)
 
@@ -43,7 +43,7 @@ Les panneaux de lecture proposent cinq styles de badges techniques : **Classique
 
 La préversion garde aussi le temps restant visible à gauche pendant la pause et affiche **En pause** à droite. Les badges du bandeau peuvent avoir une couleur normale propre, distincte de leur couleur à zéro. Dans *Sections*, les cartes s’ajustent à leur contenu par défaut : un bandeau seul tient sur une ligne native si son contenu le permet. Les tailles explicitement enregistrées restent prioritaires.
 
-[Réglages des badges techniques](docs/CONFIGURATION.md#badges-techniques-des-panneaux-de-lecture) · [Notes de la bêta 2 et retour à la stable](CHANGELOG.md#0118-beta2--préversion-de-test)
+[Réglages des badges techniques](docs/CONFIGURATION.md#badges-techniques-des-panneaux-de-lecture) · [Notes de la bêta 3 et retour à la stable](CHANGELOG.md#0118-beta3--préversion-de-test)
 
 ## Installation via HACS
 

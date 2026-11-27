@@ -2,9 +2,19 @@
 
 Les changements sont classés par version publique. Les préversions et les anciennes notes restent consultables ci-dessous. Les [GitHub Releases](https://github.com/Moosketair/home-assistant-tracearr/releases) permettent de télécharger une version précise.
 
-## Non publié
+## 0.1.18-beta.3 — Préversion de test
 
-- **Format audio** affiche le codec lorsqu’aucun format spécifique n’est connu. Un transcodage Atmos → AAC reste donc lisible lorsque Format audio est seul activé, sans doubler l’affichage lorsque Codec audio est aussi activé.
+Cette bêta complète les badges audio de `v0.1.18-beta.2`. **La version stable recommandée reste `v0.1.17`.**
+
+- **Format audio** privilégie le format spécifique, sinon le codec connu. Même si **Codec audio** est désactivé, la comparaison affiche **ATMOS → AAC** et le mode **Destination uniquement** affiche **AAC**.
+- Quand les deux catégories sont activées, le format et le codec ne sont pas répétés. Les canaux audio restent réglables séparément.
+- Les caractéristiques vidéo et le rendu Classique historique restent inchangés. Aucune destination inconnue n’est déduite.
+
+### Installer la bêta 3 ou revenir à la stable
+
+1. Après sauvegarde, ouvrez **HACS → Tracearr HA**, actualisez les informations du dépôt et affichez les préversions si nécessaire. Sélectionnez exactement **`v0.1.18-beta.3`**.
+2. Redémarrez Home Assistant et actualisez le tableau de bord sans recréer l’entrée ni les cartes. En stockage, la ressource Lovelace existante est actualisée automatiquement. En YAML, utilisez `/tracearr_ha/tracearr-card.js?v=0.1.18-beta.3`.
+3. Pour revenir à la stable, retéléchargez **`v0.1.17`** via HACS, redémarrez et actualisez le tableau de bord. En YAML, restaurez `?v=0.1.17`.
 
 ## 0.1.18-beta.2 — Préversion de test
 

@@ -24,7 +24,7 @@ lovelace:
 
 Sur les anciens Core qui n’ont pas `resource_mode`, utilisez le `mode: yaml` déjà en place plutôt que d’ajouter cette clé. Rechargez le dashboard après la mise à jour de la ressource ; ne recréez ni l’entrée Tracearr ni les cartes.
 
-Si vous testez la préversion `v0.1.18-beta.2`, utilisez `?v=0.1.18-beta.2` dans cette même déclaration, sans ajouter de seconde ressource.
+Si vous testez la préversion `v0.1.18-beta.3`, utilisez `?v=0.1.18-beta.3` dans cette même déclaration, sans ajouter de seconde ressource.
 
 ### Réglages du carrousel et de la présentation
 
