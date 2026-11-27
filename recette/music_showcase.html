@@ -49,7 +49,7 @@
     mixte:"Films, séries et musique", musique:"Plusieurs lectures musicales", direct:"Musique · Lecture directe",
     transcodage:"Musique · Transcodage audio", pause:"Musique · Lecture en pause", carousel:"Carrousel mixte",
     styles:"Les cinq styles techniques", clair:"Musique · Thème clair", pochettes:"Même illustration · différences de recadrage",
-    largeur:"Carte mixte · Recette de largeur",
+    largeur:"Carte mixte · Recette de largeur", edition:"Personnalisation des lectures musicales",
   }[view];
   const art = name => `${location.origin}/showcase-art/${name}.svg`;
   const revision = key => key.toString(16).padStart(64,"0");
@@ -129,7 +129,38 @@
         rating_key:"final",media_title:"Signal final",progress_ms:180}]));
     },
   };
-  if (view === "styles") {
+  if (view === "edition") {
+    const cardHost = host.appendChild(document.createElement("section"));
+    const editorHost = host.appendChild(document.createElement("section"));
+    const choices = [...mixed,{...transcode,username:"Sam"}];
+    let editor, card;
+    window.musicEditorBench = {
+      mountCard(options={}) {
+        cardHost.replaceChildren();
+        card = mount(cardHost,options.type === "custom:tracearr-stream-card" ? "stream" : "streams",choices,options);
+      },
+      apply(options) {
+        card.setConfig({...config,...options});
+      },
+      open(options,language="fr") {
+        editorHost.replaceChildren();
+        editor = editorHost.appendChild(document.createElement("tracearr-card-editor"));
+        editor.setConfig(options);
+        editor.addEventListener("config-changed",event => {
+          window.editorSaved = JSON.parse(JSON.stringify(event.detail.config));
+        });
+        editor.hass = {language,themes:{darkMode:true},connection:{
+          sendMessagePromise:async () => ({entries:[{
+            ...payload(choices).entries[0],name:"Bibliothèque fictive",
+            servers:[...new Map(choices.map(s=>[s.server_id,s])).values()].map(({server_id,server_name})=>({server_id,server_name})),
+          }]}),
+        }};
+      },
+      lastConfig() { return window.editorSaved; },
+      cardConfig() { return card._config; },
+    };
+    window.musicEditorBench.mountCard();
+  } else if (view === "styles") {
     for (const [style,label] of [["classic","Classique"],["premium","Premium"],["cinema","Cinéma"],
       ["minimal","Minimaliste"],["technical","Technique"]]) {
       const group = host.appendChild(document.createElement("section"));

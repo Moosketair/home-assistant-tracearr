@@ -1,6 +1,8 @@
-# État de reprise — présentation musicale 6C.4
+# État de reprise — filtres et réglages musicaux 6C.5
 
-**6C.4 livré localement pour validation visuelle.** Branche `feature/6c-music-support` depuis `5c3612c1db81d522833cf13b1a37833235095251`. Les deux cartes existantes rendent les pistes automatiquement, sans nouveaux menus ni filtres. Voir [recette 6C.4](RECETTE.md#6c4--présentation-musicale) et [les neuf captures Chromium](../recette/preuves/6c.4/README.md). Aucun changement backend, stat, version ou visuel public. Attendre la validation du mainteneur avant 6C.5.
+**6C.5 livré localement pour validation du mainteneur.** Branche `feature/6c-music-support` depuis `31c5f541d57fa512c2f3dbae03c5f89bd4bdab67`. Types de médias, visibilité et ordre des champs et badges dans les deux cartes. Voir [contrat YAML](CONFIGURATION.md#types-de-médias-et-réglages-musicaux), [recette 6C.5](RECETTE.md#6c5--filtres-et-personnalisation-musicale) et [captures de l’éditeur et du rendu](../recette/preuves/6c.5/README.md). Aucun backend, changement de version, publication ou 6C.6.
+
+**6C.4 validé visuellement par le mainteneur** sur `31c5f541d57fa512c2f3dbae03c5f89bd4bdab67`, après examen des [neuf captures Chromium](../recette/preuves/6c.4/README.md). Conserver le design, les pochettes carrées, la cohabitation des médias, les cinq styles et la présentation de la pause. Le conteneur musical reste masqué par défaut. L’amélioration esthétique du remplacement sans pochette est reportée. Voir [recette 6C.4](RECETTE.md#6c4--présentation-musicale).
 
 **6C.3 définitivement validé par le mainteneur** sur `5c3612c1db81d522833cf13b1a37833235095251`, contre-audit 6C.3.E : **PASS AVEC RÉSERVES**. Réconciliation REST/SSE et horloge confirmées. Trois P3 acceptés sans correction en 6C.4 : position musicale pouvant rester plafonnée après une durée temporairement incohérente pendant une pause ; 404 amont pouvant manquer de `no-store` si la révision expire en vol ; URL non révisée commencée sur une vidéo pouvant servir une réponse cacheable après passage à une piste.
 
@@ -97,6 +99,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** arrêt à la livraison locale de 6C.4. Attendre la validation visuelle du mainteneur ; 6C.5, 6C.6 et 6E nécessitent des autorisations distinctes.
+**Suite :** arrêt à la livraison locale de 6C.5. Attendre le mainteneur ; 6C.6 et 6E nécessitent des autorisations distinctes.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.

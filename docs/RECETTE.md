@@ -479,3 +479,13 @@ La matrice REST compare GET(A), GET(B), GET(C) et GET vide ; A et B réutilisent
 **Planche de preuve :** l’original 600 × 600 est rasterisé une fois. Les sources verticale 400 × 600 et horizontale 600 × 400 sont des découpes centrées des mêmes pixels, sans recréation de l’illustration. Vérification des dimensions naturelles, du carré CSS, du centrage et des pixels rendus par comparaison aux recadrages attendus. Le carré reçu reste entier ; le frontend ne restaure pas les bords déjà perdus. Les cas sans référence ou en HTTP 404 affichent le remplacement musical.
 
 **Périmètre :** pas de Core, de campagne de réconciliation, de test du vrai proxy ou de nouvelle recette HACS. Les validations 6C.3 sont réutilisées pour l’horloge, les signatures et la réconciliation ; la recette visuelle vérifie leur intégration au rendu, pas le transport. Aucun changement README, aucune publication ni ouverture de 6C.5.
+
+## 6C.5 — Filtres et personnalisation musicale
+
+**Base :** `31c5f541d57fa512c2f3dbae03c5f89bd4bdab67`, après validation visuelle 6C.4 par le mainteneur. Trois tests ciblés échouent sur la base : catégories et distinction défaut/liste vide, sélection individuelle, réglages et persistance dans l’éditeur.
+
+**Candidat :** syntaxe validée et **123 tests Node réussis**, dont cinq cas 6C.5 : filtres et valeurs invalides, intersections avec source/transcodage/pause, compteurs visibles, cible individuelle exclue, normalisation additive, ancre du carrousel et parité de la sortie HTML entre aperçus et cartes.
+
+**Chromium 152.0.7977.82 :** [six captures](../recette/preuves/6c.5/README.md) du module réel. Les deux éditeurs sont manipulés en français, puis recréés en anglais à partir de la configuration effectivement émise par `config-changed` et passée dans un sérialiseur/parseur YAML. Les cases, les ordres, le filtre et la liste explicitement vide sont vérifiés ; une ancienne configuration YAML sans les nouvelles clés garde toutes ses lectures et ses réglages vidéo. Le carrousel garde le panneau encore visible malgré son changement d’index, puis se recale lorsque le panneau actif est exclu.
+
+La persistance est testée au niveau de la configuration émise et du retour YAML, pas de l’interface Home Assistant ni d’un dashboard Sections réel (6C.6). Pas de campagne backend, SSE, proxy, lecteur réel ou HACS. Présentation 6C.4, garanties et trois réserves P3 6C.3 réutilisées. Aucun nouveau capteur, aucune publication.

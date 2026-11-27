@@ -55,6 +55,40 @@ Le carrousel se pilote au **cliquer-glisser**, comme sur une interface tactile, 
 
 L'animation automatique se suspend lorsque la page est masquée ou que le navigateur demande une réduction des mouvements. La pause au survol de la souris peut être activée séparément (désactivée par défaut). Le **temps entre deux changements** (`carousel_interval`) est distinct de la **durée de l'animation** (`carousel_transition_speed`).
 
+### Types de médias et réglages musicaux
+
+> Réglages du candidat 6C.5 ; ils ne sont pas inclus dans la stable publiée `v0.1.18`.
+
+Dans **Choix des lectures et filtres → Types de médias**, cochez les catégories à afficher. Les films (`movie`), séries (`episode`) et pistes (`track`) sont classés d’après le type public de Tracearr. **Autres médias** regroupe notamment le direct (`live`), les photos (`photo`), les bandes-annonces (`trailer`), les types inconnus ou futurs, et les sessions dont le type manque.
+
+Le filtre s’applique avant le choix de la lecture individuelle. Si une session précise est exclue, la carte ne la remplace pas par une autre. Les sélections par compte ou par serveur restent limitées à leur cible. Les badges Tracearr du bandeau comptent les sessions visibles après filtrage ; les capteurs globaux Home Assistant et les badges d’entités ne changent pas.
+
+| Clé YAML facultative | Format et défaut |
+|---|---|
+| `filter_media_types` | Liste de `movie`, `episode`, `track`, `other`. Absente : toutes les lectures. Liste explicitement vide `[]` : aucune lecture ; la carte suit `empty_mode`. |
+| `music_field_order` | Chaîne séparée par des virgules. Défaut : `title,artist,album,year,track_number,disc_number`. |
+| `music_field_visibility` | Objet de booléens : `title`, `artist`, `album`, `year` activés ; `track_number`, `disc_number` désactivés par défaut. |
+| `music_badge_order` | Chaîne séparée par des virgules. Défaut : `audio_format,audio_codec,sample_rate,channels,audio_bitrate,container`. |
+| `music_badge_visibility` | Objet de booléens : `audio_format`, `audio_codec`, `sample_rate`, `channels` activés ; `audio_bitrate`, `container` désactivés par défaut. |
+
+Une valeur de filtre de mauvais type ou une liste non vide entièrement inconnue utilise le défaut « tous ». Les catégories reconnues sont dédupliquées ; dans les ordres, les valeurs inconnues ou répétées sont ignorées et les champs omis sont ajoutés dans leur ordre par défaut. Les valeurs de visibilité non booléennes sont ignorées. Une ancienne carte sans ces clés conserve toutes ses lectures et ses réglages vidéo.
+
+**Titres, saisons et années → Informations musicales** permet de déplacer et masquer les champs. Le premier champ visible et renseigné occupe la ligne principale ; par défaut, titre, artiste, puis album et année. Le champ artiste vient de Tracearr et peut désigner l’artiste de l’album. **Badges techniques → Badges musicaux** règle seulement les catégories musicales. Le format spécifique est prioritaire et se replie sur le codec ; désactiver le format permet d’afficher uniquement le codec. `audio_bitrate` désigne la mesure audio détaillée, distincte du débit du flux réglé par `show_bitrate` et `bitrate_scope`. Le conteneur est une information distincte, même s’il porte le même nom que le codec. Les cinq styles, leur disposition, les couleurs et le mode de transcodage restent communs. Une mesure de source n’est pas affichée comme destination confirmée.
+
+Exemple pour une carte groupée dédiée à la musique :
+
+```yaml
+type: custom:tracearr-streams-card
+filter_media_types: [track]
+music_field_order: "artist,title,album,year,track_number,disc_number"
+music_field_visibility:
+  year: false
+  track_number: true
+music_badge_visibility:
+  audio_bitrate: true
+  container: true
+```
+
 
 ## Exemples de cartes Lovelace
 
