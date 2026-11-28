@@ -1,4 +1,6 @@
-# État de reprise — préversion 6C.6.B
+# État de reprise — stable v0.1.19
+
+**Décision 6C.6.D.** Le mainteneur confirme ses essais HACS satisfaisants de `v0.1.19-beta.1` (`4d085213d5d8c01b7455f2e7ec6b47b109afb434`) et autorise l’intégration dans `main` et la [publication stable `v0.1.19`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.19). Aucun changement fonctionnel depuis la bêta : uniquement version, tests et documentation. Le tag et les workflows sur son SHA font foi. Le lot musical 6C est clôturé avec les trois P3 et les limites Tracearr déjà acceptées. Visuels publics inchangés ; aucune ouverture de 6E.
 
 **Décision 6C.6.B.** Le mainteneur valide 6C.1 à 6C.5 et la recette 6C.6.A, puis autorise [la préversion `v0.1.19-beta.1`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.19-beta.1) pour ses essais personnels via HACS. Branche `release/v0.1.19` depuis `e4032c9c04e2aa8abc06e65b3f444f86395926dc` : aucun changement fonctionnel, uniquement version, tests et documentation. Le [tag et sa validation GitHub](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml?query=branch%3Av0.1.19-beta.1) font foi. `v0.1.18` reste la stable recommandée ; aucune fusion dans `main`, promotion stable ou ouverture de 6E.
 
@@ -103,6 +105,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** arrêt après la prépublication 6C.6.B. Attendre les essais HACS du mainteneur et un accord explicite avant toute promotion stable. Le lot 6E requiert une autorisation distincte.
+**Suite :** arrêt après la publication et sa vérification en 6C.6.D. Les visuels musicaux et le lot 6E restent des travaux séparés, avec validation préalable du mainteneur.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.

@@ -504,3 +504,11 @@ Préparation depuis `e4032c9c04e2aa8abc06e65b3f444f86395926dc` : seules les réf
 - **Distribution :** ordre `0.1.18 < 0.1.19-beta.1 < 0.1.19` avec AwesomeVersion, contrôles statiques, 18 fichiers distribués et hassfest local (1 intégration, 0 invalide). Le [workflow de branche](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml?query=branch%3Arelease%2Fv0.1.19) et le [workflow du tag](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml?query=branch%3Av0.1.19-beta.1) séparent les validations distantes des essais locaux.
 
 Le parcours HACS réel est réservé aux essais personnels du mainteneur ; pas d’accès à la production ni de promotion stable.
+
+## 6C.6.D — Promotion stable v0.1.19
+
+Le mainteneur confirme la réussite de ses essais HACS sur la bêta publiée (`4d085213d5d8c01b7455f2e7ec6b47b109afb434`). Les preuves de 6C.3.E, 6C.3.D, 6C.4–6C.5, 6C.6.A et 6C.6.B sont réutilisées, sans rejouer les campagnes. Les trois P3 et les limites intrinsèques de Tracearr restent acceptées.
+
+- **Contrôles nouveaux :** 13 tests ciblés et ordre des versions avec AwesomeVersion. Sur Core 2026.11.3 isolé, la ressource bêta est actualisée en `?v=0.1.19` : même identifiant, un seul module après deux démarrages et dashboard inchangé. Le module est servi en HTTP 200 (SHA‑256 `63078fd32853234629d6575f7b97e14f0fcdfdfc0b681a3fa6fb731fe62a3e93`).
+- **Distribution :** 18 fichiers, hassfest local (1 intégration, 0 invalide), syntaxe Python et JS, JSON et cohérence du YAML documentaire. Seuls le manifeste, la clé de cache et le bandeau JS changent dans les fichiers distribués par rapport à la bêta.
+- **Publication :** validation sur la branche de release, puis sur `main`. Le workflow [Publish stable release](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/publish-release.yml) valide le même SHA avant de créer le tag et la release. Les avertissements connus sur les dimensions et le doublon des icônes et la transition des actions Node 20 ne bloquent pas la publication ; ils restent hors périmètre.

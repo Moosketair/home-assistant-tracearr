@@ -12,19 +12,19 @@ Tracearr `2.6.0` ne fournit pas `/servers` et n’est pas compatible, même sans
 
 ### Ressource Lovelace en mode YAML
 
-En mode stockage, redémarrez Home Assistant après le remplacement de l’intégration : la ressource existante est actualisée automatiquement. En mode YAML, conservez une seule déclaration et adaptez `?v=` à la version du manifeste installé. Exemple pour la **préversion** `v0.1.19-beta.1` :
+En mode stockage, redémarrez Home Assistant après le remplacement de l’intégration : la ressource existante est actualisée automatiquement. En mode YAML, conservez une seule déclaration et adaptez `?v=` à la version du manifeste installé. Exemple pour `v0.1.19` :
 
 ```yaml
 lovelace:
   resource_mode: yaml
   resources:
-    - url: /tracearr_ha/tracearr-card.js?v=0.1.19-beta.1
+    - url: /tracearr_ha/tracearr-card.js?v=0.1.19
       type: module
 ```
 
 Sur les anciens Core qui n’ont pas `resource_mode`, utilisez le `mode: yaml` déjà en place plutôt que d’ajouter cette clé. Rechargez le dashboard après la mise à jour de la ressource ; ne recréez ni l’entrée Tracearr ni les cartes.
 
-Si vous utilisez la **stable recommandée** `v0.1.18` ou si vous y revenez, utilisez `?v=0.1.18` dans cette même déclaration, sans ajouter de seconde ressource.
+Si vous venez de `v0.1.19-beta.1`, remplacez sa clé de cache par `?v=0.1.19` dans cette même déclaration, sans ajouter de seconde ressource. Si vous revenez à `v0.1.18`, restaurez `?v=0.1.18`.
 
 ### Réglages du carrousel et de la présentation
 
@@ -57,7 +57,7 @@ L'animation automatique se suspend lorsque la page est masquée ou que le naviga
 
 ### Types de médias et réglages musicaux
 
-> Réglages disponibles à partir de `v0.1.19-beta.1` ; ils ne sont pas inclus dans la stable `v0.1.18`.
+> Réglages inclus dans `v0.1.19`, non disponibles dans `v0.1.18`.
 
 Les deux cartes reconnaissent automatiquement les pistes remontées par Tracearr (Plex, Jellyfin et Emby), sans option d’activation. Une pochette carrée reçue est affichée entière ; une source non carrée est recadrée au centre et une pochette manquante est remplacée. Si Tracearr a déjà recadré l’image, la carte ne peut pas restaurer ses bords. La progression, le restant et la pause sont affichés sans estimation de fin pour la musique. La profondeur de bits et les propriétés Hi‑Res ou lossless ne sont pas déduites.
 

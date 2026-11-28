@@ -2,6 +2,32 @@
 
 Les changements sont classés par version publique. Les préversions et les anciennes notes restent consultables ci-dessous. Les [GitHub Releases](https://github.com/Moosketair/home-assistant-tracearr/releases) permettent de télécharger une version précise.
 
+## 0.1.19 — 2026-11-28
+
+**Des films, des séries et de la musique sur le même tableau de bord Home Assistant.** Cette version stable reprend la bêta validée via HACS, sans changement fonctionnel depuis celle-ci.
+
+### Lectures musicales
+
+- Les pistes de **Plex, Jellyfin et Emby** remontées par Tracearr s’affichent automatiquement dans les deux cartes Lovelace existantes : liste, carrousel ou lecture individuelle. Films, séries et morceaux peuvent cohabiter.
+- Les pochettes sont carrées : une source non carrée est recadrée au centre, une source carrée est affichée entière, y compris si Tracearr en fournit à l’avenir. Les affiches vidéo restent verticales.
+- Choisissez la visibilité et l’ordre du titre, de l’artiste, de l’album, de l’année et des numéros de piste et de disque. La progression et le temps restant restent visibles selon vos réglages ; la pause est signalée sans estimer d’heure de fin musicale.
+- Les cinq styles de badges couvrent le format, le codec, la fréquence d’échantillonnage et les canaux audio. Le débit audio détaillé et le conteneur sont facultatifs. Pour les transcodages confirmés, affichez par exemple **FLAC → AAC** ou seulement **AAC**.
+
+### Filtres et personnalisation
+
+- Combinez **Films, Séries, Musique et Autres médias** avec les filtres existants, par exemple pour créer une liste réservée aux pistes musicales. Sans réglage, toutes les catégories restent incluses ; une sélection explicitement vide n’en affiche aucune.
+- Les choix de visibilité et d’ordre des métadonnées et badges sont propres à chaque carte et persistent dans Lovelace comme en YAML. Les anciennes configurations restent compatibles ; aucun nouveau capteur ni compteur musical. Les statistiques globales restent indépendantes des filtres de carte.
+
+### Fiabilité
+
+- La réconciliation REST/SSE distingue mieux les lectures successives sous un même identifiant, réduit le risque de réapparition d’une lecture explicitement arrêtée et préserve les enrichissements du même média.
+- L’horloge musicale se recale sur le nouveau morceau lorsqu’un changement est établi. Les pochettes musicales sont liées à leur référence par une révision SHA‑256.
+- Un débit négatif est traité comme inconnu. Un indicateur vidéo ne suffit plus à classer une piste musicale comme un transcodage vidéo.
+
+**Limites :** une image déjà recadrée par Tracearr ne peut pas être reconstituée, et l’artiste transmis peut être celui de l’album plutôt que celui du morceau. La profondeur de bits, les codecs ambigus et les mesures audio de sortie non confirmées ne sont pas déduits. Aucune propriété Hi‑Res ni garantie lossless n’est affirmée. Voir le [guide des réglages musicaux](https://github.com/Moosketair/home-assistant-tracearr/blob/v0.1.19/docs/CONFIGURATION.md#types-de-m%C3%A9dias-et-r%C3%A9glages-musicaux).
+
+**Mise à jour :** installez `v0.1.19` via HACS, redémarrez Home Assistant et rechargez le tableau de bord sans recréer l’entrée ni les cartes. En stockage, le module existant est actualisé automatiquement. En YAML, utilisez `/tracearr_ha/tracearr-card.js?v=0.1.19` dans l’unique déclaration, y compris en venant de la bêta.
+
 ## 0.1.19-beta.1 — Préversion de test
 
 **La stable recommandée reste `v0.1.18`.** Cette préversion est destinée aux essais volontaires via HACS.

@@ -4,11 +4,9 @@
 [![HACS](https://img.shields.io/badge/HACS-Catalogue%20officiel-41BDF5)](https://github.com/hacs/default/pull/13306)
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
 
-**Voyez qui regarde quoi sur Plex, Jellyfin et Emby, directement dans Home Assistant.** Tracearr HA utilise les données de Tracearr pour alimenter des capteurs et deux cartes Lovelace personnalisables : une vue d’ensemble des lectures et une carte centrée sur une seule lecture.
+**Suivez les films, séries et morceaux en cours sur Plex, Jellyfin et Emby, directement dans Home Assistant.** Tracearr HA utilise les données de Tracearr pour alimenter des capteurs et deux cartes Lovelace personnalisables : une vue d’ensemble des lectures et une carte centrée sur une seule lecture.
 
-**Stable recommandée via HACS : [`v0.1.18`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.18).** Voir [les nouveautés et les instructions de mise à jour](CHANGELOG.md#0118--2026-11-27).
-
-**Préversion de test : [`v0.1.19-beta.1`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.19-beta.1).** Elle ne remplace pas la stable. Voir [les nouveautés, l’installation via HACS et le retour arrière](CHANGELOG.md#0119-beta1--préversion-de-test).
+**Stable recommandée via HACS : [`v0.1.19`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.19).** Voir [les nouveautés et les instructions de mise à jour](CHANGELOG.md#0119--2026-11-28).
 
 [Voir les cartes](#aperçu-des-cartes) · [Installer](#installation-via-hacs) · [Configurer les cartes](docs/CONFIGURATION.md) · [Historique](CHANGELOG.md)
 
@@ -46,11 +44,11 @@
 - **Mise en page et affichage.** Taille pilotée par les réglages natifs de *Sections*, mode compact, fond cinéma flouté, couleurs par type de serveur, affiches, avatars, titres et épisodes. Affichez la progression, le temps restant ou une estimation de fin.
 - **Bandeau au choix.** Combinez statistiques Tracearr et entités Home Assistant, avec ordre, alignement et couleurs configurables. Filtrez l’affichage des débits à partir de vos [règles LAN/WAN](docs/CONFIGURATION.md#débits-locaux-et-distants).
 
-### Nouveautés de la préversion 0.1.19-beta.1
+### Nouveautés de la version 0.1.19
 
-Les deux cartes affichent automatiquement les pistes Plex, Jellyfin et Emby via Tracearr, avec pochettes carrées, métadonnées musicales personnalisables, progression et pause. Les cinq styles de badges existants couvrent aussi l’audio et son transcodage. Les filtres **Films, Séries, Musique et Autres médias** s’ajoutent aux filtres existants sans changer les capteurs globaux. La bêta améliore aussi la continuité des lectures lors des changements de morceau et la réconciliation des mises à jour Tracearr.
+Les deux cartes affichent automatiquement les pistes Plex, Jellyfin et Emby via Tracearr, avec pochettes carrées, métadonnées musicales personnalisables, progression et pause. Les cinq styles de badges existants couvrent aussi l’audio et son transcodage. Les filtres **Films, Séries, Musique et Autres médias** s’ajoutent aux filtres existants sans changer les capteurs globaux. Cette version améliore aussi la continuité des lectures lors des changements de morceau et la réconciliation des mises à jour Tracearr.
 
-[Réglages musicaux et filtres](docs/CONFIGURATION.md#types-de-médias-et-réglages-musicaux) · [Notes de la préversion](CHANGELOG.md#0119-beta1--préversion-de-test)
+[Réglages musicaux et filtres](docs/CONFIGURATION.md#types-de-médias-et-réglages-musicaux) · [Notes de la version 0.1.19](CHANGELOG.md#0119--2026-11-28)
 
 ### Nouveautés de la version 0.1.18
 
@@ -92,7 +90,7 @@ Pour une mise à jour normale, conservez l’entrée et les cartes existantes. A
 - **LAN/WAN :** la classification des lectures repose sur des règles manuelles par compte ou appareil. Tracearr HA ne déduit pas automatiquement la localisation d’un flux.
 - **Arrêt à distance :** l’intégration ne permet pas d’arrêter une lecture.
 - **Métadonnées :** la précision et la disponibilité des informations techniques dépendent des données que Tracearr transmet. Elles peuvent être incomplètes ou différées.
-- **Musique (préversion uniquement) :** une pochette déjà recadrée par Tracearr ne peut pas être restaurée. Certaines caractéristiques audio, dont la profondeur de bits ou les mesures de sortie non confirmées, ne sont pas affichées.
+- **Musique :** une pochette déjà recadrée par Tracearr ne peut pas être restaurée. Certaines caractéristiques audio, dont la profondeur de bits ou les mesures de sortie non confirmées, ne sont pas affichées.
 
 ## Documentation et dépannage
 
@@ -105,7 +103,7 @@ Pour une mise à jour normale, conservez l’entrée et les cartes existantes. A
 
 - **Aucun capteur :** vérifiez l’adresse Tracearr, la clé API et **Paramètres → Système → Journaux**.
 - **Clé refusée sur une intégration existante :** utilisez la demande de réauthentification de Home Assistant pour remplacer la clé sans recréer l’entrée ni perdre ses entités ou réglages.
-- **Carte absente ou ancienne interface :** dans **Paramètres → Tableaux de bord → Ressources**, vérifiez l’unique module `/tracearr_ha/tracearr-card.js` avec `?v=` suivi de la version installée (par exemple `?v=0.1.18`). Redémarrez Home Assistant et rechargez le tableau de bord. En [mode YAML](docs/CONFIGURATION.md#ressource-lovelace-en-mode-yaml), vérifiez la déclaration manuelle.
+- **Carte absente ou ancienne interface :** dans **Paramètres → Tableaux de bord → Ressources**, vérifiez l’unique module `/tracearr_ha/tracearr-card.js` avec `?v=` suivi de la version installée (par exemple `?v=0.1.19`). Redémarrez Home Assistant et rechargez le tableau de bord. En [mode YAML](docs/CONFIGURATION.md#ressource-lovelace-en-mode-yaml), vérifiez la déclaration manuelle.
 - **Affiche absente :** vérifiez que Tracearr transmet une URL d’affiche et consultez les erreurs réseau ou les journaux. Sans affiche, le fond cinéma reste uni et sombre.
 - **Carrousel immobile :** vérifiez le nombre de flux visibles, les réglages de défilement automatique, les préférences d’animation et la pause au survol.
 

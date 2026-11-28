@@ -82,7 +82,7 @@ def test_legacy_mode_and_existing_resource_updated(previous_version):
     assert resources.updated == [('old', RESOURCE)]
 
 
-@pytest.mark.parametrize('previous_version', ['0.1.18-beta.3', '0.1.18'])
+@pytest.mark.parametrize('previous_version', ['0.1.18-beta.3', '0.1.18', '0.1.19-beta.1'])
 def test_storage_upgrade_preserves_existing_resource(previous_version):
     other = {'id': 'other', 'res_type': 'module', 'url': '/local/other.js'}
     resources = Resources([{'id': 'existing', 'res_type': 'module', 'url': f'{MODULE}?v={previous_version}'}, other.copy()])
