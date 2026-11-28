@@ -49,6 +49,7 @@ class Resources:
 
     async def async_update_item(self, id, item):
         self.updated.append((id, item))
+        next(entry for entry in self.items if entry['id'] == id).update(item)
 
 
 class Http:
@@ -81,12 +82,17 @@ def test_legacy_mode_and_existing_resource_updated(previous_version):
     assert resources.updated == [('old', RESOURCE)]
 
 
-def test_storage_upgrade_from_beta_3_preserves_existing_resource():
-    resources = Resources([{'id': 'existing', 'res_type': 'module', 'url': f'{MODULE}?v=0.1.18-beta.3'}])
+@pytest.mark.parametrize('previous_version', ['0.1.18-beta.3', '0.1.18'])
+def test_storage_upgrade_preserves_existing_resource(previous_version):
+    other = {'id': 'other', 'res_type': 'module', 'url': '/local/other.js'}
+    resources = Resources([{'id': 'existing', 'res_type': 'module', 'url': f'{MODULE}?v={previous_version}'}, other.copy()])
     hass = SimpleNamespace(data={'lovelace': SimpleNamespace(resource_mode='storage', resources=resources)}, http=Http())
-    asyncio.run(load_register_function()(hass))
+    register = load_register_function()
+    asyncio.run(register(hass))
+    asyncio.run(register(hass))
     assert resources.created == []
     assert resources.updated == [('existing', RESOURCE)]
+    assert resources.items == [{'id': 'existing', **RESOURCE}, other]
 
 
 def test_current_resource_unchanged():

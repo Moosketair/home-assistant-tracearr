@@ -1,6 +1,8 @@
-# État de reprise — recette intégrée 6C.6.A
+# État de reprise — préversion 6C.6.B
 
-**6C.6.A livrée localement : PASS AVEC RÉSERVES** sur le candidat `e730b6339f738b6573de2c358a6de4d81103246e`. [Rapport](RECETTE_6C6A.md) : mise à niveau simulée depuis `v0.1.18`, vrai Sections et Masonry, persistance dans les deux éditeurs et en YAML, packaging. Aucun nouveau défaut significatif reproduit. La préparation de `v0.1.19-beta.1` est recommandée après accord, sans ouvrir 6E.
+**Décision 6C.6.B.** Le mainteneur valide 6C.1 à 6C.5 et la recette 6C.6.A, puis autorise [la préversion `v0.1.19-beta.1`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.19-beta.1) pour ses essais personnels via HACS. Branche `release/v0.1.19` depuis `e4032c9c04e2aa8abc06e65b3f444f86395926dc` : aucun changement fonctionnel, uniquement version, tests et documentation. Le [tag et sa validation GitHub](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml?query=branch%3Av0.1.19-beta.1) font foi. `v0.1.18` reste la stable recommandée ; aucune fusion dans `main`, promotion stable ou ouverture de 6E.
+
+**6C.6.A validée par le mainteneur : PASS AVEC RÉSERVES** sur le candidat `e730b6339f738b6573de2c358a6de4d81103246e`. [Rapport](RECETTE_6C6A.md) : mise à niveau simulée depuis `v0.1.18`, vrai Sections et Masonry, persistance dans les deux éditeurs et en YAML, packaging. Aucun nouveau défaut significatif reproduit ; réserves P3 et limites du protocole acceptées.
 
 **6C.5 validé visuellement par le mainteneur** sur `e730b6339f738b6573de2c358a6de4d81103246e`. Filtres, organisation des métadonnées, ordre et visibilité des badges, aperçus et rendus personnalisés sont acceptés. Le codec et le conteneur FLAC peuvent apparaître séparément quand le conteneur est explicitement activé ; il reste masqué par défaut. Une distinction visuelle différente pourra être examinée en 6E. Voir le [contrat YAML](CONFIGURATION.md#types-de-médias-et-réglages-musicaux), la [recette 6C.5](RECETTE.md#6c5--filtres-et-personnalisation-musicale) et ses [captures](../recette/preuves/6c.5/README.md).
 
@@ -101,6 +103,6 @@
 
 Aucune des six anomalies reprises n’a disparu indirectement. Les réserves 2A (durée du nettoyage, annulation d’un unload ordinaire, rétention temporaire par l’ancien Core) restent dans [RECETTE](RECETTE.md). Les réserves 2B, 2C et 3.2 restent tracées, sans réouverture des lots validés.
 
-**Suite :** arrêt après le rapport local 6C.6.A. Attendre le mainteneur ; une prépublication et le lot 6E nécessitent des autorisations distinctes.
+**Suite :** arrêt après la prépublication 6C.6.B. Attendre les essais HACS du mainteneur et un accord explicite avant toute promotion stable. Le lot 6E requiert une autorisation distincte.
 
 **Où intervenir si un lot est approuvé :** [ARCHITECTURE](ARCHITECTURE.md) pour le flux de données et les fichiers ; [DEVELOPMENT](DEVELOPMENT.md) pour reproduire la base de tests ; [CONFIGURATION](CONFIGURATION.md) pour les réglages publics ; [MAINTENANCE](MAINTENANCE.md) pour une éventuelle publication ultérieure. Avant toute suite, recontrôler `git status --short --branch`, le SHA et l’état distant en lecture seule : cet état est une photographie, pas une référence permanente au dernier upstream.

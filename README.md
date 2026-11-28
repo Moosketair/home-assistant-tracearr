@@ -8,6 +8,8 @@
 
 **Stable recommandée via HACS : [`v0.1.18`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.18).** Voir [les nouveautés et les instructions de mise à jour](CHANGELOG.md#0118--2026-11-27).
 
+**Préversion de test : [`v0.1.19-beta.1`](https://github.com/Moosketair/home-assistant-tracearr/releases/tag/v0.1.19-beta.1).** Elle ne remplace pas la stable. Voir [les nouveautés, l’installation via HACS et le retour arrière](CHANGELOG.md#0119-beta1--préversion-de-test).
+
 [Voir les cartes](#aperçu-des-cartes) · [Installer](#installation-via-hacs) · [Configurer les cartes](docs/CONFIGURATION.md) · [Historique](CHANGELOG.md)
 
 ## Aperçu des cartes
@@ -43,6 +45,12 @@
 - **Capteurs Home Assistant.** Nombre de flux, lectures directes ou transcodées, types de transcodage, débit estimé et disponibilité des serveurs. Testez les capteurs avant de les utiliser dans des automatismes critiques.
 - **Mise en page et affichage.** Taille pilotée par les réglages natifs de *Sections*, mode compact, fond cinéma flouté, couleurs par type de serveur, affiches, avatars, titres et épisodes. Affichez la progression, le temps restant ou une estimation de fin.
 - **Bandeau au choix.** Combinez statistiques Tracearr et entités Home Assistant, avec ordre, alignement et couleurs configurables. Filtrez l’affichage des débits à partir de vos [règles LAN/WAN](docs/CONFIGURATION.md#débits-locaux-et-distants).
+
+### Nouveautés de la préversion 0.1.19-beta.1
+
+Les deux cartes affichent automatiquement les pistes Plex, Jellyfin et Emby via Tracearr, avec pochettes carrées, métadonnées musicales personnalisables, progression et pause. Les cinq styles de badges existants couvrent aussi l’audio et son transcodage. Les filtres **Films, Séries, Musique et Autres médias** s’ajoutent aux filtres existants sans changer les capteurs globaux. La bêta améliore aussi la continuité des lectures lors des changements de morceau et la réconciliation des mises à jour Tracearr.
+
+[Réglages musicaux et filtres](docs/CONFIGURATION.md#types-de-médias-et-réglages-musicaux) · [Notes de la préversion](CHANGELOG.md#0119-beta1--préversion-de-test)
 
 ### Nouveautés de la version 0.1.18
 
@@ -84,7 +92,7 @@ Pour une mise à jour normale, conservez l’entrée et les cartes existantes. A
 - **LAN/WAN :** la classification des lectures repose sur des règles manuelles par compte ou appareil. Tracearr HA ne déduit pas automatiquement la localisation d’un flux.
 - **Arrêt à distance :** l’intégration ne permet pas d’arrêter une lecture.
 - **Métadonnées :** la précision et la disponibilité des informations techniques dépendent des données que Tracearr transmet. Elles peuvent être incomplètes ou différées.
-- **Musique :** l’affichage dédié aux lectures musicales n’est pas inclus ; il reste prévu dans le [lot 6C](docs/ROADMAP.md#lot-6c--lectures-musicales).
+- **Musique (préversion uniquement) :** une pochette déjà recadrée par Tracearr ne peut pas être restaurée. Certaines caractéristiques audio, dont la profondeur de bits ou les mesures de sortie non confirmées, ne sont pas affichées.
 
 ## Documentation et dépannage
 

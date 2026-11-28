@@ -495,3 +495,12 @@ La persistance est testée au niveau de la configuration émise et du retour YAM
 ## 6C.6.A — Recette intégrée avant prépublication
 
 Voir le [rapport 6C.6.A](RECETTE_6C6A.md) : mise à niveau depuis `v0.1.18`, Sections, persistance Lovelace et YAML, contrôles musicaux et distinction entre résultats nouveaux et preuves antérieures.
+
+## 6C.6.B — Prépublication v0.1.19-beta.1
+
+Préparation depuis `e4032c9c04e2aa8abc06e65b3f444f86395926dc` : seules les références de version, les tests et la documentation changent après la recette validée. Les suites 6C.3 à 6C.5 et la recette 6C.6.A restent acquises sans nouvelle campagne.
+
+- **Cache et stockage :** 12 tests ciblés de ressource et de versionnement. Sur le banc Core 2026.11.3 de 6C.6.A, une ressource `?v=0.1.18` devient `?v=0.1.19-beta.1`, sans doublon à deux démarrages, même identifiant, dashboard inchangé et chargement des deux cartes. Réponse JS 200, SHA‑256 `12b83453ee016fc8c16700f893f6d03830c900dbb039c6edf58b3393e2460a91`. Ressource YAML à modifier manuellement ; son fonctionnement réel a été validé en 6C.6.A.
+- **Distribution :** ordre `0.1.18 < 0.1.19-beta.1 < 0.1.19` avec AwesomeVersion, contrôles statiques, 18 fichiers distribués et hassfest local (1 intégration, 0 invalide). Le [workflow de branche](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml?query=branch%3Arelease%2Fv0.1.19) et le [workflow du tag](https://github.com/Moosketair/home-assistant-tracearr/actions/workflows/validate.yml?query=branch%3Av0.1.19-beta.1) séparent les validations distantes des essais locaux.
+
+Le parcours HACS réel est réservé aux essais personnels du mainteneur ; pas d’accès à la production ni de promotion stable.

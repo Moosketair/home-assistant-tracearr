@@ -12,19 +12,19 @@ Tracearr `2.6.0` ne fournit pas `/servers` et n’est pas compatible, même sans
 
 ### Ressource Lovelace en mode YAML
 
-En mode stockage, redémarrez Home Assistant après le remplacement de l’intégration : la ressource existante est actualisée automatiquement. En mode YAML, conservez une seule déclaration et adaptez `?v=` à la version du manifeste installé. Pour `v0.1.18` :
+En mode stockage, redémarrez Home Assistant après le remplacement de l’intégration : la ressource existante est actualisée automatiquement. En mode YAML, conservez une seule déclaration et adaptez `?v=` à la version du manifeste installé. Exemple pour la **préversion** `v0.1.19-beta.1` :
 
 ```yaml
 lovelace:
   resource_mode: yaml
   resources:
-    - url: /tracearr_ha/tracearr-card.js?v=0.1.18
+    - url: /tracearr_ha/tracearr-card.js?v=0.1.19-beta.1
       type: module
 ```
 
 Sur les anciens Core qui n’ont pas `resource_mode`, utilisez le `mode: yaml` déjà en place plutôt que d’ajouter cette clé. Rechargez le dashboard après la mise à jour de la ressource ; ne recréez ni l’entrée Tracearr ni les cartes.
 
-Si vous venez d’une préversion, remplacez son `?v=` par `?v=0.1.18` dans cette même déclaration, sans ajouter de seconde ressource.
+Si vous utilisez la **stable recommandée** `v0.1.18` ou si vous y revenez, utilisez `?v=0.1.18` dans cette même déclaration, sans ajouter de seconde ressource.
 
 ### Réglages du carrousel et de la présentation
 
@@ -57,7 +57,9 @@ L'animation automatique se suspend lorsque la page est masquée ou que le naviga
 
 ### Types de médias et réglages musicaux
 
-> Réglages du candidat 6C.5 ; ils ne sont pas inclus dans la stable publiée `v0.1.18`.
+> Réglages disponibles à partir de `v0.1.19-beta.1` ; ils ne sont pas inclus dans la stable `v0.1.18`.
+
+Les deux cartes reconnaissent automatiquement les pistes remontées par Tracearr (Plex, Jellyfin et Emby), sans option d’activation. Une pochette carrée reçue est affichée entière ; une source non carrée est recadrée au centre et une pochette manquante est remplacée. Si Tracearr a déjà recadré l’image, la carte ne peut pas restaurer ses bords. La progression, le restant et la pause sont affichés sans estimation de fin pour la musique. La profondeur de bits et les propriétés Hi‑Res ou lossless ne sont pas déduites.
 
 Dans **Choix des lectures et filtres → Types de médias**, cochez les catégories à afficher. Les films (`movie`), séries (`episode`) et pistes (`track`) sont classés d’après le type public de Tracearr. **Autres médias** regroupe notamment le direct (`live`), les photos (`photo`), les bandes-annonces (`trailer`), les types inconnus ou futurs, et les sessions dont le type manque.
 
